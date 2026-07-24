@@ -10,6 +10,7 @@ import dev.ungaaaabungaaa.relay.ui.components.RelayInput
 import dev.ungaaaabungaaa.relay.ui.components.RelayLabel
 import dev.ungaaaabungaaa.relay.ui.components.RelayList
 import dev.ungaaaabungaaa.relay.ui.components.RelayTextButton
+import dev.ungaaaabungaaa.relay.ui.components.HoldToRecord
 import dev.ungaaaabungaaa.relay.ui.theme.RelayColors
 
 @Composable
@@ -184,25 +185,83 @@ fun SystemInputScreen(
 
 @Composable
 fun VoiceRecordScreen(
+    recording: Boolean,
+    transcribing: Boolean,
+    canRecord: Boolean,
+    microphoneGranted: Boolean,
+    onRequestMicrophone: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onCancelRecording: () -> Unit,
     onSystemInput: () -> Unit,
     onBack: () -> Unit,
 ) {
     RelayList(title = "Voice") {
-        item {
-            RelayLabel(
-                "Custom recording is added in the next release checkpoint.",
-                color = RelayColors.Muted,
-                size = 10,
-            )
+        when {
+            transcribing -> {
+                item {
+                    RelayLabel(
+                        "Transcribing on your Mac…",
+                        color = RelayColors.Blue,
+                        size = 11,
+                    )
+                }
+            }
+            else -> {
+                item {
+                    RelayLabel(
+                        if (recording) {
+                            "Recording · automatic stop at 30 seconds"
+                        } else {
+                            "Audio is deleted after transcription or cancellation."
+                        },
+                        color = if (recording) RelayColors.Red else RelayColors.Muted,
+                        size = 9,
+                    )
+                }
+                if (microphoneGranted) {
+                    item {
+                        HoldToRecord(
+                            enabled = canRecord,
+                            recording = recording,
+                            onStart = onStartRecording,
+                            onStop = onStopRecording,
+                            onCancel = onCancelRecording,
+                        )
+                    }
+                } else {
+                    item {
+                        RelayActionButton(
+                            "Enable microphone",
+                            enabled = canRecord,
+                            color = RelayColors.Red,
+                            onClick = onRequestMicrophone,
+                        )
+                    }
+                    item {
+                        RelayLabel(
+                            "Permission is requested only for this custom mode.",
+                            color = RelayColors.Muted,
+                            size = 9,
+                        )
+                    }
+                }
+                item {
+                    RelayCard(
+                        title = "Use Wear OS voice",
+                        detail = "System input · no OpenAI key",
+                        enabled = canRecord && !recording,
+                        onClick = onSystemInput,
+                    )
+                }
+                item {
+                    RelayTextButton(
+                        if (recording) "Cancel & delete" else "Back",
+                        onClick = if (recording) onCancelRecording else onBack,
+                    )
+                }
+            }
         }
-        item {
-            RelayCard(
-                title = "Use Wear OS voice now",
-                detail = "Private system input · no OpenAI key",
-                onClick = onSystemInput,
-            )
-        }
-        item { RelayTextButton("Back", onClick = onBack) }
     }
 }
 

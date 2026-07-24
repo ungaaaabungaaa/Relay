@@ -1,5 +1,9 @@
 package dev.ungaaaabungaaa.relay.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -7,8 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.ungaaaabungaaa.relay.domain.Screen
 import dev.ungaaaabungaaa.relay.ui.components.RelayLabel
@@ -45,6 +54,21 @@ import dev.ungaaaabungaaa.relay.ui.theme.RelayTheme
 fun RelayApp(viewModel: RelayViewModel) {
     val state = viewModel.state
     val canMutate = state.connected && !state.stale
+    val context = LocalContext.current
+    var microphoneGranted by remember {
+        mutableStateOf(
+            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val microphonePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        microphoneGranted = granted
+        if (!granted) {
+            viewModel.microphonePermissionDenied()
+        }
+    }
     RelayTheme {
         Box(Modifier.fillMaxSize()) {
             when (state.screen) {
@@ -153,15 +177,25 @@ fun RelayApp(viewModel: RelayViewModel) {
                     onBack = { viewModel.navigate(Screen.Instruction) },
                 )
                 Screen.VoiceRecord -> VoiceRecordScreen(
+                    recording = viewModel.recordingVoice,
+                    transcribing = viewModel.transcribingVoice,
+                    canRecord = canMutate,
+                    microphoneGranted = microphoneGranted,
+                    onRequestMicrophone = {
+                        microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    onStartRecording = viewModel::startVoiceRecording,
+                    onStopRecording = viewModel::stopVoiceRecording,
+                    onCancelRecording = viewModel::cancelVoiceRecording,
                     onSystemInput = { viewModel.navigate(Screen.SystemInput) },
                     onBack = { viewModel.navigate(Screen.Instruction) },
                 )
                 Screen.TranscriptReview -> TranscriptReviewScreen(
                     transcript = state.transcript,
                     canSend = canMutate,
-                    onSend = viewModel::sendInstruction,
-                    onRerecord = { viewModel.navigate(Screen.VoiceRecord) },
-                    onCancel = { viewModel.navigate(Screen.Instruction) },
+                    onSend = viewModel::sendTranscript,
+                    onRerecord = viewModel::rerecordVoice,
+                    onCancel = viewModel::cancelTranscript,
                 )
                 Screen.TaskControls -> TaskControlsScreen(
                     task = state.selectedTask,

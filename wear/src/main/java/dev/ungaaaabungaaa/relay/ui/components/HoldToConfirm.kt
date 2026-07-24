@@ -133,3 +133,47 @@ fun HoldToConfirm(
         )
     }
 }
+
+@Composable
+fun HoldToRecord(
+    enabled: Boolean,
+    recording: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 58.dp)
+            .background(
+                when {
+                    !enabled -> RelayColors.Line
+                    recording -> RelayColors.Red
+                    else -> RelayColors.Red.copy(alpha = 0.24f)
+                },
+                CircleShape,
+            )
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(
+                    onPress = {
+                        onStart()
+                        val released = tryAwaitRelease()
+                        if (released) onStop() else onCancel()
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        RelayLabel(
+            when {
+                !enabled -> "Unavailable while offline"
+                recording -> "Release to transcribe"
+                else -> "Press and hold to record"
+            },
+            color = RelayColors.White,
+            size = 10,
+        )
+    }
+}

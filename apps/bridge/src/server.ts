@@ -15,6 +15,8 @@ import {
   WorkspacePolicyError,
   type WorkspacePolicy,
 } from "./workspaces/workspace-policy.ts";
+import type { Transcriber } from "./transcription/transcriber.ts";
+import { transcribeAudio } from "./transcription/transcriber.ts";
 
 type Adapter = Pick<
   CodexAdapter,
@@ -35,6 +37,9 @@ type HandlerOptions = {
   store: SecurityStore;
   adapter: Partial<Adapter> & Pick<Adapter, "listTasks" | "readTask" | "listModels" | "approvals" | "questions">;
   workspacePolicy: WorkspacePolicy;
+  transcriber?: Transcriber;
+  transcriptionTemporaryDirectory?: string;
+  transcriptionTimeoutMs?: number;
 };
 
 type RelayServerOptions = HandlerOptions & {
@@ -128,6 +133,37 @@ export function createRequestHandler(options: HandlerOptions) {
             url.searchParams.get("path") ?? undefined,
           ),
         );
+      }
+      if (request.method === "POST" && url.pathname === "/v1/transcribe") {
+        if (!options.transcriber || !options.transcriptionTemporaryDirectory) {
+          return json({ error: "transcription unavailable" }, 503);
+        }
+        try {
+          const transcript = await transcribeAudio({
+            audio: bodyBytes,
+            contentType: request.headers.get("content-type") ?? "",
+            durationMs: Number(url.searchParams.get("durationMs")),
+            temporaryDirectory: options.transcriptionTemporaryDirectory,
+            transcriber: options.transcriber,
+            timeoutMs: options.transcriptionTimeoutMs,
+          });
+          return json({ transcript });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "transcription failed";
+          if (message.includes("timed out")) {
+            return json({ error: "transcription timed out" }, 504);
+          }
+          if (
+            message.includes("unsupported") ||
+            message.includes("duration") ||
+            message.includes("2 MiB") ||
+            message.includes("empty")
+          ) {
+            return json({ error: message }, 400);
+          }
+          return json({ error: "transcription failed" }, 502);
+        }
       }
       if (request.method === "POST") {
         const body = await parseJson(request);

@@ -596,32 +596,32 @@ git commit -m "feat: complete Relay watch flows"
 - Produces: `VoiceRecorder.start()`, `VoiceRecorder.stop()`, and
   `VoiceRecorder.cancel()`.
 
-- [ ] **Step 1: Write failing deletion and limit tests**
+- [x] **Step 1: Write failing deletion and limit tests**
 
 Use an injected fake transcriber and temporary file. Assert deletion after
 success, provider failure, invalid media, oversized input, and timeout.
 
-- [ ] **Step 2: Implement the injected route and provider**
+- [x] **Step 2: Implement the injected route and provider**
 
 Use native `fetch` with a multipart request to the configured OpenAI
 transcription endpoint. Return only the transcript; do not log response bodies.
 
-- [ ] **Step 3: Write failing watch duration-policy tests**
+- [x] **Step 3: Write failing watch duration-policy tests**
 
 Assert recording stops at 30 seconds, cancellation deletes the local file, and
 upload success or failure deletes it.
 
-- [ ] **Step 4: Implement just-in-time microphone flow**
+- [x] **Step 4: Implement just-in-time microphone flow**
 
 Request microphone permission only when custom recording starts. System Wear OS
 text input remains available without an OpenAI key.
 
-- [ ] **Step 5: Require transcript review**
+- [x] **Step 5: Require transcript review**
 
 The only transitions from transcription are Review, Re-record, or Cancel.
 Sending requires an explicit action from Review.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run all bridge and Wear verification.
 

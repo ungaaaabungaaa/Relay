@@ -8,6 +8,7 @@ import dev.ungaaaabungaaa.relay.domain.RelayTask
 import dev.ungaaaabungaaa.relay.domain.parseApprovalRisk
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
 import dev.ungaaaabungaaa.relay.security.canonicalRequest
+import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -144,7 +145,19 @@ class RelayApi(
             .put("model", model)
             .put("effort", effort)
             .put("prompt", prompt),
-    )
+        )
+
+    suspend fun transcribe(file: File, durationMs: Long): String {
+        val body = withContext(Dispatchers.IO) { file.readBytes() }
+        val response = request(
+            path = "/v1/transcribe?durationMs=$durationMs",
+            method = "POST",
+            body = body,
+            idempotencyKey = UUID.randomUUID().toString(),
+            contentType = AUDIO,
+        )
+        return response.getString("transcript")
+    }
 
     private suspend fun get(path: String): JSONObject = request(path, "GET", ByteArray(0))
 
@@ -164,6 +177,7 @@ class RelayApi(
         method: String,
         body: ByteArray,
         idempotencyKey: String? = null,
+        contentType: okhttp3.MediaType = JSON,
     ): JSONObject =
         withContext(Dispatchers.IO) {
             val deviceId = preferences.deviceId ?: error("Watch is not paired")
@@ -179,7 +193,7 @@ class RelayApi(
             idempotencyKey?.let {
                 builder.header("idempotency-key", it)
             }
-            if (method == "POST") builder.post(body.toRequestBody(JSON))
+            if (method == "POST") builder.post(body.toRequestBody(contentType))
             val response = client.newCall(builder.build()).execute()
             response.use {
                 val text = it.body.string()
@@ -193,6 +207,7 @@ class RelayApi(
 
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
+        private val AUDIO = "audio/mp4".toMediaType()
     }
 }
 

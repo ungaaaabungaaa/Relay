@@ -6,6 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.ungaaaabungaaa.relay.audio.VoiceClip
+import dev.ungaaaabungaaa.relay.audio.VoiceRecorder
+import dev.ungaaaabungaaa.relay.audio.consume
 import dev.ungaaaabungaaa.relay.data.RelayApi
 import dev.ungaaaabungaaa.relay.data.RelayLiveEvent
 import dev.ungaaaabungaaa.relay.data.RelayPreferences
@@ -48,6 +51,10 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     var instruction by mutableStateOf("")
     var questionAnswer by mutableStateOf("")
     var questionReviewing by mutableStateOf(false)
+    var recordingVoice by mutableStateOf(false)
+        private set
+    var transcribingVoice by mutableStateOf(false)
+        private set
 
     private val socket by lazy {
         RelaySocket(
@@ -61,6 +68,12 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
                 }
             },
         )
+    }
+    private val voiceRecorder by lazy {
+        VoiceRecorder.forContext(application) { clip ->
+            recordingVoice = false
+            transcribeVoiceClip(clip)
+        }
     }
 
     init {
@@ -217,6 +230,67 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun startVoiceRecording() {
+        if (!state.connected || state.stale || recordingVoice) return
+        runCatching {
+            voiceRecorder.start()
+            recordingVoice = true
+        }.onFailure {
+            dispatch(RelayAction.Failure(it.message ?: "Unable to start recording"))
+        }
+    }
+
+    fun stopVoiceRecording() {
+        if (!recordingVoice) return
+        runCatching { voiceRecorder.stop() }
+            .onSuccess { clip ->
+                recordingVoice = false
+                transcribeVoiceClip(clip)
+            }
+            .onFailure {
+                recordingVoice = false
+                dispatch(RelayAction.Failure(it.message ?: "Unable to finish recording"))
+            }
+    }
+
+    fun cancelVoiceRecording() {
+        if (!recordingVoice) return
+        voiceRecorder.cancel()
+        recordingVoice = false
+        state = state.copy(screen = Screen.Instruction)
+    }
+
+    fun microphonePermissionDenied() {
+        dispatch(RelayAction.Failure("Microphone permission is needed only for custom recording"))
+    }
+
+    fun sendTranscript() {
+        if (!state.connected || state.stale) return
+        val task = state.selectedTask ?: return
+        val transcript = state.transcript.trim()
+        if (transcript.isBlank()) return
+        viewModelScope.launch {
+            runCatching { api.send(task.id, transcript) }
+                .onSuccess {
+                    state = state.copy(
+                        transcript = "",
+                        screen = Screen.TaskDetail,
+                    )
+                }
+                .onFailure {
+                    dispatch(RelayAction.Failure(it.message ?: "Unable to send transcript"))
+                }
+        }
+    }
+
+    fun rerecordVoice() {
+        state = state.copy(transcript = "", screen = Screen.VoiceRecord)
+    }
+
+    fun cancelTranscript() {
+        state = state.copy(transcript = "", screen = Screen.Instruction)
+    }
+
     fun beginNewTask() {
         state = state.copy(
             newTaskDraft = NewTaskDraft(),
@@ -306,6 +380,8 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun unpair() {
+        voiceRecorder.cancel()
+        recordingVoice = false
         socket.close()
         preferences.clear()
         identity.delete()
@@ -358,7 +434,29 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun transcribeVoiceClip(clip: VoiceClip) {
+        viewModelScope.launch {
+            transcribingVoice = true
+            runCatching {
+                clip.consume {
+                    api.transcribe(it.file, it.durationMs)
+                }
+            }.onSuccess { transcript ->
+                transcribingVoice = false
+                state = state.copy(
+                    transcript = transcript,
+                    screen = Screen.TranscriptReview,
+                )
+            }.onFailure {
+                transcribingVoice = false
+                state = state.copy(screen = Screen.VoiceRecord)
+                dispatch(RelayAction.Failure(it.message ?: "Transcription failed"))
+            }
+        }
+    }
+
     override fun onCleared() {
+        voiceRecorder.cancel()
         socket.close()
         super.onCleared()
     }

@@ -5,6 +5,7 @@ import { CodexAdapter } from "./codex/adapter.ts";
 import { PairingService } from "./security/pairing.ts";
 import { createRelayServer } from "./server.ts";
 import { SqliteStore } from "./store/sqlite-store.ts";
+import { OpenAITranscriber } from "./transcription/openai-transcriber.ts";
 import { WorkspacePolicy } from "./workspaces/workspace-policy.ts";
 
 const dataDir =
@@ -19,6 +20,7 @@ const workspacePolicy = new WorkspacePolicy(
 );
 const { positionals } = parseArgs({ allowPositionals: true });
 const command = positionals[0] ?? "help";
+const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
 
 if (command === "serve") {
   const adapter = new CodexAdapter();
@@ -28,6 +30,12 @@ if (command === "serve") {
     adapter,
     workspacePolicy,
     eventHub: adapter.events,
+    ...(openAiApiKey
+      ? {
+          transcriber: new OpenAITranscriber({ apiKey: openAiApiKey }),
+          transcriptionTemporaryDirectory: join(dataDir, "transcription"),
+        }
+      : {}),
   });
   const host = process.env.CODEWATCH_BIND_HOST ?? "127.0.0.1";
   const port = Number(process.env.CODEWATCH_PORT ?? "43117");
