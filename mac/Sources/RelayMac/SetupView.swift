@@ -26,6 +26,26 @@ struct SetupView: View {
                             detail: "Free private transport with an optional Funnel endpoint.",
                             status: model.setupState.tailscale
                         )
+                        if !model.tailscaleInstalled {
+                            HStack {
+                                Spacer()
+                                Link(
+                                    "Download Tailscale",
+                                    destination: URL(string: "https://tailscale.com/download/mac")!
+                                )
+                                .font(.caption)
+                            }
+                        }
+                        if !model.platformToolsReady {
+                            Divider()
+                            HStack {
+                                Label("Android Platform Tools", systemImage: "wrench.and.screwdriver")
+                                Spacer()
+                                Button("Install verified tools") {
+                                    Task { await model.installPlatformTools() }
+                                }
+                            }
+                        }
                         Divider()
                         RequirementRow(
                             icon: "lock.shield",

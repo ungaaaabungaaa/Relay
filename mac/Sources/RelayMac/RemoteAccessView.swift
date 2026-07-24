@@ -30,6 +30,25 @@ struct RemoteAccessView: View {
                         )
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        HStack {
+                            Button(model.funnelEnabled ? "Disable Funnel" : "Enable Funnel") {
+                                Task {
+                                    if model.funnelEnabled {
+                                        await model.disableRemoteAccess()
+                                    } else {
+                                        await model.enableRemoteAccess()
+                                    }
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(model.funnelEnabled ? RelayPalette.amber : RelayPalette.accent)
+                            .disabled(!model.tailscaleInstalled || !model.tailscaleSignedIn)
+                            if let origin = model.funnelOrigin {
+                                Text(origin.absoluteString)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                            }
+                        }
                     }
                 }
                 RelayPanel {

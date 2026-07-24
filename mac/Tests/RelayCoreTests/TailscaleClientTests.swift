@@ -1,0 +1,106 @@
+import Foundation
+import Testing
+@testable import RelayCore
+
+@Test
+func tailscalePlansAlwaysTargetTheRelayWatchPort() {
+    let tailscale = URL(fileURLWithPath: "/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+
+    #expect(
+        TailscaleCommandPlan.status(tailscale: tailscale) == CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["status", "--json"]
+        )
+    )
+    #expect(
+        TailscaleCommandPlan.enableFunnel(tailscale: tailscale) == CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["funnel", "--bg", "43117"]
+        )
+    )
+    #expect(
+        TailscaleCommandPlan.disableFunnel(tailscale: tailscale) == CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["funnel", "43117", "off"]
+        )
+    )
+    #expect(
+        TailscaleCommandPlan.funnelStatus(tailscale: tailscale) == CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["funnel", "status", "--json"]
+        )
+    )
+}
+
+@Test
+func funnelEnableRequiresSignInAndTheBridgeSecuritySelfTest() async throws {
+    let tailscale = URL(fileURLWithPath: "/usr/local/bin/tailscale")
+    let runner = QueueCommandRunner(
+        results: [
+            CommandResult(
+                exitCode: 0,
+                standardOutput: #"{"BackendState":"Running","Self":{"DNSName":"relay.tailnet.ts.net."}}"#,
+                standardError: ""
+            ),
+        ]
+    )
+    let client = TailscaleClient(executableURL: tailscale, runner: runner)
+
+    await #expect(throws: TailscaleClientError.bridgeSecurityCheckFailed) {
+        try await client.enableFunnel {
+            AdminSecuritySelfTest(
+                ok: false,
+                checks: AdminSecurityChecks(
+                    adminLoopbackOnly: true,
+                    watchLoopbackOnly: false,
+                    strongAdminToken: true
+                )
+            )
+        }
+    }
+    #expect(await runner.invocations.count == 1)
+    #expect(await runner.invocations.first?.arguments == ["status", "--json"])
+}
+
+@Test
+func emergencyStopAttemptsBridgeShutdownWhenFunnelDisableFails() async {
+    let runner = QueueCommandRunner(
+        results: [
+            CommandResult(exitCode: 1, standardOutput: "", standardError: "failed"),
+        ]
+    )
+    let bridge = BridgeShutdownRecorder()
+    let client = TailscaleClient(
+        executableURL: URL(fileURLWithPath: "/usr/local/bin/tailscale"),
+        runner: runner
+    )
+
+    let result = await client.emergencyStop {
+        await bridge.stop()
+    }
+
+    #expect(result == EmergencyStopResult(funnelDisabled: false, bridgeStopped: true))
+    #expect(await bridge.stopped)
+}
+
+private actor QueueCommandRunner: CommandRunning {
+    private var results: [CommandResult]
+    private(set) var invocations: [CommandInvocation] = []
+
+    init(results: [CommandResult]) {
+        self.results = results
+    }
+
+    func run(_ invocation: CommandInvocation) async throws -> CommandResult {
+        invocations.append(invocation)
+        return results.removeFirst()
+    }
+}
+
+private actor BridgeShutdownRecorder {
+    private(set) var stopped = false
+
+    func stop() {
+        stopped = true
+    }
+}

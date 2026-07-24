@@ -832,36 +832,36 @@ git commit -m "feat: add Relay Mac menu-bar app"
 - Produces Funnel preflight, enable, status, disable, and Emergency Stop.
 - Produces signed GitHub update-manifest parsing and downgrade rejection.
 
-- [ ] **Step 1: Write failing command-plan tests**
+- [x] **Step 1: Write failing command-plan tests**
 
 Assert exact argument arrays for `adb pair`, `adb connect`, `adb install -r`,
 `tailscale status --json`, `tailscale funnel --bg 43117`, and
 `tailscale funnel 43117 off`. Never build shell command strings.
 
-- [ ] **Step 2: Implement Platform Tools integrity**
+- [x] **Step 2: Implement Platform Tools integrity**
 
 Download only the official configured HTTPS artifact. Verify the pinned SHA-256
 before extracting to Relay Application Support. Reject redirects to unapproved
 hosts and delete a failed download.
 
-- [ ] **Step 3: Implement ADB wizard state**
+- [x] **Step 3: Implement ADB wizard state**
 
 Discover `_adb-tls-pairing._tcp` and `_adb-tls-connect._tcp`, permit manual
 address entry, verify the connected device reports the watch hardware feature,
 install the bundled APK, and verify package version.
 
-- [ ] **Step 4: Implement Tailscale preflight**
+- [x] **Step 4: Implement Tailscale preflight**
 
 Require a signed-in status and successful bridge security self-test before
 Funnel enable. Always target port 43117. Emergency Stop attempts Funnel disable
 and bridge remote-session shutdown independently and reports both results.
 
-- [ ] **Step 5: Implement signed release checks**
+- [x] **Step 5: Implement signed release checks**
 
 Verify update metadata and artifact digest, reject lower versions, and preserve
 the previous Mac app or APK after failure.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run Swift tests and build with full Xcode.
 

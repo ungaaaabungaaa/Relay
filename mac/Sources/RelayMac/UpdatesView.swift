@@ -27,6 +27,18 @@ struct UpdatesView: View {
                     }
                 }
                 RelayPanel {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Label("Signed manifest verification ready", systemImage: "signature")
+                            .font(.headline)
+                            .foregroundStyle(RelayPalette.accent)
+                        Text(
+                            "Relay rejects a changed byte, an Intel artifact, an invalid signature, and any version older than the installed build."
+                        )
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                RelayPanel {
                     Label("Rollback protection", systemImage: "checkmark.shield.fill")
                         .font(.headline)
                         .foregroundStyle(RelayPalette.accent)
