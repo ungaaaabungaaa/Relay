@@ -740,9 +740,9 @@ git commit -m "feat: package the Relay bridge sidecar"
 
 ### Task 10: Native SwiftUI menu-bar control plane
 
-**Prerequisite:** Install full Xcode and select its developer directory. The
-current machine has Command Line Tools and Swift but not the full Xcode SDK
-toolchain required to build, sign, and notarize the SwiftUI application.
+**Prerequisite:** Full Xcode is installed. The system-wide selector remains on
+Command Line Tools, so project verification sets
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` explicitly.
 
 **Files:**
 
@@ -767,7 +767,7 @@ toolchain required to build, sign, and notarize the SwiftUI application.
 - Consumes the token-authenticated loopback admin API.
 - Stores admin and OpenAI secrets through `KeychainStore`.
 
-- [ ] **Step 1: Write failing Swift setup-state tests**
+- [x] **Step 1: Write failing Swift setup-state tests**
 
 ```swift
 @Test func setupIsReadyOnlyWhenEveryRequiredCheckPasses() {
@@ -779,23 +779,23 @@ toolchain required to build, sign, and notarize the SwiftUI application.
 }
 ```
 
-- [ ] **Step 2: Implement RelayCore with injected process and Keychain ports**
+- [x] **Step 2: Implement RelayCore with injected process and Keychain ports**
 
 Production code uses `Process` and Security.framework. Tests use in-memory
 implementations through protocols; production source has no test-only methods.
 
-- [ ] **Step 3: Test bridge lifecycle**
+- [x] **Step 3: Test bridge lifecycle**
 
 Assert one sidecar instance, clean stop, bounded restart after a crash, redacted
 error output, and no automatic restart after Emergency Stop.
 
-- [ ] **Step 4: Build the MenuBarExtra and dashboard**
+- [x] **Step 4: Build the MenuBarExtra and dashboard**
 
 The menu shows bridge, Codex, Funnel, watch, pending-action, update, dashboard,
 emergency stop, and quit states. The dashboard implements every Mac screen in
 the public-release spec.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
