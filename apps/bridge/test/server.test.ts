@@ -161,6 +161,7 @@ describe("bridge API", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          "idempotency-key": "workspace-task-0001",
           "x-relay-device": "watch",
           "x-relay-timestamp": String(taskTimestamp),
           "x-relay-nonce": taskNonce,
@@ -171,5 +172,120 @@ describe("bridge API", () => {
     );
     assert.equal(taskResponse.status, 403);
     assert.equal(startCalls, 0);
+  });
+
+  it("requires an idempotency key before invoking a mutating route", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const store = new InMemorySecurityStore();
+    store.addDevice(
+      "watch",
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    let approvalCalls = 0;
+    const handler = createRequestHandler({
+      store,
+      adapter: {
+        ...fakeAdapter,
+        answerApproval: () => {
+          approvalCalls += 1;
+        },
+      },
+      workspacePolicy: new WorkspacePolicy([]),
+    });
+    const body = Buffer.from(JSON.stringify({ decision: "approve" }));
+    const timestamp = Date.now();
+    const nonce = "missing-idempotency-key";
+    const signature = sign(
+      null,
+      Buffer.from(
+        canonicalRequest({
+          deviceId: "watch",
+          method: "POST",
+          path: "/v1/approvals/approval-1",
+          body,
+          timestamp,
+          nonce,
+        }),
+      ),
+      privateKey,
+    ).toString("base64");
+
+    const response = await handler(
+      new Request("http://localhost/v1/approvals/approval-1", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-relay-device": "watch",
+          "x-relay-timestamp": String(timestamp),
+          "x-relay-nonce": nonce,
+          "x-relay-signature": signature,
+        },
+        body,
+      }),
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      error: "invalid idempotency key",
+    });
+    assert.equal(approvalCalls, 0);
+  });
+
+  it("returns the first approval result without invoking Codex twice", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const store = new InMemorySecurityStore();
+    store.addDevice(
+      "watch",
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    let approvalCalls = 0;
+    const handler = createRequestHandler({
+      store,
+      adapter: {
+        ...fakeAdapter,
+        answerApproval: () => {
+          approvalCalls += 1;
+        },
+      },
+      workspacePolicy: new WorkspacePolicy([]),
+    });
+    const body = Buffer.from(JSON.stringify({ decision: "approve" }));
+    const makeRequest = (nonce: string) => {
+      const timestamp = Date.now();
+      const signature = sign(
+        null,
+        Buffer.from(
+          canonicalRequest({
+            deviceId: "watch",
+            method: "POST",
+            path: "/v1/approvals/approval-1",
+            body,
+            timestamp,
+            nonce,
+          }),
+        ),
+        privateKey,
+      ).toString("base64");
+      return new Request("http://localhost/v1/approvals/approval-1", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "approval-request-0001",
+          "x-relay-device": "watch",
+          "x-relay-timestamp": String(timestamp),
+          "x-relay-nonce": nonce,
+          "x-relay-signature": signature,
+        },
+        body,
+      });
+    };
+
+    const first = await handler(makeRequest("approval-first-nonce"));
+    const second = await handler(makeRequest("approval-second-nonce"));
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.deepEqual(await second.json(), { ok: true });
+    assert.equal(approvalCalls, 1);
   });
 });

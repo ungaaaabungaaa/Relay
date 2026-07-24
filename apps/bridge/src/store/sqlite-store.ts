@@ -26,6 +26,12 @@ export class SqliteStore implements SecurityStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, action TEXT NOT NULL,
         target TEXT, result TEXT NOT NULL, created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS action_results (
+        device_id TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+        action TEXT NOT NULL, target TEXT, status TEXT NOT NULL,
+        response_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (device_id, idempotency_key)
+      );
     `);
   }
 
@@ -92,6 +98,74 @@ export class SqliteStore implements SecurityStore {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  getActionResult(deviceId: string, idempotencyKey: string) {
+    const row = this.db
+      .prepare(
+        `SELECT action,target,status,response_json FROM action_results
+         WHERE device_id=? AND idempotency_key=?`,
+      )
+      .get(deviceId, idempotencyKey) as
+      | {
+          action: string;
+          target: string | null;
+          status: "pending" | "succeeded" | "failed";
+          response_json: string | null;
+        }
+      | undefined;
+    return row
+      ? {
+          action: row.action,
+          target: row.target,
+          status: row.status,
+          responseJson: row.response_json,
+        }
+      : undefined;
+  }
+
+  claimAction(
+    deviceId: string,
+    idempotencyKey: string,
+    action: string,
+    target: string | null,
+  ) {
+    const now = Date.now();
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO action_results(
+            device_id,idempotency_key,action,target,status,response_json,created_at,updated_at
+          ) VALUES(?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          deviceId,
+          idempotencyKey,
+          action,
+          target,
+          "pending",
+          null,
+          now,
+          now,
+        );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  finishAction(
+    deviceId: string,
+    idempotencyKey: string,
+    status: "succeeded" | "failed",
+    responseJson: string | null,
+  ) {
+    this.db
+      .prepare(
+        `UPDATE action_results SET status=?,response_json=?,updated_at=?
+         WHERE device_id=? AND idempotency_key=?`,
+      )
+      .run(status, responseJson, Date.now(), deviceId, idempotencyKey);
   }
 
   audit(deviceId: string | null, action: string, target: string | null, result: string) {

@@ -94,12 +94,17 @@ class RelayApi(
             .mapObjects { RelayFolder(it.getString("name"), it.getString("path")) }
 
     suspend fun decideApproval(id: String, approve: Boolean) =
-        post("/v1/approvals/$id", JSONObject().put("decision", if (approve) "approve" else "deny"))
+        post(
+            "/v1/approvals/$id",
+            JSONObject().put("decision", if (approve) "approve" else "deny"),
+            idempotencyKeyFor("approval", id, if (approve) "approve" else "deny"),
+        )
 
     suspend fun answerQuestion(id: String, questionId: String, answers: List<String>) =
         post(
             "/v1/questions/$id",
             JSONObject().put("answers", JSONObject().put(questionId, JSONArray(answers))),
+            idempotencyKeyFor("question", id, questionId, answers.joinToString("\u001F")),
         )
 
     suspend fun send(threadId: String, text: String) =
@@ -112,7 +117,11 @@ class RelayApi(
         )
 
     suspend fun stop(threadId: String, turnId: String) =
-        post("/v1/tasks/$threadId/stop", JSONObject().put("turnId", turnId))
+        post(
+            "/v1/tasks/$threadId/stop",
+            JSONObject().put("turnId", turnId),
+            idempotencyKeyFor("stop", threadId, turnId),
+        )
 
     suspend fun startTask(
         cwd: String,
@@ -130,10 +139,23 @@ class RelayApi(
 
     private suspend fun get(path: String): JSONObject = request(path, "GET", ByteArray(0))
 
-    private suspend fun post(path: String, body: JSONObject): JSONObject =
-        request(path, "POST", body.toString().toByteArray())
+    private suspend fun post(
+        path: String,
+        body: JSONObject,
+        idempotencyKey: String = UUID.randomUUID().toString(),
+    ): JSONObject = request(
+        path,
+        "POST",
+        body.toString().toByteArray(),
+        idempotencyKey,
+    )
 
-    private suspend fun request(path: String, method: String, body: ByteArray): JSONObject =
+    private suspend fun request(
+        path: String,
+        method: String,
+        body: ByteArray,
+        idempotencyKey: String? = null,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             val deviceId = preferences.deviceId ?: error("Watch is not paired")
             val timestamp = System.currentTimeMillis()
@@ -145,6 +167,9 @@ class RelayApi(
                 .header("x-relay-timestamp", timestamp.toString())
                 .header("x-relay-nonce", nonce)
                 .header("x-relay-signature", identity.sign(canonical))
+            idempotencyKey?.let {
+                builder.header("idempotency-key", it)
+            }
             if (method == "POST") builder.post(body.toRequestBody(JSON))
             val response = client.newCall(builder.build()).execute()
             response.use {

@@ -345,7 +345,7 @@ git commit -m "feat: restrict Relay to approved workspaces"
 - Consumes: `deviceId`, required `Idempotency-Key`, action type, target ID.
 - Produces: the original serialized result for repeated keys.
 
-- [ ] **Step 1: Write a failing duplicate-action test**
+- [x] **Step 1: Write a failing duplicate-action test**
 
 ```ts
 it("executes a repeated approval only once and returns the first result", async () => {
@@ -357,28 +357,28 @@ it("executes a repeated approval only once and returns the first result", async 
 });
 ```
 
-- [ ] **Step 2: Run it and observe the missing executor**
+- [x] **Step 2: Run it and observe the missing executor**
 
 Run `node --test apps/bridge/test/action-executor.test.ts`.
 
-- [ ] **Step 3: Add transactional idempotency storage**
+- [x] **Step 3: Add transactional idempotency storage**
 
 Add an `action_results` SQLite table keyed by `(device_id, idempotency_key)`.
 Persist `action`, `target`, `status`, `response_json`, and timestamps. Insert the
 claim before the operation and finalize it in the same serialized executor.
 
-- [ ] **Step 4: Require idempotency keys on all mutating watch routes**
+- [x] **Step 4: Require idempotency keys on all mutating watch routes**
 
 Approval, question, instruction, steer, stop, and start-task requests without a
 valid 16–128 character `Idempotency-Key` return `400`. Repeated requests return
 the first response and do not call Codex again.
 
-- [ ] **Step 5: Audit success and failure without payload content**
+- [x] **Step 5: Audit success and failure without payload content**
 
 Audit only device, action type, target, risk class where applicable, and result.
 Never store prompt text, command output, answers, or request bodies.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run `pnpm test && pnpm typecheck`.
 

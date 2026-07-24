@@ -1,4 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  ActionExecutor,
+  ActionInProgressError,
+  ActionPreviouslyFailedError,
+  IdempotencyConflictError,
+} from "./actions/action-executor.ts";
 import type { CodexAdapter } from "./codex/adapter.ts";
 import { verifyRequest } from "./security/authentication.ts";
 import { PairingService } from "./security/pairing.ts";
@@ -45,6 +51,7 @@ async function parseJson(request: Request) {
 
 export function createRequestHandler(options: HandlerOptions) {
   const pairing = new PairingService(options.store);
+  const actions = new ActionExecutor(options.store);
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
@@ -84,6 +91,14 @@ export function createRequestHandler(options: HandlerOptions) {
       return json({ error: "unauthorized" }, 401);
     }
 
+    const idempotencyKey = request.headers.get("idempotency-key") ?? "";
+    if (
+      request.method === "POST" &&
+      !/^[A-Za-z0-9._:-]{16,128}$/.test(idempotencyKey)
+    ) {
+      return json({ error: "invalid idempotency key" }, 400);
+    }
+
     try {
       if (request.method === "GET" && url.pathname === "/v1/tasks") {
         return json(await options.adapter.listTasks(url.searchParams.get("cursor")));
@@ -112,49 +127,116 @@ export function createRequestHandler(options: HandlerOptions) {
         const body = await parseJson(request);
         const approval = url.pathname.match(/^\/v1\/approvals\/([^/]+)$/);
         if (approval?.[1] && options.adapter.answerApproval) {
-          options.adapter.answerApproval(approval[1], body.decision === "approve");
-          return json({ ok: true });
+          const approve = body.decision === "approve";
+          const pending = options.adapter
+            .approvals()
+            .find((item) => item.id === approval[1]);
+          return json(
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: `approval.${approve ? "approve" : "deny"}.${pending?.risk ?? "dangerous"}`,
+                target: approval[1],
+              },
+              () => {
+                options.adapter.answerApproval?.(approval[1], approve);
+                return { ok: true };
+              },
+            ),
+          );
         }
         const question = url.pathname.match(/^\/v1\/questions\/([^/]+)$/);
         if (question?.[1] && options.adapter.answerQuestion) {
-          options.adapter.answerQuestion(
-            question[1],
-            (body.answers ?? {}) as Record<string, string[]>,
+          return json(
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: "question.answer",
+                target: question[1],
+              },
+              () => {
+                options.adapter.answerQuestion?.(
+                  question[1],
+                  (body.answers ?? {}) as Record<string, string[]>,
+                );
+                return { ok: true };
+              },
+            ),
           );
-          return json({ ok: true });
         }
         if (url.pathname === "/v1/tasks" && options.adapter.startTask) {
           const cwd = await options.workspacePolicy.assertAllowed(String(body.cwd));
           return json(
-            await options.adapter.startTask({
-              cwd,
-              model: String(body.model),
-              effort: String(body.effort),
-              prompt: String(body.prompt),
-            }),
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: "task.start",
+                target: "new-task",
+              },
+              () =>
+                options.adapter.startTask?.({
+                  cwd,
+                  model: String(body.model),
+                  effort: String(body.effort),
+                  prompt: String(body.prompt),
+                }),
+            ),
             201,
           );
         }
         const instruction = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/instructions$/);
         if (instruction?.[1] && options.adapter.sendInstruction) {
           return json(
-            await options.adapter.sendInstruction(instruction[1], String(body.text)),
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: "task.instruction",
+                target: instruction[1],
+              },
+              () =>
+                options.adapter.sendInstruction?.(
+                  instruction[1],
+                  String(body.text),
+                ),
+            ),
           );
         }
         const steer = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/steer$/);
         if (steer?.[1] && options.adapter.steerTask) {
           return json(
-            await options.adapter.steerTask(
-              steer[1],
-              String(body.turnId),
-              String(body.text),
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: "task.steer",
+                target: steer[1],
+              },
+              () =>
+                options.adapter.steerTask?.(
+                  steer[1],
+                  String(body.turnId),
+                  String(body.text),
+                ),
             ),
           );
         }
         const stop = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/stop$/);
         if (stop?.[1] && options.adapter.stopTask) {
           return json(
-            await options.adapter.stopTask(stop[1], String(body.turnId)),
+            await actions.run(
+              {
+                deviceId,
+                idempotencyKey,
+                action: "task.stop",
+                target: stop[1],
+              },
+              () =>
+                options.adapter.stopTask?.(stop[1], String(body.turnId)),
+            ),
           );
         }
       }
@@ -162,6 +244,13 @@ export function createRequestHandler(options: HandlerOptions) {
     } catch (error) {
       if (error instanceof WorkspacePolicyError) {
         return json({ error: error.message }, 403);
+      }
+      if (
+        error instanceof ActionInProgressError ||
+        error instanceof ActionPreviouslyFailedError ||
+        error instanceof IdempotencyConflictError
+      ) {
+        return json({ error: error.message }, 409);
       }
       const message = error instanceof Error ? error.message : "request failed";
       return json({ error: message }, message.includes("expired") ? 409 : 400);
