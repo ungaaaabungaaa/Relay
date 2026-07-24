@@ -703,29 +703,29 @@ git commit -m "feat: add visible Relay live monitoring"
   shutdown.
 - Produces `dist/relay-bridge-arm64` with no external Node.js dependency.
 
-- [ ] **Step 1: Write failing admin authentication tests**
+- [x] **Step 1: Write failing admin authentication tests**
 
 Requests on the admin port without the 256-bit bearer token return a generic
 `401`. The admin server refuses any non-loopback bind address.
 
-- [ ] **Step 2: Implement focused admin routes**
+- [x] **Step 2: Implement focused admin routes**
 
 No route accepts arbitrary shell commands. Return structured status only and
 never return a stored secret value.
 
-- [ ] **Step 3: Add Node SEA build dependencies and script**
+- [x] **Step 3: Add Node SEA build dependencies and script**
 
 Bundle the TypeScript entry to one CommonJS file, generate a SEA blob, copy the
 current arm64 Node executable, remove its existing signature, inject the blob,
 and apply an ad-hoc signature for local verification. Release signing replaces
 the ad-hoc signature later.
 
-- [ ] **Step 4: Smoke-test the binary**
+- [x] **Step 4: Smoke-test the binary**
 
 Start it with temporary data and ports, call both health endpoints, assert the
 watch endpoint contains no private metadata, then terminate cleanly.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run bridge tests, typecheck, SEA build, and smoke test.
 

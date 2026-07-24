@@ -20,7 +20,7 @@ export class WorkspacePolicyError extends Error {
 }
 
 export class WorkspacePolicy {
-  private readonly configuredRoots: readonly string[];
+  private configuredRoots: readonly string[];
 
   constructor(configuredRoots: readonly string[]) {
     this.configuredRoots = configuredRoots;
@@ -70,6 +70,21 @@ export class WorkspacePolicy {
           kind: "directory" as const,
         })),
     };
+  }
+
+  async roots(): Promise<string[]> {
+    return this.canonicalRoots();
+  }
+
+  async replaceRoots(roots: readonly string[]): Promise<string[]> {
+    let canonical: string[];
+    try {
+      canonical = await Promise.all(roots.map((root) => realpath(root)));
+    } catch {
+      throw new WorkspacePolicyError();
+    }
+    this.configuredRoots = [...new Set(canonical)].sort();
+    return [...this.configuredRoots];
   }
 
   private async canonicalRoots(): Promise<string[]> {

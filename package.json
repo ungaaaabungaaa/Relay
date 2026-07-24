@@ -4,12 +4,16 @@
   "packageManager": "pnpm@11.16.0",
   "scripts": {
     "generate:codex": "node scripts/generate-codex-protocol.mjs",
+    "build:bridge-sea": "node scripts/build-bridge-sea.mjs",
+    "smoke:bridge-sea": "node scripts/smoke-bridge-sea.mjs",
     "test": "node --test packages/*/test/*.test.ts apps/*/test/*.test.ts",
     "test:protocol": "node --test packages/codex-protocol/test/*.test.ts",
     "typecheck": "node scripts/check-types.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.1",
+    "postject": "1.0.0-alpha.6",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   }

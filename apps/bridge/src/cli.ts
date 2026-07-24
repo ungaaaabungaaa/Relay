@@ -1,6 +1,10 @@
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { parseArgs } from "node:util";
+import {
+  assertLoopbackAdminHost,
+  listenAdminServer,
+} from "./admin/admin-server.ts";
 import { CodexAdapter } from "./codex/adapter.ts";
 import { PairingService } from "./security/pairing.ts";
 import { createRelayServer } from "./server.ts";
@@ -23,8 +27,27 @@ const command = positionals[0] ?? "help";
 const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
 
 if (command === "serve") {
+  const adminToken = process.env.CODEWATCH_ADMIN_TOKEN?.trim();
+  if (!adminToken) {
+    throw new Error("CODEWATCH_ADMIN_TOKEN is required to start the bridge");
+  }
+  const host = process.env.CODEWATCH_BIND_HOST ?? "127.0.0.1";
+  const adminHost = process.env.CODEWATCH_ADMIN_HOST ?? "127.0.0.1";
+  assertLoopbackAdminHost(host);
+  assertLoopbackAdminHost(adminHost);
+  const port = Number(process.env.CODEWATCH_PORT ?? "43117");
+  const adminPort = Number(process.env.CODEWATCH_ADMIN_PORT ?? "43118");
   const adapter = new CodexAdapter();
-  await adapter.start();
+  let codexStatus: "starting" | "ready" | "unavailable" = "starting";
+  void adapter.start().then(
+    () => {
+      codexStatus = "ready";
+    },
+    () => {
+      codexStatus = "unavailable";
+      console.error("Relay could not connect to Codex");
+    },
+  );
   const server = createRelayServer({
     store,
     adapter,
@@ -37,15 +60,40 @@ if (command === "serve") {
         }
       : {}),
   });
-  const host = process.env.CODEWATCH_BIND_HOST ?? "127.0.0.1";
-  const port = Number(process.env.CODEWATCH_PORT ?? "43117");
   server.listen(port, host, () => {
-    console.log(`Relay bridge listening on http://${host}:${port}`);
+    const address = server.address();
+    const listeningPort =
+      address && typeof address !== "string" ? address.port : port;
+    console.log(`Relay bridge listening on http://${host}:${listeningPort}`);
   });
+  let shuttingDown = false;
   const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     server.close();
+    adminServer.close();
     adapter.stop();
   };
+  const adminServer = listenAdminServer(
+    {
+      token: adminToken,
+      store,
+      workspacePolicy,
+      adminBindHost: adminHost,
+      watchBindHost: host,
+      watchPort: port,
+      codexStatus: () => codexStatus,
+      voiceConfigured: Boolean(openAiApiKey),
+      shutdown,
+    },
+    adminPort,
+    adminHost,
+    (address) => {
+      console.log(
+        `Relay admin listening on http://${adminHost}:${address.port}`,
+      );
+    },
+  );
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 } else if (command === "pair") {

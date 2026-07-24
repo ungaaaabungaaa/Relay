@@ -31,6 +31,7 @@ export interface SecurityStore {
   revokeDevice(id: string, now?: number): void;
   savePairingCode(code: string, expiresAt: number): void;
   consumePairingCode(code: string): PairingCode | undefined;
+  listDevices(): StoredDevice[];
   getActionResult(deviceId: string, idempotencyKey: string): StoredActionResult | undefined;
   claimAction(
     deviceId: string,
@@ -91,6 +92,12 @@ export class InMemorySecurityStore {
     if (!stored || stored.used) return undefined;
     stored.used = true;
     return stored;
+  }
+
+  listDevices() {
+    return [...this.devices.values()].sort(
+      (left, right) => right.createdAt - left.createdAt,
+    );
   }
 
   getActionResult(deviceId: string, idempotencyKey: string) {
