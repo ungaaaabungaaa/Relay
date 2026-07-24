@@ -40,6 +40,8 @@ describe("Codex protocol mappers", () => {
     assert.equal(approval.kind, "command");
     assert.equal(approval.command, "git push");
     assert.equal(approval.cwd, "/tmp/relay");
+    assert.equal(approval.risk, "dangerous");
+    assert.deepEqual(approval.riskReasons, ["remote write"]);
   });
 
   it("maps user input questions and model efforts", () => {

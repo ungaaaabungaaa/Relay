@@ -30,7 +30,16 @@ class RelayReducerTest {
 
     @Test
     fun removesResolvedApproval() {
-        val approval = RelayApproval("a", "t", "command", "git push", "/tmp", "network")
+        val approval = RelayApproval(
+            id = "a",
+            threadId = "t",
+            kind = "command",
+            risk = ApprovalRisk.Dangerous,
+            riskReasons = listOf("remote write"),
+            command = "git push",
+            cwd = "/tmp",
+            reason = "network",
+        )
         val state = RelayState(approvals = listOf(approval))
         assertTrue(reduce(state, RelayAction.ApprovalResolved("a")).approvals.isEmpty())
     }

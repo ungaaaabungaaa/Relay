@@ -1,4 +1,5 @@
 import type { RelayApproval, RelayModel, RelayQuestion, RelayTask } from "../domain.ts";
+import { classifyApprovalRisk } from "../security/approval-risk.ts";
 
 type ProtocolThread = {
   id: string;
@@ -48,12 +49,18 @@ export function mapApproval(id: string, request: ApprovalRequest): RelayApproval
     : request.method.includes("fileChange")
       ? "file"
       : "permission";
+  const risk = classifyApprovalRisk({
+    kind,
+    command: request.params.command ?? null,
+    reason: request.params.reason ?? null,
+  });
   return {
     id,
     threadId: request.params.threadId,
     turnId: request.params.turnId,
     itemId: request.params.itemId,
     kind,
+    ...risk,
     command: request.params.command ?? null,
     cwd: request.params.cwd ?? null,
     reason: request.params.reason ?? null,

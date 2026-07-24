@@ -122,7 +122,7 @@ Tailscale CLI, Android Platform Tools.
 - Consumes: mapped Codex approval kind, exact command, reason, and working
   directory.
 
-- [ ] **Step 1: Write the failing bridge risk tests**
+- [x] **Step 1: Write the failing bridge risk tests**
 
 ```ts
 it("marks destructive, privileged, remote-write, and incomplete approvals dangerous", () => {
@@ -142,7 +142,7 @@ it("keeps read-only and test commands normal", () => {
 });
 ```
 
-- [ ] **Step 2: Run the bridge test and observe the missing-module failure**
+- [x] **Step 2: Run the bridge test and observe the missing-module failure**
 
 Run:
 
@@ -152,7 +152,7 @@ node --test apps/bridge/test/approval-risk.test.ts
 
 Expected: FAIL because `approval-risk.ts` does not exist.
 
-- [ ] **Step 3: Implement the minimal deterministic classifier**
+- [x] **Step 3: Implement the minimal deterministic classifier**
 
 ```ts
 export type ApprovalRiskInput = {
@@ -181,7 +181,7 @@ export function classifyApprovalRisk(input: ApprovalRiskInput): ApprovalRiskResu
 }
 ```
 
-- [ ] **Step 4: Add risk metadata to mapped approvals and mapper assertions**
+- [x] **Step 4: Add risk metadata to mapped approvals and mapper assertions**
 
 `RelayApproval` gains:
 
@@ -193,7 +193,7 @@ riskReasons: string[];
 `mapApproval` calls `classifyApprovalRisk` once and spreads the result into the
 returned object.
 
-- [ ] **Step 5: Run bridge tests**
+- [x] **Step 5: Run bridge tests**
 
 Run:
 
@@ -204,7 +204,7 @@ pnpm typecheck
 
 Expected: all Node tests pass and the TypeScript check exits zero.
 
-- [ ] **Step 6: Write the failing Kotlin policy test**
+- [x] **Step 6: Write the failing Kotlin policy test**
 
 ```kotlin
 @Test
@@ -224,7 +224,7 @@ env JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' \
 
 Expected: FAIL because `ApprovalRisk` and `requiresHold` do not exist.
 
-- [ ] **Step 7: Add the Kotlin enum, parser, and hold policy**
+- [x] **Step 7: Add the Kotlin enum, parser, and hold policy**
 
 ```kotlin
 enum class ApprovalRisk { Normal, Dangerous }
@@ -235,7 +235,7 @@ fun RelayApproval.requiresHold(): Boolean = risk == ApprovalRisk.Dangerous
 The JSON parser maps only the exact string `normal` to `Normal`; missing or
 unknown strings map to `Dangerous`.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 

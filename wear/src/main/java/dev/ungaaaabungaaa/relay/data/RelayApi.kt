@@ -5,6 +5,7 @@ import dev.ungaaaabungaaa.relay.domain.RelayFolder
 import dev.ungaaaabungaaa.relay.domain.RelayModel
 import dev.ungaaaabungaaa.relay.domain.RelayQuestion
 import dev.ungaaaabungaaa.relay.domain.RelayTask
+import dev.ungaaaabungaaa.relay.domain.parseApprovalRisk
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
 import dev.ungaaaabungaaa.relay.security.canonicalRequest
 import java.util.UUID
@@ -57,6 +58,8 @@ class RelayApi(
                 item.getString("id"),
                 item.getString("threadId"),
                 item.getString("kind"),
+                parseApprovalRisk(item.optString("risk").takeIf(String::isNotBlank)),
+                item.optJSONArray("riskReasons")?.mapStrings() ?: emptyList(),
                 item.optString("command").takeIf { it.isNotBlank() && it != "null" },
                 item.optString("cwd").takeIf { it.isNotBlank() && it != "null" },
                 item.optString("reason").takeIf { it.isNotBlank() && it != "null" },

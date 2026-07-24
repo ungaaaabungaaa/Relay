@@ -9,10 +9,17 @@ data class RelayTask(
     val updatedAt: Long = 0,
 )
 
+enum class ApprovalRisk {
+    Normal,
+    Dangerous,
+}
+
 data class RelayApproval(
     val id: String,
     val threadId: String,
     val kind: String,
+    val risk: ApprovalRisk,
+    val riskReasons: List<String>,
     val command: String?,
     val cwd: String?,
     val reason: String?,

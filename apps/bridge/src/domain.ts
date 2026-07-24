@@ -13,6 +13,8 @@ export type RelayApproval = {
   turnId: string;
   itemId: string;
   kind: "command" | "file" | "permission";
+  risk: "normal" | "dangerous";
+  riskReasons: string[];
   command: string | null;
   cwd: string | null;
   reason: string | null;
