@@ -6,12 +6,12 @@ import org.junit.Test
 
 class RelayReducerTest {
     @Test
-    fun startsInPairingAndConnectsToInbox() {
+    fun startsInPairingAndConnectsToHome() {
         val initial = RelayState()
-        assertEquals(Screen.Pairing, initial.screen)
+        assertEquals(Screen.PairingCode, initial.screen)
 
         val connected = reduce(initial, RelayAction.Connected)
-        assertEquals(Screen.Inbox, connected.screen)
+        assertEquals(Screen.Home, connected.screen)
         assertTrue(connected.connected)
     }
 
@@ -53,5 +53,24 @@ class RelayReducerTest {
         )
         val state = RelayState(approvals = listOf(approval))
         assertTrue(reduce(state, RelayAction.ApprovalResolved("a")).approvals.isEmpty())
+    }
+
+    @Test
+    fun revocationClearsCachedPrivateState() {
+        val state = RelayState(
+            screen = Screen.Home,
+            connectionState = RelayConnectionState.Live,
+            tasks = listOf(RelayTask("1", "Private task", "running", "/private")),
+            questions = listOf(RelayQuestion("q", "t", "Private question")),
+        )
+
+        val revoked = reduce(
+            state,
+            RelayAction.ConnectionChanged(RelayConnectionState.Revoked),
+        )
+
+        assertEquals(Screen.Revoked, revoked.screen)
+        assertTrue(revoked.tasks.isEmpty())
+        assertTrue(revoked.questions.isEmpty())
     }
 }

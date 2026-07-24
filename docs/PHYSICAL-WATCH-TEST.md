@@ -43,6 +43,20 @@ adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
 
 Enter the six-character code on the watch. Keep the default bridge URL, `http://127.0.0.1:43117`; `adb reverse` securely carries that watch-local port to the Mac-local bridge.
 
+## Run the physical UI navigation test
+
+The instrumentation APK compiles without an emulator. After `adb devices` shows
+the Galaxy Watch6 as connected, run:
+
+```bash
+./gradlew :wear:connectedDebugAndroidTest
+```
+
+`RelayNavigationTest` exercises Home → Action inbox → Approval detail and
+verifies that the exact command and working directory remain visible. This gate
+is pending until the reset Watch6 is paired over wireless ADB; do not replace it
+with an emulator run.
+
 ## Acceptance pass
 
 - Pairing succeeds once and the code cannot be reused.

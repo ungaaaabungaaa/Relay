@@ -536,39 +536,39 @@ git commit -m "feat: receive live Relay events on Wear OS"
 - Consumes only `RelayState` and callback functions; composables contain no
   protocol, persistence, or credential logic.
 
-- [ ] **Step 1: Write failing pure navigation tests**
+- [x] **Step 1: Write failing pure navigation tests**
 
 Assert Home → Inbox → Approval, Home → Task → Instruction, and New Task →
 Workspace → Folder → Model → Effort → Permissions → Review.
 
-- [ ] **Step 2: Add the final screen enum and immutable draft state**
+- [x] **Step 2: Add the final screen enum and immutable draft state**
 
 Represent onboarding, connection failures, daily control, new-task steps,
 history, settings, and about explicitly. Do not use a generic screen for
 production states.
 
-- [ ] **Step 3: Write and test the hold controller**
+- [x] **Step 3: Write and test the hold controller**
 
 `HoldController` reaches confirmation only after 1,500 milliseconds of
 continuous press. Cancel, pointer exit, lifecycle loss, and early release reset
 progress without invoking approval.
 
-- [ ] **Step 4: Split reusable components and focused screens**
+- [x] **Step 4: Split reusable components and focused screens**
 
 Use `TransformingLazyColumn` or the current Wear Compose rotary list primitive,
 round-screen safe padding, minimum touch targets, vector icons, content
 descriptions, and text for commands, paths, models, and consequences.
 
-- [ ] **Step 5: Wire all loading, empty, stale, failure, and expired states**
+- [x] **Step 5: Wire all loading, empty, stale, failure, and expired states**
 
 Stale states render cached summaries but expose no mutating callbacks.
 
-- [ ] **Step 6: Verify without an emulator**
+- [x] **Step 6: Verify without an emulator**
 
 Run unit tests, lint, and APK assembly. Record connected Android tests as a
 physical-device gate until the Watch6 is paired.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add wear

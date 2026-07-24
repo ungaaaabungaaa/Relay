@@ -12,9 +12,13 @@ import dev.ungaaaabungaaa.relay.data.RelayPreferences
 import dev.ungaaaabungaaa.relay.data.RelaySocket
 import dev.ungaaaabungaaa.relay.data.applyEvents
 import dev.ungaaaabungaaa.relay.domain.ApprovalHistoryItem
+import dev.ungaaaabungaaa.relay.domain.NewTaskDraft
 import dev.ungaaaabungaaa.relay.domain.RelayAction
 import dev.ungaaaabungaaa.relay.domain.RelayApproval
 import dev.ungaaaabungaaa.relay.domain.RelayConnectionState
+import dev.ungaaaabungaaa.relay.domain.RelayFolder
+import dev.ungaaaabungaaa.relay.domain.RelayModel
+import dev.ungaaaabungaaa.relay.domain.RelayQuestion
 import dev.ungaaaabungaaa.relay.domain.RelayState
 import dev.ungaaaabungaaa.relay.domain.RelayTask
 import dev.ungaaaabungaaa.relay.domain.Screen
@@ -29,7 +33,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
 
     var state by mutableStateOf(
         RelayState(
-            screen = if (preferences.deviceId == null) Screen.Pairing else Screen.Offline,
+            screen = if (preferences.deviceId == null) Screen.PairingCode else Screen.Offline,
             connectionState = if (preferences.deviceId == null) {
                 RelayConnectionState.Unpaired
             } else {
@@ -42,6 +46,8 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     var pairingCode by mutableStateOf("")
     var bridgeUrl by mutableStateOf(preferences.bridgeUrl)
     var instruction by mutableStateOf("")
+    var questionAnswer by mutableStateOf("")
+    var questionReviewing by mutableStateOf(false)
 
     private val socket by lazy {
         RelaySocket(
@@ -68,11 +74,14 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         when (screen) {
             Screen.Tasks -> loadTasks()
             Screen.Inbox -> refresh()
+            Screen.Workspaces -> loadFolderEntries("", Screen.Workspaces)
+            Screen.Models -> loadModels()
             else -> Unit
         }
     }
 
     fun pair() {
+        dispatch(RelayAction.Navigate(Screen.Connecting))
         viewModelScope.launch {
             runCatching {
                 preferences.bridgeUrl = bridgeUrl
@@ -80,7 +89,10 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess {
                 dispatch(RelayAction.Connected)
                 refresh(startLiveAfter = true)
-            }.onFailure { dispatch(RelayAction.Failure(it.message ?: "Pairing failed")) }
+            }.onFailure {
+                state = state.copy(screen = Screen.PairingCode)
+                dispatch(RelayAction.Failure(it.message ?: "Pairing failed"))
+            }
         }
     }
 
@@ -133,7 +145,14 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(selectedApproval = approval, screen = Screen.Approval)
     }
 
+    fun selectQuestion(question: RelayQuestion) {
+        questionAnswer = ""
+        questionReviewing = false
+        state = state.copy(selectedQuestion = question, screen = Screen.Question)
+    }
+
     fun decide(approve: Boolean) {
+        if (!state.connected || state.stale) return
         val approval = state.selectedApproval ?: return
         viewModelScope.launch {
             runCatching { api.decideApproval(approval.id, approve) }
@@ -154,14 +173,135 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun answerQuestion(answers: List<String>) {
+        if (!state.connected || state.stale) return
+        val question = state.selectedQuestion ?: return
+        viewModelScope.launch {
+            runCatching {
+                api.answerQuestion(question.id, question.questionId, answers)
+            }.onSuccess {
+                questionAnswer = ""
+                questionReviewing = false
+                state = state.copy(
+                    questions = state.questions.filterNot { it.id == question.id },
+                    selectedQuestion = null,
+                    screen = Screen.Inbox,
+                )
+            }.onFailure {
+                dispatch(RelayAction.Failure(it.message ?: "Unable to answer question"))
+            }
+        }
+    }
+
+    fun reviewQuestion(answer: String) {
+        questionAnswer = answer
+        questionReviewing = answer.isNotBlank()
+    }
+
+    fun editQuestionAnswer() {
+        questionReviewing = false
+    }
+
     fun sendInstruction() {
+        if (!state.connected || state.stale) return
         val task = state.selectedTask ?: return
         val text = instruction.trim()
         if (text.isEmpty()) return
         viewModelScope.launch {
             runCatching { api.send(task.id, text) }
-                .onSuccess { instruction = "" }
+                .onSuccess {
+                    instruction = ""
+                    state = state.copy(screen = Screen.TaskDetail)
+                }
                 .onFailure { dispatch(RelayAction.Failure(it.message ?: "Send failed")) }
+        }
+    }
+
+    fun beginNewTask() {
+        state = state.copy(
+            newTaskDraft = NewTaskDraft(),
+            screen = Screen.Workspaces,
+        )
+        loadFolderEntries("", Screen.Workspaces)
+    }
+
+    fun selectWorkspace(folder: RelayFolder) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(folder = folder.path),
+        )
+        loadFolderEntries(folder.path, Screen.Folders)
+    }
+
+    fun openFolder(folder: RelayFolder) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(folder = folder.path),
+        )
+        loadFolderEntries(folder.path, Screen.Folders)
+    }
+
+    fun useSelectedFolder() {
+        loadModels()
+    }
+
+    fun selectModel(model: RelayModel) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(
+                modelId = model.id,
+                modelName = model.name,
+                effort = model.defaultEffort,
+            ),
+            screen = Screen.Effort,
+        )
+    }
+
+    fun selectEffort(effort: String) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(effort = effort),
+            screen = Screen.Permissions,
+        )
+    }
+
+    fun selectPermissionProfile(profile: String) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(permissionProfile = profile),
+            screen = Screen.Prompt,
+        )
+    }
+
+    fun updateDraftPrompt(prompt: String) {
+        state = state.copy(
+            newTaskDraft = state.newTaskDraft.copy(prompt = prompt),
+        )
+    }
+
+    fun reviewNewTask() {
+        if (state.newTaskDraft.prompt.isNotBlank()) {
+            state = state.copy(screen = Screen.NewTaskReview)
+        }
+    }
+
+    fun startNewTask() {
+        val draft = state.newTaskDraft
+        if (!state.connected || state.stale || draft.prompt.isBlank()) return
+        viewModelScope.launch {
+            state = state.copy(loading = true)
+            runCatching {
+                api.startTask(
+                    draft.folder,
+                    draft.modelId,
+                    draft.effort,
+                    draft.prompt.trim(),
+                )
+            }.onSuccess {
+                state = state.copy(
+                    loading = false,
+                    newTaskDraft = NewTaskDraft(),
+                    screen = Screen.Tasks,
+                )
+                loadTasks()
+            }.onFailure {
+                dispatch(RelayAction.Failure(it.message ?: "Unable to start task"))
+            }
         }
     }
 
@@ -189,6 +329,32 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
             if (!previous.snapshotRequired && updated.snapshotRequired) {
                 refresh(silent = true, startLiveAfter = true)
             }
+        }
+    }
+
+    private fun loadFolderEntries(path: String, destination: Screen) {
+        viewModelScope.launch {
+            state = state.copy(loading = true, screen = destination)
+            runCatching { api.folders(path) }
+                .onSuccess { folders ->
+                    state = state.copy(folders = folders, loading = false)
+                }
+                .onFailure {
+                    dispatch(RelayAction.Failure(it.message ?: "Unable to load folders"))
+                }
+        }
+    }
+
+    private fun loadModels() {
+        viewModelScope.launch {
+            state = state.copy(loading = true, screen = Screen.Models)
+            runCatching { api.models() }
+                .onSuccess { models ->
+                    state = state.copy(models = models, loading = false)
+                }
+                .onFailure {
+                    dispatch(RelayAction.Failure(it.message ?: "Unable to load models"))
+                }
         }
     }
 

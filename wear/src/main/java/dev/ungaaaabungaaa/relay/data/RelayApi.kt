@@ -68,10 +68,13 @@ class RelayApi(
         val questions = response.getJSONArray("questions").mapObjects { item ->
             val first = item.getJSONArray("questions").getJSONObject(0)
             RelayQuestion(
-                item.getString("id"),
-                item.getString("threadId"),
-                first.getString("question"),
-                first.optJSONArray("options")?.mapObjects { it.getString("label") } ?: emptyList(),
+                id = item.getString("id"),
+                threadId = item.getString("threadId"),
+                prompt = first.getString("question"),
+                options = first.optJSONArray("options")
+                    ?.mapObjects { it.getString("label") }
+                    ?: emptyList(),
+                questionId = first.getString("id"),
             )
         }
         return approvals to questions
@@ -88,8 +91,14 @@ class RelayApi(
             )
         }
 
-    suspend fun folders(path: String): List<RelayFolder> =
-        get("/v1/folders?path=${java.net.URLEncoder.encode(path, "UTF-8")}")
+    suspend fun folders(path: String = ""): List<RelayFolder> =
+        get(
+            if (path.isBlank()) {
+                "/v1/folders"
+            } else {
+                "/v1/folders?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
+            },
+        )
             .getJSONArray("entries")
             .mapObjects { RelayFolder(it.getString("name"), it.getString("path")) }
 

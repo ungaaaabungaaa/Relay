@@ -1,20 +1,34 @@
 package dev.ungaaaabungaaa.relay.domain
 
 enum class Screen {
-    Pairing,
+    Welcome,
+    PairingCode,
+    MacIdentity,
+    Connecting,
     Offline,
+    Revoked,
+    UpdateRequired,
+    Home,
     Inbox,
     Approval,
     Question,
     Tasks,
     TaskDetail,
-    Voice,
-    Transcript,
+    Instruction,
+    SystemInput,
+    VoiceRecord,
+    TranscriptReview,
+    TaskControls,
+    Workspaces,
     Folders,
     Models,
-    NewTask,
+    Effort,
+    Permissions,
+    Prompt,
+    NewTaskReview,
     Settings,
     History,
+    About,
 }
 
 enum class RelayConnectionState {
@@ -28,7 +42,7 @@ enum class RelayConnectionState {
 }
 
 data class RelayState(
-    val screen: Screen = Screen.Pairing,
+    val screen: Screen = Screen.PairingCode,
     val connectionState: RelayConnectionState = RelayConnectionState.Unpaired,
     val connected: Boolean = false,
     val stale: Boolean = false,
@@ -43,10 +57,7 @@ data class RelayState(
     val selectedTask: RelayTask? = null,
     val selectedApproval: RelayApproval? = null,
     val selectedQuestion: RelayQuestion? = null,
-    val selectedFolder: String = "",
-    val selectedModel: String = "",
-    val selectedEffort: String = "",
-    val draftPrompt: String = "",
+    val newTaskDraft: NewTaskDraft = NewTaskDraft(),
     val transcript: String = "",
     val lastEventId: Long = 0,
     val appliedEventCount: Int = 0,
@@ -74,8 +85,12 @@ sealed interface RelayAction {
 
 fun reduce(state: RelayState, action: RelayAction): RelayState = when (action) {
     RelayAction.Connected -> state.copy(
-        screen = if (state.screen == Screen.Pairing || state.screen == Screen.Offline) {
-            Screen.Inbox
+        screen = if (
+            state.screen == Screen.PairingCode ||
+            state.screen == Screen.Connecting ||
+            state.screen == Screen.Offline
+        ) {
+            Screen.Home
         } else {
             state.screen
         },
@@ -109,8 +124,12 @@ fun reduce(state: RelayState, action: RelayAction): RelayState = when (action) {
             connected = false,
         )
         RelayConnectionState.Live -> state.copy(
-            screen = if (state.screen == Screen.Pairing || state.screen == Screen.Offline) {
-                Screen.Inbox
+            screen = if (
+                state.screen == Screen.PairingCode ||
+                state.screen == Screen.Connecting ||
+                state.screen == Screen.Offline
+            ) {
+                Screen.Home
             } else {
                 state.screen
             },
@@ -130,15 +149,14 @@ fun reduce(state: RelayState, action: RelayAction): RelayState = when (action) {
             connected = false,
             stale = true,
         )
-        RelayConnectionState.Revoked -> state.copy(
-            screen = Screen.Pairing,
+        RelayConnectionState.Revoked -> RelayState(
+            screen = Screen.Revoked,
             connectionState = action.connectionState,
-            connected = false,
             stale = true,
             error = "Pairing was revoked on the Mac",
         )
         RelayConnectionState.UpdateRequired -> state.copy(
-            screen = Screen.Offline,
+            screen = Screen.UpdateRequired,
             connectionState = action.connectionState,
             connected = false,
             stale = true,

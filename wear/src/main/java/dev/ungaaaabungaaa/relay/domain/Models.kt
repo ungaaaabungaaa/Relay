@@ -30,6 +30,7 @@ data class RelayQuestion(
     val threadId: String,
     val prompt: String,
     val options: List<String> = emptyList(),
+    val questionId: String = id,
 )
 
 data class RelayModel(
@@ -47,4 +48,13 @@ data class ApprovalHistoryItem(
     val decision: String,
     val summary: String,
     val timestamp: Long,
+)
+
+data class NewTaskDraft(
+    val folder: String = "",
+    val modelId: String = "",
+    val modelName: String = "",
+    val effort: String = "",
+    val permissionProfile: String = "On request",
+    val prompt: String = "",
 )

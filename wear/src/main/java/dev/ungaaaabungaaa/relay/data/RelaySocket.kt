@@ -283,6 +283,7 @@ private fun parseQuestion(data: JSONObject): RelayQuestion {
         options = first.optJSONArray("options")?.mapObjects {
             it.getString("label")
         } ?: emptyList(),
+        questionId = first.getString("id"),
     )
 }
 
