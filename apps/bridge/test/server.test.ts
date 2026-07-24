@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { canonicalRequest } from "../src/security/authentication.ts";
 import { InMemorySecurityStore } from "../src/security/store.ts";
 import { createRequestHandler } from "../src/server.ts";
+import { WorkspacePolicy } from "../src/workspaces/workspace-policy.ts";
 
 const fakeAdapter = {
   listTasks: async () => ({ data: [{ id: "secret-task" }], nextCursor: null }),
@@ -18,6 +22,7 @@ describe("bridge API", () => {
     const handler = createRequestHandler({
       store: new InMemorySecurityStore(),
       adapter: fakeAdapter,
+      workspacePolicy: new WorkspacePolicy([]),
     });
     const response = await handler(new Request("http://localhost/health"));
     assert.equal(response.status, 200);
@@ -28,6 +33,7 @@ describe("bridge API", () => {
     const handler = createRequestHandler({
       store: new InMemorySecurityStore(),
       adapter: fakeAdapter,
+      workspacePolicy: new WorkspacePolicy([]),
     });
     const response = await handler(new Request("http://localhost/v1/tasks"));
     assert.equal(response.status, 401);
@@ -48,7 +54,11 @@ describe("bridge API", () => {
       nonce: "signed-nonce-1234",
     };
     const signature = sign(null, Buffer.from(canonicalRequest(signed)), privateKey).toString("base64");
-    const handler = createRequestHandler({ store, adapter: fakeAdapter });
+    const handler = createRequestHandler({
+      store,
+      adapter: fakeAdapter,
+      workspacePolicy: new WorkspacePolicy([]),
+    });
     const response = await handler(
       new Request("http://localhost/v1/tasks", {
         headers: {
@@ -61,5 +71,105 @@ describe("bridge API", () => {
     );
     assert.equal(response.status, 200);
     assert.equal((await response.json()).data[0].id, "secret-task");
+  });
+
+  it("rejects folder browsing and task creation outside approved roots", async (context) => {
+    const temporary = await mkdtemp(join(tmpdir(), "relay-server-workspaces-"));
+    context.after(() => rm(temporary, { recursive: true, force: true }));
+    const approvedRoot = join(temporary, "approved");
+    const siblingRoot = join(temporary, "sibling");
+    await mkdir(approvedRoot);
+    await mkdir(siblingRoot);
+
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const store = new InMemorySecurityStore();
+    store.addDevice(
+      "watch",
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    let startCalls = 0;
+    const handler = createRequestHandler({
+      store,
+      adapter: {
+        ...fakeAdapter,
+        startTask: async () => {
+          startCalls += 1;
+          return {};
+        },
+      },
+      workspacePolicy: new WorkspacePolicy([approvedRoot]),
+    });
+
+    const folderPath = `/v1/folders?path=${encodeURIComponent(siblingRoot)}`;
+    const folderTimestamp = Date.now();
+    const folderNonce = "folder-policy-nonce";
+    const folderSignature = sign(
+      null,
+      Buffer.from(
+        canonicalRequest({
+          deviceId: "watch",
+          method: "GET",
+          path: folderPath,
+          body: new Uint8Array(),
+          timestamp: folderTimestamp,
+          nonce: folderNonce,
+        }),
+      ),
+      privateKey,
+    ).toString("base64");
+    const folderResponse = await handler(
+      new Request(`http://localhost${folderPath}`, {
+        headers: {
+          "x-relay-device": "watch",
+          "x-relay-timestamp": String(folderTimestamp),
+          "x-relay-nonce": folderNonce,
+          "x-relay-signature": folderSignature,
+        },
+      }),
+    );
+    assert.equal(folderResponse.status, 403);
+    assert.deepEqual(await folderResponse.json(), {
+      error: "workspace not allowed",
+    });
+
+    const body = Buffer.from(
+      JSON.stringify({
+        cwd: siblingRoot,
+        model: "gpt",
+        effort: "high",
+        prompt: "Build Relay",
+      }),
+    );
+    const taskTimestamp = Date.now();
+    const taskNonce = "task-policy-nonce";
+    const taskSignature = sign(
+      null,
+      Buffer.from(
+        canonicalRequest({
+          deviceId: "watch",
+          method: "POST",
+          path: "/v1/tasks",
+          body,
+          timestamp: taskTimestamp,
+          nonce: taskNonce,
+        }),
+      ),
+      privateKey,
+    ).toString("base64");
+    const taskResponse = await handler(
+      new Request("http://localhost/v1/tasks", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-relay-device": "watch",
+          "x-relay-timestamp": String(taskTimestamp),
+          "x-relay-nonce": taskNonce,
+          "x-relay-signature": taskSignature,
+        },
+        body,
+      }),
+    );
+    assert.equal(taskResponse.status, 403);
+    assert.equal(startCalls, 0);
   });
 });

@@ -274,7 +274,7 @@ git commit -m "feat: classify Relay approval risk safely"
   `WorkspacePolicy.assertAllowed(path: string): Promise<string>`.
 - Consumes: canonical root paths loaded by the admin configuration.
 
-- [ ] **Step 1: Write failing tests using temporary real directories**
+- [x] **Step 1: Write failing tests using temporary real directories**
 
 ```ts
 it("lists an approved root and rejects a sibling path and escaping symlink", async () => {
@@ -285,7 +285,7 @@ it("lists an approved root and rejects a sibling path and escaping symlink", asy
 });
 ```
 
-- [ ] **Step 2: Run and observe the missing class**
+- [x] **Step 2: Run and observe the missing class**
 
 Run:
 
@@ -295,26 +295,26 @@ node --test apps/bridge/test/workspace-policy.test.ts
 
 Expected: FAIL because `WorkspacePolicy` is missing.
 
-- [ ] **Step 3: Implement canonical root validation**
+- [x] **Step 3: Implement canonical root validation**
 
 Resolve roots and requested paths with `realpath`, require an exact root match or
 the root plus the platform path separator, filter hidden directories, and
 return at most 100 sorted directory entries. A symlink is allowed only when its
 resolved target remains within an approved root.
 
-- [ ] **Step 4: Inject policy into the bridge handler**
+- [x] **Step 4: Inject policy into the bridge handler**
 
 Replace direct `readdir(resolve(...))` access with
 `options.workspacePolicy.list(url.searchParams.get("path") ?? undefined)`.
 Starting a task calls `assertAllowed(String(body.cwd))` before the adapter.
 
-- [ ] **Step 5: Add server tests**
+- [x] **Step 5: Add server tests**
 
 Authenticated `/v1/folders` must return roots when no path is supplied, reject
 an unapproved path with `403`, and reject a new task outside a root before
 calling the fake adapter.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run `pnpm test && pnpm typecheck`.
 

@@ -1,10 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import type { CodexAdapter } from "./codex/adapter.ts";
 import { verifyRequest } from "./security/authentication.ts";
 import { PairingService } from "./security/pairing.ts";
 import type { SecurityStore } from "./security/store.ts";
+import {
+  WorkspacePolicyError,
+  type WorkspacePolicy,
+} from "./workspaces/workspace-policy.ts";
 
 type Adapter = Pick<
   CodexAdapter,
@@ -24,6 +26,7 @@ type Adapter = Pick<
 type HandlerOptions = {
   store: SecurityStore;
   adapter: Partial<Adapter> & Pick<Adapter, "listTasks" | "readTask" | "listModels" | "approvals" | "questions">;
+  workspacePolicy: WorkspacePolicy;
 };
 
 const json = (body: unknown, status = 200) =>
@@ -99,16 +102,11 @@ export function createRequestHandler(options: HandlerOptions) {
         });
       }
       if (request.method === "GET" && url.pathname === "/v1/folders") {
-        const path = resolve(url.searchParams.get("path") || process.env.HOME || "/");
-        const entries = await readdir(path, { withFileTypes: true });
-        return json({
-          path,
-          entries: entries
-            .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .slice(0, 100)
-            .map((entry) => ({ name: entry.name, path: resolve(path, entry.name) })),
-        });
+        return json(
+          await options.workspacePolicy.list(
+            url.searchParams.get("path") ?? undefined,
+          ),
+        );
       }
       if (request.method === "POST") {
         const body = await parseJson(request);
@@ -126,9 +124,10 @@ export function createRequestHandler(options: HandlerOptions) {
           return json({ ok: true });
         }
         if (url.pathname === "/v1/tasks" && options.adapter.startTask) {
+          const cwd = await options.workspacePolicy.assertAllowed(String(body.cwd));
           return json(
             await options.adapter.startTask({
-              cwd: String(body.cwd),
+              cwd,
               model: String(body.model),
               effort: String(body.effort),
               prompt: String(body.prompt),
@@ -161,6 +160,9 @@ export function createRequestHandler(options: HandlerOptions) {
       }
       return json({ error: "not found" }, 404);
     } catch (error) {
+      if (error instanceof WorkspacePolicyError) {
+        return json({ error: error.message }, 403);
+      }
       const message = error instanceof Error ? error.message : "request failed";
       return json({ error: message }, message.includes("expired") ? 409 : 400);
     } finally {

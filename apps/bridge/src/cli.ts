@@ -1,22 +1,29 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { parseArgs } from "node:util";
 import { CodexAdapter } from "./codex/adapter.ts";
 import { PairingService } from "./security/pairing.ts";
 import { createRelayServer } from "./server.ts";
 import { SqliteStore } from "./store/sqlite-store.ts";
+import { WorkspacePolicy } from "./workspaces/workspace-policy.ts";
 
 const dataDir =
   process.env.CODEWATCH_DATA_DIR ??
   join(homedir(), "Library", "Application Support", "Relay");
 const store = new SqliteStore(join(dataDir, "relay.sqlite"));
+const workspacePolicy = new WorkspacePolicy(
+  (process.env.CODEWATCH_WORKSPACE_ROOTS ?? "")
+    .split(delimiter)
+    .map((root) => root.trim())
+    .filter(Boolean),
+);
 const { positionals } = parseArgs({ allowPositionals: true });
 const command = positionals[0] ?? "help";
 
 if (command === "serve") {
   const adapter = new CodexAdapter();
   await adapter.start();
-  const server = createRelayServer({ store, adapter });
+  const server = createRelayServer({ store, adapter, workspacePolicy });
   const host = process.env.CODEWATCH_BIND_HOST ?? "127.0.0.1";
   const port = Number(process.env.CODEWATCH_PORT ?? "43117");
   server.listen(port, host, () => {
