@@ -17,8 +17,19 @@ enum class Screen {
     History,
 }
 
+enum class RelayConnectionState {
+    Unpaired,
+    Connecting,
+    Live,
+    Reconnecting,
+    Offline,
+    Revoked,
+    UpdateRequired,
+}
+
 data class RelayState(
     val screen: Screen = Screen.Pairing,
+    val connectionState: RelayConnectionState = RelayConnectionState.Unpaired,
     val connected: Boolean = false,
     val stale: Boolean = false,
     val loading: Boolean = false,
@@ -37,6 +48,10 @@ data class RelayState(
     val selectedEffort: String = "",
     val draftPrompt: String = "",
     val transcript: String = "",
+    val lastEventId: Long = 0,
+    val appliedEventCount: Int = 0,
+    val snapshotRequired: Boolean = false,
+    val snapshotEventId: Long = 0,
 )
 
 sealed interface RelayAction {
@@ -50,19 +65,28 @@ sealed interface RelayAction {
     ) : RelayAction
     data class ApprovalResolved(val id: String) : RelayAction
     data class Failure(val message: String) : RelayAction
+    data class ConnectionChanged(
+        val connectionState: RelayConnectionState,
+    ) : RelayAction
     data object ClearError : RelayAction
     data object Unpaired : RelayAction
 }
 
 fun reduce(state: RelayState, action: RelayAction): RelayState = when (action) {
     RelayAction.Connected -> state.copy(
-        screen = Screen.Inbox,
+        screen = if (state.screen == Screen.Pairing || state.screen == Screen.Offline) {
+            Screen.Inbox
+        } else {
+            state.screen
+        },
+        connectionState = RelayConnectionState.Live,
         connected = true,
         stale = false,
         error = null,
     )
     RelayAction.Disconnected -> state.copy(
         screen = Screen.Offline,
+        connectionState = RelayConnectionState.Offline,
         connected = false,
         stale = true,
     )
@@ -78,6 +102,49 @@ fun reduce(state: RelayState, action: RelayAction): RelayState = when (action) {
         selectedApproval = null,
         screen = Screen.Inbox,
     )
+    is RelayAction.ConnectionChanged -> when (action.connectionState) {
+        RelayConnectionState.Unpaired -> RelayState()
+        RelayConnectionState.Connecting -> state.copy(
+            connectionState = action.connectionState,
+            connected = false,
+        )
+        RelayConnectionState.Live -> state.copy(
+            screen = if (state.screen == Screen.Pairing || state.screen == Screen.Offline) {
+                Screen.Inbox
+            } else {
+                state.screen
+            },
+            connectionState = action.connectionState,
+            connected = true,
+            stale = false,
+            error = null,
+        )
+        RelayConnectionState.Reconnecting -> state.copy(
+            connectionState = action.connectionState,
+            connected = false,
+            stale = true,
+        )
+        RelayConnectionState.Offline -> state.copy(
+            screen = Screen.Offline,
+            connectionState = action.connectionState,
+            connected = false,
+            stale = true,
+        )
+        RelayConnectionState.Revoked -> state.copy(
+            screen = Screen.Pairing,
+            connectionState = action.connectionState,
+            connected = false,
+            stale = true,
+            error = "Pairing was revoked on the Mac",
+        )
+        RelayConnectionState.UpdateRequired -> state.copy(
+            screen = Screen.Offline,
+            connectionState = action.connectionState,
+            connected = false,
+            stale = true,
+            error = "Relay must be updated before reconnecting",
+        )
+    }
     is RelayAction.Failure -> state.copy(error = action.message, loading = false)
     RelayAction.ClearError -> state.copy(error = null)
     RelayAction.Unpaired -> RelayState()

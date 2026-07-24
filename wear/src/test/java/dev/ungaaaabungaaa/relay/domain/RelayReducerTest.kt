@@ -16,6 +16,17 @@ class RelayReducerTest {
     }
 
     @Test
+    fun preservesCurrentScreenWhenAConnectedSessionRefreshes() {
+        val state = RelayState(
+            screen = Screen.TaskDetail,
+            connectionState = RelayConnectionState.Live,
+            connected = true,
+        )
+
+        assertEquals(Screen.TaskDetail, reduce(state, RelayAction.Connected).screen)
+    }
+
+    @Test
     fun preservesTasksWhenConnectionBecomesStale() {
         val state = RelayState(
             screen = Screen.Tasks,

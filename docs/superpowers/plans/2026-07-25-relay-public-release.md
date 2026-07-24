@@ -469,7 +469,7 @@ git commit -m "feat: stream resumable Relay events"
 - Emits typed `RelayLiveEvent` values and `SnapshotRequired`.
 - Persists the last processed sequence only after state accepts an event.
 
-- [ ] **Step 1: Write failing sequence tests**
+- [x] **Step 1: Write failing sequence tests**
 
 ```kotlin
 @Test
@@ -480,27 +480,27 @@ fun ignoresDuplicateEventsAndRequestsSnapshotAcrossRetentionGap() {
 }
 ```
 
-- [ ] **Step 2: Observe the missing event reducer failure**
+- [x] **Step 2: Observe the missing event reducer failure**
 
 Run the single test with the Android Studio JDK and existing SDK.
 
-- [ ] **Step 3: Implement event models and reducer**
+- [x] **Step 3: Implement event models and reducer**
 
 Deduplicate sequence IDs, map approval/question/task events, and transition to a
 fresh snapshot request on `snapshot.required`.
 
-- [ ] **Step 4: Implement signed OkHttp WebSocket**
+- [x] **Step 4: Implement signed OkHttp WebSocket**
 
 Build the canonical signed GET path with the persisted sequence, reconnect with
 capped exponential backoff, and stop reconnecting after revocation or an
 update-required response.
 
-- [ ] **Step 5: Remove three-second foreground polling**
+- [x] **Step 5: Remove three-second foreground polling**
 
 Use the socket while connected and retain an explicit authenticated snapshot
 refresh for launch, resume-gap, and manual retry.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run Wear unit tests, lint, and debug assembly.
 
