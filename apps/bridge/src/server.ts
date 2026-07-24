@@ -6,6 +6,8 @@ import {
   IdempotencyConflictError,
 } from "./actions/action-executor.ts";
 import type { CodexAdapter } from "./codex/adapter.ts";
+import type { EventHub } from "./events/event-hub.ts";
+import { attachEventWebSocket } from "./events/websocket-server.ts";
 import { verifyRequest } from "./security/authentication.ts";
 import { PairingService } from "./security/pairing.ts";
 import type { SecurityStore } from "./security/store.ts";
@@ -33,6 +35,10 @@ type HandlerOptions = {
   store: SecurityStore;
   adapter: Partial<Adapter> & Pick<Adapter, "listTasks" | "readTask" | "listModels" | "approvals" | "questions">;
   workspacePolicy: WorkspacePolicy;
+};
+
+type RelayServerOptions = HandlerOptions & {
+  eventHub: EventHub;
 };
 
 const json = (body: unknown, status = 200) =>
@@ -283,9 +289,9 @@ async function sendNodeResponse(response: Response, target: ServerResponse) {
   target.end(Buffer.from(await response.arrayBuffer()));
 }
 
-export function createRelayServer(options: HandlerOptions) {
+export function createRelayServer(options: RelayServerOptions) {
   const handler = createRequestHandler(options);
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       await sendNodeResponse(await handler(await nodeRequest(request)), response);
     } catch {
@@ -293,4 +299,9 @@ export function createRelayServer(options: HandlerOptions) {
       response.end(JSON.stringify({ error: "invalid request" }));
     }
   });
+  attachEventWebSocket(server, {
+    store: options.store,
+    eventHub: options.eventHub,
+  });
+  return server;
 }

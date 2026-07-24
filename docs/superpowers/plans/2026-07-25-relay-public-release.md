@@ -410,7 +410,7 @@ git commit -m "feat: make Relay actions idempotent and auditable"
 - Produces: authenticated `GET /v1/events?after=<sequence>` WebSocket upgrade.
 - Consumes the same signed request headers as HTTP.
 
-- [ ] **Step 1: Add failing retention-gap tests**
+- [x] **Step 1: Add failing retention-gap tests**
 
 ```ts
 it("requires a snapshot when the requested sequence is older than retention", () => {
@@ -423,24 +423,24 @@ it("requires a snapshot when the requested sequence is older than retention", ()
 });
 ```
 
-- [ ] **Step 2: Implement bounded resume metadata**
+- [x] **Step 2: Implement bounded resume metadata**
 
 Track the earliest retained event and return `snapshotRequired` only when the
 client asks before that boundary.
 
-- [ ] **Step 3: Add `ws` and write failing upgrade tests**
+- [x] **Step 3: Add `ws` and write failing upgrade tests**
 
 The test connects with a valid signed upgrade, receives replayed events, then
 receives a newly published event. Missing, stale, replayed, or revoked
 credentials must close before private event data is sent.
 
-- [ ] **Step 4: Implement WebSocket upgrade composition**
+- [x] **Step 4: Implement WebSocket upgrade composition**
 
 Attach `WebSocketServer({ noServer: true })` to `createRelayServer`. Validate
 the signed path including `?after=` before calling `handleUpgrade`. Send either
 `snapshot.required` or retained events, then subscribe until close.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run `pnpm install --frozen-lockfile`, `pnpm test`, and `pnpm typecheck`.
 

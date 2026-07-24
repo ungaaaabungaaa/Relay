@@ -23,7 +23,12 @@ const command = positionals[0] ?? "help";
 if (command === "serve") {
   const adapter = new CodexAdapter();
   await adapter.start();
-  const server = createRelayServer({ store, adapter, workspacePolicy });
+  const server = createRelayServer({
+    store,
+    adapter,
+    workspacePolicy,
+    eventHub: adapter.events,
+  });
   const host = process.env.CODEWATCH_BIND_HOST ?? "127.0.0.1";
   const port = Number(process.env.CODEWATCH_PORT ?? "43117");
   server.listen(port, host, () => {

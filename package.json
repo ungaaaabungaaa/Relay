@@ -7,5 +7,10 @@
     "test": "node --test packages/*/test/*.test.ts apps/*/test/*.test.ts",
     "test:protocol": "node --test packages/codex-protocol/test/*.test.ts",
     "typecheck": "node scripts/check-types.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
   }
 }
