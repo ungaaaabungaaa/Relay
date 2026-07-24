@@ -199,6 +199,56 @@ describe("authenticated event WebSocket", () => {
       401,
     );
   });
+
+  it("includes a fresh resume cursor when retained events have a gap", async (context) => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const store = new InMemorySecurityStore();
+    store.addDevice(
+      "watch",
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    const events = new EventHub(2);
+    events.publish("task.updated", { id: "one" });
+    events.publish("task.updated", { id: "two" });
+    events.publish("task.updated", { id: "three" });
+    const server = createRelayServer({
+      store,
+      adapter: fakeAdapter,
+      workspacePolicy: new WorkspacePolicy([]),
+      eventHub: events,
+    });
+    await listen(server);
+    context.after(() => closeServer(server));
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+
+    const path = "/v1/events?after=0";
+    const socket = new WebSocket(
+      `ws://127.0.0.1:${address.port}${path}`,
+      {
+        headers: signedHeaders(
+          privateKey,
+          path,
+          Date.now(),
+          "websocket-snapshot-cursor",
+        ),
+      },
+    );
+    context.after(() => socket.close());
+
+    const message = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      socket.once("message", (payload) => {
+        resolve(JSON.parse(payload.toString()) as Record<string, unknown>);
+      });
+      socket.once("error", reject);
+    });
+
+    assert.deepEqual(message, {
+      type: "snapshot.required",
+      after: 0,
+      latestEventId: 3,
+    });
+  });
 });
 
 function listen(server: ReturnType<typeof createRelayServer>) {

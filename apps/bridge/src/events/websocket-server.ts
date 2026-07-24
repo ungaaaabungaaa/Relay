@@ -76,7 +76,11 @@ function streamEvents(
   const resume = eventHub.resumeAfter(after);
   if (resume.snapshotRequired) {
     socket.send(
-      JSON.stringify({ type: "snapshot.required", after }),
+      JSON.stringify({
+        type: "snapshot.required",
+        after,
+        latestEventId: eventHub.latestEventId,
+      }),
       () => socket.close(1000, "snapshot required"),
     );
     return;

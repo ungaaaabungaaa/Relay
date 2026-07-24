@@ -27,6 +27,10 @@ export class EventHub {
     return this.events.filter((event) => event.id > id);
   }
 
+  get latestEventId(): number {
+    return this.sequence;
+  }
+
   resumeAfter(id: number): {
     events: RelayEvent[];
     snapshotRequired: boolean;
