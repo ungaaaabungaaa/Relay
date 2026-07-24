@@ -34,6 +34,37 @@ Open [http://127.0.0.1:4173](http://127.0.0.1:4173). You can click Home,
 Approval, Task, Voice, New task, Offline, and every Mac dashboard section. The
 preview uses no account and sends no data. It is not the Wear OS application.
 
+## All 28 watch screens
+
+These boards show the complete native screen map, not just the six clickable
+demo states. They follow the circular Galaxy Watch6 safe area and keep risky
+commands, folders, models, and consequences readable. The native Compose
+implementation is the source of truth; a repository test checks that every
+`Screen` enum entry appears here exactly once.
+
+### 01 — Connection and onboarding
+
+![Relay connection and onboarding screens: welcome, pairing code, Mac identity, connecting, offline, revoked, and update required](docs/assets/screens-connection.svg)
+
+### 02 — Daily control
+
+![Relay daily-control screens: home, inbox, approval, question, tasks, task detail, instruction, system input, voice record, transcript review, and task controls](docs/assets/screens-daily-control.svg)
+
+### 03 — New task
+
+![Relay new-task screens: workspaces, folders, models, reasoning effort, permissions, prompt, and review](docs/assets/screens-new-task.svg)
+
+### 04 — Management
+
+![Relay management screens: approval history, settings, and about](docs/assets/screens-management.svg)
+
+Maintainers can rebuild these lightweight SVG boards without adding a graphics
+dependency:
+
+```bash
+pnpm generate:readme-screens
+```
+
 ## What is implemented
 
 ### Watch
