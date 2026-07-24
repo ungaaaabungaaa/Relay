@@ -44,7 +44,10 @@ fun HistoryScreen(
 fun SettingsScreen(
     bridgeUrl: String,
     connectionState: RelayConnectionState,
+    liveMonitoringEnabled: Boolean,
+    canStartLiveMonitoring: Boolean,
     onRefresh: () -> Unit,
+    onToggleLiveMonitoring: () -> Unit,
     onHistory: () -> Unit,
     onAbout: () -> Unit,
     onUnpair: () -> Unit,
@@ -73,9 +76,25 @@ fun SettingsScreen(
         item {
             RelayCard(
                 "Live monitoring",
-                "Off · optional four-hour battery-visible mode",
-                enabled = false,
-                onClick = {},
+                if (liveMonitoringEnabled) {
+                    "On · visible notification · tap to stop"
+                } else {
+                    "Up to 4 hours · uses more battery · stops below 15%"
+                },
+                enabled = liveMonitoringEnabled || canStartLiveMonitoring,
+                tone = if (liveMonitoringEnabled) {
+                    RelayColors.Green.copy(alpha = 0.12f)
+                } else {
+                    RelayColors.Surface
+                },
+                onClick = onToggleLiveMonitoring,
+            )
+        }
+        item {
+            RelayLabel(
+                "Live mode keeps a private socket open. A persistent watch-face indicator stays visible the entire time.",
+                color = RelayColors.Amber,
+                size = 9,
             )
         }
         item { RelayCard("Approval history", "Decisions made on this watch", onClick = onHistory) }

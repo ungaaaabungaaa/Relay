@@ -1,6 +1,7 @@
 package dev.ungaaaabungaaa.relay.ui
 
 import android.app.Application
+import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import dev.ungaaaabungaaa.relay.audio.VoiceClip
 import dev.ungaaaabungaaa.relay.audio.VoiceRecorder
 import dev.ungaaaabungaaa.relay.audio.consume
+import dev.ungaaaabungaaa.relay.background.LiveMonitoringService
+import dev.ungaaaabungaaa.relay.background.RelayRefreshWorker
 import dev.ungaaaabungaaa.relay.data.RelayApi
 import dev.ungaaaabungaaa.relay.data.RelayLiveEvent
 import dev.ungaaaabungaaa.relay.data.RelayPreferences
@@ -55,6 +58,8 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var transcribingVoice by mutableStateOf(false)
         private set
+    var liveMonitoringEnabled by mutableStateOf(preferences.liveMonitoringEnabled)
+        private set
 
     private val socket by lazy {
         RelaySocket(
@@ -65,6 +70,9 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
             onConnectionChanged = { connectionState ->
                 viewModelScope.launch {
                     dispatch(RelayAction.ConnectionChanged(connectionState))
+                    if (connectionState == RelayConnectionState.Revoked) {
+                        stopLiveMonitoring()
+                    }
                 }
             },
         )
@@ -79,6 +87,9 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     init {
         if (preferences.deviceId != null) {
             refresh(startLiveAfter = true)
+            if (!liveMonitoringEnabled) {
+                RelayRefreshWorker.schedule(application)
+            }
         }
     }
 
@@ -135,6 +146,9 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (startLiveAfter || needsSnapshot) {
                     socket.start(preferences.lastEventId)
+                }
+                if (startLiveAfter && preferences.liveMonitoringEnabled) {
+                    startLiveMonitoring()
                 }
             }.onFailure {
                 if (!silent || state.connected) dispatch(RelayAction.Disconnected)
@@ -264,6 +278,10 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         dispatch(RelayAction.Failure("Microphone permission is needed only for custom recording"))
     }
 
+    fun notificationPermissionDenied() {
+        dispatch(RelayAction.Failure("Notifications are required while live monitoring is active"))
+    }
+
     fun sendTranscript() {
         if (!state.connected || state.stale) return
         val task = state.selectedTask ?: return
@@ -289,6 +307,28 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cancelTranscript() {
         state = state.copy(transcript = "", screen = Screen.Instruction)
+    }
+
+    fun startLiveMonitoring() {
+        if (preferences.deviceId == null || !state.connected || state.stale) return
+        preferences.liveMonitoringEnabled = true
+        liveMonitoringEnabled = true
+        val app = getApplication<Application>()
+        app.startForegroundService(
+            Intent(app, LiveMonitoringService::class.java)
+                .setAction(LiveMonitoringService.ACTION_START),
+        )
+    }
+
+    fun stopLiveMonitoring() {
+        preferences.liveMonitoringEnabled = false
+        liveMonitoringEnabled = false
+        val app = getApplication<Application>()
+        app.startService(
+            Intent(app, LiveMonitoringService::class.java)
+                .setAction(LiveMonitoringService.ACTION_STOP),
+        )
+        RelayRefreshWorker.schedule(app)
     }
 
     fun beginNewTask() {
@@ -380,6 +420,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun unpair() {
+        stopLiveMonitoring()
         voiceRecorder.cancel()
         recordingVoice = false
         socket.close()

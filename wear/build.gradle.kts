@@ -50,6 +50,9 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
+    implementation(libs.androidx.core)
+    implementation(libs.work.runtime)
+    implementation(libs.wear.ongoing)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

@@ -61,12 +61,28 @@ fun RelayApp(viewModel: RelayViewModel) {
                 PackageManager.PERMISSION_GRANTED,
         )
     }
+    var notificationGranted by remember {
+        mutableStateOf(
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
     val microphonePermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         microphoneGranted = granted
         if (!granted) {
             viewModel.microphonePermissionDenied()
+        }
+    }
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationGranted = granted
+        if (granted) {
+            viewModel.startLiveMonitoring()
+        } else {
+            viewModel.notificationPermissionDenied()
         }
     }
     RelayTheme {
@@ -254,7 +270,18 @@ fun RelayApp(viewModel: RelayViewModel) {
                 Screen.Settings -> SettingsScreen(
                     bridgeUrl = viewModel.bridgeUrl,
                     connectionState = state.connectionState,
+                    liveMonitoringEnabled = viewModel.liveMonitoringEnabled,
+                    canStartLiveMonitoring = canMutate,
                     onRefresh = { viewModel.refresh(startLiveAfter = true) },
+                    onToggleLiveMonitoring = {
+                        if (viewModel.liveMonitoringEnabled) {
+                            viewModel.stopLiveMonitoring()
+                        } else if (notificationGranted) {
+                            viewModel.startLiveMonitoring()
+                        } else {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
                     onHistory = { viewModel.navigate(Screen.History) },
                     onAbout = { viewModel.navigate(Screen.About) },
                     onUnpair = viewModel::unpair,

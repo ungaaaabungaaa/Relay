@@ -653,26 +653,26 @@ git commit -m "feat: add reviewed voice instructions"
   low-battery threshold.
 - Produces battery-aware WorkManager refresh when live mode is off.
 
-- [ ] **Step 1: Write failing pure policy tests**
+- [x] **Step 1: Write failing pure policy tests**
 
 Assert the session stops at exactly four hours, below 15% battery when not
 charging, and immediately on revocation.
 
-- [ ] **Step 2: Implement policy and service lifecycle**
+- [x] **Step 2: Implement policy and service lifecycle**
 
 The foreground notification and ongoing activity must be visible whenever the
 service keeps the socket open. Tapping it opens Inbox or the active task.
 
-- [ ] **Step 3: Add periodic WorkManager refresh**
+- [x] **Step 3: Add periodic WorkManager refresh**
 
 Require network connectivity. Refresh only summaries, approvals, and questions;
 never execute an action from background work.
 
-- [ ] **Step 4: Add settings disclosures**
+- [x] **Step 4: Add settings disclosures**
 
 Before activation, show the four-hour maximum and expected battery cost.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run Wear unit tests, lint, and assembly.
 
