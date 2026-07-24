@@ -11,6 +11,7 @@ local.properties
 node_modules/
 .pnpm-store/
 dist/
+release/out/
 coverage/
 *.log
 .superpowers/

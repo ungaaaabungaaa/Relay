@@ -1,71 +1,105 @@
-# Physical Galaxy Watch6 Test
+# Physical Galaxy Watch6 release test
 
-Relay is developed against the real watch. No AVD or emulator image is needed.
+Relay uses a real watch for development and acceptance. Do not replace this
+gate with an emulator run.
 
-## After a watch reset
+## Prepare a reset Watch6
 
-Finish Samsung's initial setup before enabling developer options. A Bluetooth/Wi-Fi Galaxy Watch6 normally uses the Galaxy Wearable app on a compatible Android phone. Some Watch6 LTE variants expose a phone-free setup path; availability depends on model, region, and carrier.
+A Bluetooth/Wi-Fi Galaxy Watch6 normally needs a compatible Android phone and
+the Galaxy Wearable app to finish Samsung's initial setup. Availability of a
+phone-free flow varies by LTE model, region, and carrier.
 
-## Pair wireless ADB
+After setup:
 
-1. Connect the Mac and watch to the same Wi-Fi network.
+1. Connect the Mac and watch to the same Wi-Fi.
 2. On the watch, open **Settings → About watch → Software information**.
 3. Tap **Software version** five times.
-4. Open **Settings → Developer options**.
-5. Enable **ADB debugging**, **Wireless debugging**, and **Turn off automatic Wi-Fi**.
+4. Open **Developer options**.
+5. Enable **ADB debugging** and **Wireless debugging**.
 6. Open **Wireless debugging → Pair new device**.
-7. In Android Studio's Terminal, run:
+
+## Pair and install
+
+Use the Relay Mac wizard. For command-line diagnosis:
 
 ```bash
 adb pair WATCH_IP:PAIRING_PORT
 adb connect WATCH_IP:CONNECTION_PORT
 adb devices
-```
-
-The pairing and connection ports are different.
-
-## Run Relay locally
-
-From the repository root:
-
-```bash
-node apps/bridge/src/cli.ts serve
-```
-
-In a second terminal:
-
-```bash
-node apps/bridge/src/cli.ts pair
-adb reverse tcp:43117 tcp:43117
 ./gradlew :wear:installDebug
 adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
 ```
 
-Enter the six-character code on the watch. Keep the default bridge URL, `http://127.0.0.1:43117`; `adb reverse` securely carries that watch-local port to the Mac-local bridge.
+The pairing and connection ports are different. Confirm `adb devices` lists
+the expected watch before installing.
 
-## Run the physical UI navigation test
+For local development only:
 
-The instrumentation APK compiles without an emulator. After `adb devices` shows
-the Galaxy Watch6 as connected, run:
+```bash
+adb reverse tcp:43117 tcp:43117
+```
+
+After installation, create the five-minute Relay code in the Mac app, enter it
+on the watch, compare the Mac identity, and confirm the watch appears in the
+Mac Watches screen.
+
+## Automated physical navigation
+
+The instrumentation APK can be compiled without a device. Run it only after
+the Watch6 appears in `adb devices`:
 
 ```bash
 ./gradlew :wear:connectedDebugAndroidTest
 ```
 
-`RelayNavigationTest` exercises Home → Action inbox → Approval detail and
-verifies that the exact command and working directory remain visible. This gate
-is pending until the reset Watch6 is paired over wireless ADB; do not replace it
-with an emulator run.
+The test covers Home → Action inbox → Approval detail and verifies that the
+exact command and working directory remain visible.
 
-## Acceptance pass
+## Required physical matrix
 
-- Pairing succeeds once and the code cannot be reused.
-- An unsigned request to `/v1/tasks` returns only `{"error":"unauthorized"}`.
-- Inbox shows live approvals and questions.
-- Approve and deny each resolve the matching Codex request once.
-- Tasks reflect current Codex status.
-- A text instruction reaches the selected task.
-- Disconnecting Wi-Fi shows stale/offline state without queuing actions.
-- Revoking the watch with `node apps/bridge/src/cli.ts revoke DEVICE_ID` blocks it immediately.
+Record the result and evidence without storing task text, commands, device
+keys, pairing codes, account names, or the private Funnel URL.
 
-Turn off wireless debugging when development is finished.
+| Test | Result | Evidence |
+| --- | --- | --- |
+| Fresh install and `adb install -r` upgrade from Mac wizard | Pending | |
+| Round safe areas, rotary input, default and large text | Pending | |
+| Wi-Fi and LTE when available | Pending | |
+| Foreground WebSocket events | Pending | |
+| Visible Live Monitoring and periodic refresh | Pending | |
+| Wi-Fi switching, Mac sleep, and bridge restart recovery | Pending | |
+| Approve, deny, question, instruction, both voice modes, stop, new task | Pending | |
+| Lost-watch revocation and cached-data removal | Pending | |
+| One-hour normal and Live Monitoring battery observation | Pending | |
+| Accessibility labels and haptic behavior | Pending | |
+
+## Release acceptance
+
+Version 1 remains blocked until all ten criteria pass:
+
+1. A clean Apple silicon Mac installs the notarized DMG without a development
+   toolchain.
+2. The first-run wizard reaches healthy using only its plain-language steps.
+3. A reset Galaxy Watch6 installs and pairs using only the Mac wizard.
+4. The watch discovers an existing Codex task through Funnel.
+5. One normal and one dangerous approval use the correct confirmation policy.
+6. Questions, instructions, both voice modes, steering, stopping, and new-task
+   creation work end to end.
+7. Workspace escape, replay, revocation, and unauthenticated metadata tests
+   fail safely.
+8. Live Monitoring state and battery cost are visible and documented.
+9. Mac and APK updates preserve the previous app and watch pairing.
+10. Tag, source, checksums, DMG, APK, license, notes, and compatibility data
+    all agree.
+
+Also confirm:
+
+- an unsigned `/v1/tasks` request receives only
+  `{"error":"unauthorized"}`;
+- duplicate taps return the first result without repeating the Codex action;
+- stale/offline state disables every mutation;
+- audio is deleted after transcription failure as well as success;
+- Emergency Stop disables remote access and leaves Codex tasks running.
+
+Turn Wireless Debugging off after the run. Add other Wear OS 4+ devices to
+`docs/COMPATIBILITY.md` only after a documented physical result.

@@ -1,0 +1,105 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "codex/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node and release metadata
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack install
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test
+        run: pnpm test
+      - name: Type-check
+        run: pnpm typecheck
+
+  wear:
+    name: Wear OS
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - name: Install required SDK only
+        run: sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36.1"
+      - name: Unit tests, instrumentation compile, lint, and APK
+        run: >-
+          ./gradlew
+          :wear:testDebugUnitTest
+          :wear:compileDebugAndroidTestKotlin
+          :wear:lintDebug
+          :wear:assembleDebug
+          :wear:assembleDebugAndroidTest
+      - name: Scan APK for embedded secrets
+        run: node scripts/scan-apk-secrets.mjs --apk wear/build/outputs/apk/debug/wear-debug.apk
+      - name: Upload testable APKs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: relay-wear-debug
+          path: |
+            wear/build/outputs/apk/debug/wear-debug.apk
+            wear/build/outputs/apk/androidTest/debug/wear-debug-androidTest.apk
+          if-no-files-found: error
+
+  apple-silicon:
+    name: Apple silicon Mac
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack install
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build and smoke-test bridge sidecar
+        run: |
+          pnpm build:bridge-sea
+          pnpm smoke:bridge-sea
+          file dist/relay-bridge-arm64 | grep arm64
+      - name: Test and build Mac app
+        run: |
+          swift test --package-path mac
+          swift build --package-path mac --configuration release --arch arm64
+      - name: Upload bridge sidecar
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: relay-bridge-arm64
+          path: dist/relay-bridge-arm64
+          if-no-files-found: error

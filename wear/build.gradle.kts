@@ -15,9 +15,34 @@ android {
         applicationId = "dev.ungaaaabungaaa.relay"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.environmentVariable("RELAY_WATCH_VERSION_CODE")
+            .orNull?.toIntOrNull() ?: 1
+        versionName = providers.environmentVariable("RELAY_VERSION")
+            .orNull ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["usesCleartextTraffic"] = false
+    }
+
+    signingConfigs {
+        val keyStorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+        if (keyStorePath != null) {
+            create("release") {
+                storeFile = file(keyStorePath)
+                storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            manifestPlaceholders["usesCleartextTraffic"] = true
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
+            isMinifyEnabled = false
+        }
     }
 
     buildFeatures {

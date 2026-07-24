@@ -900,24 +900,24 @@ git commit -m "feat: automate Relay watch and Funnel setup"
   manifest, source archive, license, notices, release notes, and compatibility
   matrix from one clean tag.
 
-- [ ] **Step 1: Write failing release-manifest verifier tests**
+- [x] **Step 1: Write failing release-manifest verifier tests**
 
 Assert matching tag, Mac version, watch version, Codex compatibility range,
 artifact names, digests, architectures, and signatures. Reject a changed byte,
 wrong tag, Intel artifact, unsigned APK, or missing license.
 
-- [ ] **Step 2: Add Apache 2.0 and notices**
+- [x] **Step 2: Add Apache 2.0 and notices**
 
 Add the unmodified Apache License 2.0 text, project copyright notice, and
 third-party license inventory generated from locked dependencies.
 
-- [ ] **Step 3: Add quality workflow**
+- [x] **Step 3: Add quality workflow**
 
 Run Node tests/typecheck, Wear unit tests/lint/assembly, Swift tests/build, APK
 secret scan, bridge sidecar smoke test, and release-manifest tests. Upload
 artifacts only from successful jobs.
 
-- [ ] **Step 4: Add release workflow**
+- [x] **Step 4: Add release workflow**
 
 Trigger only on `v*` tags. Import signing material from protected secrets, build
 and sign nested Mac executables, notarize and staple the app and DMG, sign the
@@ -931,7 +931,7 @@ Use the exact ten acceptance criteria from
 command outputs, device/OS versions, battery observations, and remaining
 community-tested devices without storing secrets.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run the complete local quality command and `scripts/verify-release.mjs` against
 unsigned local fixtures; keep signing/notarization as the credentialed release

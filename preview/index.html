@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Interactive browser preview of the Relay Wear OS and Mac interfaces."
+    >
+    <title>Relay UI Preview</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#preview">Skip to preview</a>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#preview" aria-label="Relay preview home">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <span>RELAY</span>
+      </a>
+      <p>Watch Codex move.</p>
+      <span class="build-chip"><i></i> Interactive prototype</span>
+    </header>
+
+    <main id="preview">
+      <section class="hero" aria-labelledby="preview-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Wear OS + Apple silicon Mac</p>
+          <h1 id="preview-title">Your Codex tasks,<br>one turn away.</h1>
+          <p class="hero-detail">
+            Click through the real Relay screen map. The watch stays focused on
+            urgent decisions; the Mac handles setup, security, and connectivity.
+          </p>
+          <div class="legend" aria-label="Preview legend">
+            <span><i class="dot live"></i> Live connection</span>
+            <span><i class="dot safe"></i> Safe default</span>
+            <span><i class="dot gate"></i> Hold to approve risk</span>
+          </div>
+        </div>
+        <div class="coordinate" aria-hidden="true">
+          <span>ROUND / 40MM</span>
+          <span>WEAR OS 4+</span>
+          <span>PROTO / 0.1</span>
+        </div>
+      </section>
+
+      <section class="stage" aria-label="Interactive Relay watch preview">
+        <div class="screen-rail" role="tablist" aria-label="Watch screens">
+          <button class="rail-button active" role="tab" aria-selected="true" data-screen="home">
+            <span>01</span> Home
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="approval">
+            <span>02</span> Approval
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="task">
+            <span>03</span> Task
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="voice">
+            <span>04</span> Voice
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="new-task">
+            <span>05</span> New task
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="offline">
+            <span>06</span> Offline
+          </button>
+        </div>
+
+        <div class="watch-zone">
+          <div class="signal-orbit orbit-one" aria-hidden="true"></div>
+          <div class="signal-orbit orbit-two" aria-hidden="true"></div>
+          <div class="watch">
+            <span class="crown" aria-hidden="true"></span>
+            <div class="watch-glass">
+              <div id="watch-screen" class="watch-screen" aria-live="polite"></div>
+            </div>
+          </div>
+          <p class="interaction-hint">
+            <span class="mouse-icon" aria-hidden="true"></span>
+            Controls work in this preview
+          </p>
+        </div>
+
+        <aside class="screen-notes" aria-live="polite">
+          <p class="note-index" id="note-index">SCREEN 01 / 06</p>
+          <h2 id="note-title">Home</h2>
+          <p id="note-body">
+            The urgent thing is always first. A pending approval outranks active
+            work, recent tasks, and connection details.
+          </p>
+          <div class="principle">
+            <span>DESIGN RULE</span>
+            <strong id="note-rule">Two meaningful taps or fewer</strong>
+          </div>
+          <div class="status-readout">
+            <div><span>Bridge</span><strong>Local / ready</strong></div>
+            <div><span>Transport</span><strong>Tailscale Funnel</strong></div>
+            <div><span>Auth</span><strong>Signed device key</strong></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="mac-section" aria-labelledby="mac-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">The quiet control room</p>
+            <h2 id="mac-title">Mac dashboard</h2>
+          </div>
+          <p>
+            Relay does the complicated setup here once, so normal watch use
+            stays simple.
+          </p>
+        </div>
+
+        <div class="mac-window">
+          <div class="window-chrome" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <p>Relay</p>
+            <div></div>
+          </div>
+          <div class="dashboard">
+            <nav class="sidebar" aria-label="Dashboard preview sections">
+              <div class="sidebar-brand">
+                <span class="brand-mark small" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+                <strong>Relay</strong>
+              </div>
+              <button class="side-item active" data-panel="setup">Setup</button>
+              <button class="side-item" data-panel="watches">Watches</button>
+              <button class="side-item" data-panel="remote">Remote Access</button>
+              <button class="side-item" data-panel="workspaces">Workspaces</button>
+              <button class="side-item" data-panel="voice">Voice</button>
+              <button class="side-item" data-panel="updates">Updates</button>
+              <button class="side-item" data-panel="diagnostics">Diagnostics</button>
+              <div class="bridge-state"><i></i> Local bridge ready</div>
+            </nav>
+            <div id="dashboard-panel" class="dashboard-panel" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="how-it-works" aria-labelledby="flow-title">
+        <p class="eyebrow">The whole route</p>
+        <h2 id="flow-title">One request. Three guarded hops.</h2>
+        <ol class="flow">
+          <li>
+            <span>01</span>
+            <strong>Watch signs</strong>
+            <p>Every request gets a fresh nonce and device signature.</p>
+          </li>
+          <li>
+            <span>02</span>
+            <strong>Funnel carries</strong>
+            <p>Tailscale provides TLS; Relay still verifies the watch itself.</p>
+          </li>
+          <li>
+            <span>03</span>
+            <strong>Mac decides</strong>
+            <p>The loopback bridge applies risk, replay, and workspace rules.</p>
+          </li>
+          <li>
+            <span>04</span>
+            <strong>Codex acts</strong>
+            <p>Your existing desktop task remains the source of truth.</p>
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <span>Relay UI preview</span>
+      <span>HTML only · no account or data</span>
+      <a href="../docs/SETUP.md">Setup guide →</a>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

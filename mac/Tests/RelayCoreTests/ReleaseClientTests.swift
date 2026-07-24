@@ -11,12 +11,36 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
         schemaVersion: 1,
         tag: "v1.1.0",
         version: "1.1.0",
+        license: "Apache-2.0",
+        mac: ReleaseMac(
+            version: "1.1.0",
+            artifact: "Relay.dmg",
+            architecture: "arm64"
+        ),
+        watch: ReleaseWatch(
+            versionName: "1.1.0",
+            versionCode: 10100,
+            artifact: "relay-wear.apk",
+            minimumWearOS: 4
+        ),
+        codex: CodexCompatibility(
+            minimumVersion: "0.144.0",
+            maximumVersion: "0.144.x"
+        ),
         artifacts: [
             ReleaseArtifact(
                 name: "Relay.dmg",
                 version: "1.1.0",
                 architecture: "arm64",
-                sha256: String(repeating: "a", count: 64)
+                sha256: String(repeating: "a", count: 64),
+                signed: true
+            ),
+            ReleaseArtifact(
+                name: "relay-wear.apk",
+                version: "1.1.0",
+                architecture: "universal",
+                sha256: String(repeating: "b", count: 64),
+                signed: true
             ),
         ]
     )
@@ -47,6 +71,22 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
         schemaVersion: 1,
         tag: "v2.0.0",
         version: "2.0.0",
+        license: "Apache-2.0",
+        mac: ReleaseMac(
+            version: "2.0.0",
+            artifact: "Relay.dmg",
+            architecture: "arm64"
+        ),
+        watch: ReleaseWatch(
+            versionName: "2.0.0",
+            versionCode: 20000,
+            artifact: "relay-wear.apk",
+            minimumWearOS: 4
+        ),
+        codex: CodexCompatibility(
+            minimumVersion: "0.144.0",
+            maximumVersion: "0.144.x"
+        ),
         artifacts: []
     )
     let signature = try signingKey.signature(
@@ -57,6 +97,10 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
             schemaVersion: 1,
             tag: "v2.0.1",
             version: "2.0.1",
+            license: originalPayload.license,
+            mac: originalPayload.mac,
+            watch: originalPayload.watch,
+            codex: originalPayload.codex,
             artifacts: []
         ),
         signature: signature.base64EncodedString()
@@ -76,7 +120,8 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
         name: "Relay.dmg",
         version: "2.0.0",
         architecture: "arm64",
-        sha256: String(repeating: "0", count: 64)
+        sha256: String(repeating: "0", count: 64),
+        signed: true
     )
 
     #expect(throws: ReleaseClientError.digestMismatch) {
