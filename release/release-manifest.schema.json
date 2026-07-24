@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ungaaaabungaaa/Relay/blob/main/release/release-manifest.schema.json",
+  "title": "Relay signed release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["payload", "signature"],
+  "properties": {
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "tag",
+        "version",
+        "license",
+        "mac",
+        "watch",
+        "codex",
+        "artifacts"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+        "license": { "const": "Apache-2.0" },
+        "mac": { "$ref": "#/$defs/mac" },
+        "watch": { "$ref": "#/$defs/watch" },
+        "codex": { "$ref": "#/$defs/codex" },
+        "artifacts": {
+          "type": "array",
+          "minItems": 8,
+          "items": { "$ref": "#/$defs/artifact" }
+        }
+      }
+    },
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64"
+    }
+  },
+  "$defs": {
+    "mac": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "artifact", "architecture"],
+      "properties": {
+        "version": { "type": "string" },
+        "artifact": { "const": "Relay.dmg" },
+        "architecture": { "const": "arm64" }
+      }
+    },
+    "watch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versionName",
+        "versionCode",
+        "artifact",
+        "minimumWearOS"
+      ],
+      "properties": {
+        "versionName": { "type": "string" },
+        "versionCode": { "type": "integer", "minimum": 1 },
+        "artifact": { "const": "relay-wear.apk" },
+        "minimumWearOS": { "const": 4 }
+      }
+    },
+    "codex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumVersion", "maximumVersion"],
+      "properties": {
+        "minimumVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.(?:[0-9]+|x)$" },
+        "maximumVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.(?:[0-9]+|x)$" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "architecture",
+        "sha256",
+        "signed"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[^/\\\\]+$" },
+        "version": { "type": "string" },
+        "architecture": {
+          "enum": ["arm64", "universal", "source", "text"]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signed": { "type": "boolean" }
+      }
+    }
+  }
+}

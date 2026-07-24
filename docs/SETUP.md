@@ -1,59 +1,103 @@
-# Physical Watch Development Setup
+# Set up Relay
 
-This guide uses the Galaxy Watch6 itself for development. Do not create an Android Virtual Device and do not download Wear OS emulator system images.
+There are two paths below. Use the first one after a verified GitHub Release is
+published. Use the developer path today.
 
-## 1. Mac prerequisites
+## What you need
 
-Current machine inventory on 2026-07-22:
+- an Apple silicon Mac: M1 or newer;
+- macOS 14 or newer;
+- Codex installed, signed in, and able to open a task;
+- Tailscale on the Mac; its free plan is enough;
+- a Wear OS 4+ watch;
+- Wi-Fi shared by the Mac and watch for the one-time install.
 
-- macOS 26.5.2
-- Node.js 24.18.0: installed
-- pnpm 11.13.0: installed
-- Codex CLI 0.144.5: installed
-- Android Studio: not installed
-- Android platform tools (`adb`): not installed
-- Tailscale CLI: not installed
+A reset Bluetooth/Wi-Fi Galaxy Watch6 normally needs the Galaxy Wearable app on
+a compatible Android phone to finish Samsung's initial setup. Relay itself
+does not require the phone after that.
 
-### Install Android Studio without an emulator
+Do not install an Android emulator, create an Android Virtual Device, or
+download a Wear OS system image.
 
-- [ ] Download the current stable Android Studio for Apple silicon from the Android developer website.
-- [ ] Drag Android Studio into `/Applications` and open it.
-- [ ] In the Setup Wizard, choose **Custom** if it offers to install emulator images.
-- [ ] Install the Android SDK, SDK Platform Tools, and the SDK platform selected by the project.
-- [ ] Do **not** install an Android Emulator, Wear OS system image, or create an AVD.
-- [ ] In Android Studio, open **Settings → Languages & Frameworks → Android SDK → SDK Tools** and confirm **Android SDK Platform-Tools** is installed.
-- [ ] Use Android Studio's bundled JDK for Gradle. No separate Java installation is required.
+## Easy install from GitHub Release
 
-After installation, verify from Android Studio's Terminal:
+This route becomes available only after the repository publishes a notarized
+release.
+
+1. Open the repository's **Releases** page.
+2. Download `Relay.dmg` and `SHA256SUMS`.
+3. Verify the checksum:
+
+   ```bash
+   shasum -a 256 -c SHA256SUMS
+   ```
+
+4. Open `Relay.dmg` and drag Relay to Applications.
+5. Open Relay. macOS should accept the Developer ID and notarization without a
+   security override.
+6. Open the Relay dashboard from the menu-bar icon.
+7. Install Tailscale from its official Mac download, sign in, and return to
+   Relay.
+8. In **Setup**, choose **Install verified tools**. Relay downloads only the
+   pinned official Android Platform Tools archive; it does not install Android
+   Studio or an emulator.
+9. On the watch, enable Developer Options and Wireless Debugging using the
+   steps below.
+10. In **Watches**, pair, connect, and install Relay.
+11. Create the short Relay pairing code in the Mac app and enter it on the
+    watch. Confirm the Mac identity shown on both devices.
+12. Add only the Mac workspace folders you want the watch to browse.
+13. In **Remote Access**, run checks, then enable Funnel.
+14. Test once with the watch on a different Wi-Fi network.
+15. Turn Wireless Debugging off on the watch.
+
+Remote Access is deliberately last. The bridge stays private until the local
+security self-test passes.
+
+## Prepare the physical watch
+
+1. Open **Settings → About watch → Software information**.
+2. Tap **Software version** five times.
+3. Go back and open **Developer options**.
+4. Enable **ADB debugging** and **Wireless debugging**.
+5. If available, enable **Turn off automatic Wi-Fi** while installing.
+6. Open **Wireless debugging → Pair new device**.
+7. Keep the watch on this page while Relay searches.
+
+The pairing port and connection port are different and may change whenever
+Wireless Debugging restarts.
+
+## Developer setup today
+
+Current local development uses Android Studio only for its bundled Java and SDK.
+No emulator is used.
+
+### 1. Open the project
+
+Open the repository root in Android Studio and allow Gradle to sync. Confirm
+these SDK pieces in **Settings → Languages & Frameworks → Android SDK**:
+
+- Android SDK Platform 36.1;
+- Android SDK Build Tools 36.0.0;
+- Android SDK Platform-Tools.
+
+### 2. Build and run the Mac app
+
+From the repository root:
 
 ```bash
-adb version
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build:bridge-sea
+swift run --package-path mac RelayMac
 ```
 
-### Install Tailscale on the Mac
+Relay creates a random 32-byte admin token and stores it in macOS Keychain. The
+app starts one local bridge process, checks Codex, and never prints the token.
 
-- [ ] Install an official macOS Tailscale variant that provides the CLI and supports Funnel.
-- [ ] Sign in and connect the Mac to your tailnet.
-- [ ] Confirm `tailscale status` works.
-- [ ] Enable MagicDNS and HTTPS when prompted by the Funnel command.
-- [ ] Do not enable Funnel until the bridge authentication tests pass.
+### 3. Pair the watch over Wireless ADB
 
-Tailscale Funnel is public internet ingress. It is acceptable here only because the bridge listens on localhost and independently authenticates every watch request.
-
-## 2. Prepare the Galaxy Watch6
-
-- [ ] Connect the watch and Mac to the same Wi-Fi for development deployment.
-- [ ] On the watch, open **Settings → About watch → Software information**.
-- [ ] Tap **Software version** five times to enable Developer options.
-- [ ] Open **Settings → Developer options**.
-- [ ] Enable **ADB debugging**.
-- [ ] Enable **Wireless debugging**.
-- [ ] Enable **Turn off automatic Wi-Fi** while actively developing, if shown.
-- [ ] Open **Wireless debugging → Pair new device** and note the pairing IP, pairing port, and pairing code.
-
-The watch exposes separate pairing and connection ports. They can change when wireless debugging restarts.
-
-From Android Studio's Terminal:
+You can use the Relay Watches screen or Android Studio's Terminal:
 
 ```bash
 adb pair WATCH_IP:PAIRING_PORT
@@ -61,79 +105,83 @@ adb connect WATCH_IP:CONNECTION_PORT
 adb devices
 ```
 
-Enter the watch pairing code when requested. `adb devices` should list one connected device.
+Enter the six-digit Wireless ADB code. `adb devices` must list exactly the
+watch you intend to use.
 
-## 3. Open and deploy Relay
-
-These steps become active after the Wear OS module is implemented:
-
-- [ ] Open the repository root in Android Studio.
-- [ ] Allow Gradle to sync using Android Studio's bundled JDK.
-- [ ] Select the physical Galaxy Watch6 as the run target.
-- [ ] Run the `wear` configuration.
-- [ ] Accept the install/debug prompt on the watch if shown.
-- [ ] Confirm the pairing screen renders without clipped controls.
-
-Command-line deployment will also be available:
+### 4. Install the debug APK
 
 ```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
 ./gradlew :wear:installDebug
 adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
 ```
 
-## 4. Configure the Mac bridge
-
-The bridge will use environment variables loaded by its launch agent. Never commit their values.
-
-```text
-OPENAI_API_KEY=
-CODEWATCH_BIND_HOST=127.0.0.1
-CODEWATCH_PORT=43117
-CODEWATCH_DATA_DIR=
-CODEWATCH_FUNNEL_ORIGIN=
-```
-
-- [ ] Create the bridge data directory with Mac-user-only permissions.
-- [ ] Add `OPENAI_API_KEY` to the macOS Keychain-backed bridge configuration.
-- [ ] Start the Codex app and confirm the target tasks are visible.
-- [ ] Start the bridge on `127.0.0.1:43117`.
-- [ ] Run the local bridge health check.
-- [ ] Generate a short-lived watch pairing code.
-- [ ] Enter it on the watch and confirm the paired device appears locally.
-
-## 5. Enable remote Wi-Fi access
-
-Only do this after local pairing, authorization, replay protection, and rate-limit tests pass.
+For the safe local development loop, keep the bridge on localhost and forward
+the watch-local port through ADB:
 
 ```bash
+adb reverse tcp:43117 tcp:43117
+```
+
+The watch can then use `http://127.0.0.1:43117` without exposing the bridge.
+The release APK disables cleartext networking and uses the HTTPS Funnel origin.
+
+### 5. Manual bridge fallback
+
+Normally the Mac app manages the bridge. For bridge-only development:
+
+```bash
+export CODEWATCH_ADMIN_TOKEN="$(openssl rand -base64 32)"
+export CODEWATCH_BIND_HOST=127.0.0.1
+export CODEWATCH_ADMIN_HOST=127.0.0.1
+node apps/bridge/src/cli.ts serve
+```
+
+In another terminal, create a five-minute Relay pairing code:
+
+```bash
+node apps/bridge/src/cli.ts pair
+```
+
+Do not paste the admin token into source, `.env` files, issues, or logs.
+
+## Optional reviewed voice
+
+The watch's built-in keyboard/dictation works without an OpenAI key. For
+hold-to-record transcription:
+
+1. Open **Voice** in the Mac dashboard.
+2. Paste the OpenAI key there.
+3. Relay stores it in Keychain.
+4. Test one recording and verify the transcript before sending.
+
+Audio is temporary, is deleted after transcription or failure, and is never
+sent to Codex automatically.
+
+## Turn on remote access
+
+Install and sign in to the official Tailscale Mac app. Relay runs:
+
+```bash
+tailscale status --json
 tailscale funnel --bg 43117
-tailscale funnel status
+tailscale funnel status --json
 ```
 
-- [ ] Record the generated `https://…ts.net` origin in the watch configuration during pairing.
-- [ ] Turn off ADB debugging after installation if active debugging is not needed.
-- [ ] Put the watch on a different Wi-Fi network and confirm it reconnects.
-- [ ] Confirm an unpaired HTTP client receives no task metadata.
-- [ ] Confirm the Mac bridge becomes unavailable when the Mac sleeps.
+Funnel is public internet ingress, but it forwards only to the localhost
+bridge. Relay still requires the watch's device signature on every private
+request.
 
-To disable public ingress:
+Emergency Stop disables Funnel and closes watch access while leaving Codex
+tasks running. It does not silently revoke the watch; revocation is a separate
+deliberate action.
 
-```bash
-tailscale funnel 43117 off
-```
+## Daily use
 
-## 6. Daily use requirements
-
-- The watch must have working Wi-Fi.
-- The Mac must be powered on, awake, online, signed into Tailscale, and running both Codex and the bridge.
-- The OpenAI API key and account must have access to speech transcription.
-- A sleeping or offline Mac is shown as offline; Relay does not silently queue approvals.
-
-## Disk-space policy
-
-- No emulator or virtual device.
-- No Wear OS system images.
-- Build only the physical-watch debug APK during development.
-- Periodically remove local Gradle build outputs with the repository cleanup task once it exists.
-- Keep Gradle caches shared rather than vendoring dependencies into the repository.
-
+- Keep the Mac awake, online, and running Relay and Codex.
+- Keep Tailscale connected for remote networks.
+- Start Live Monitoring only when you want visible real-time background
+  updates; it ends after four hours or on low battery.
+- If the Mac is offline, cached watch data is marked stale and controls are
+  disabled. Relay does not queue actions to run later.

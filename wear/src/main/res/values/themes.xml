@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Relay" parent="android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@android:color/white</item>
+    </style>
+</resources>

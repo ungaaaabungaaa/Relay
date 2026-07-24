@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.ungaaaabungaaa.relay.bridge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>node</string>
+    <string>REPOSITORY_PATH/apps/bridge/src/cli.ts</string>
+    <string>serve</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>REPOSITORY_PATH</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>DATA_PATH/bridge.log</string>
+  <key>StandardErrorPath</key>
+  <string>DATA_PATH/bridge-error.log</string>
+</dict>
+</plist>

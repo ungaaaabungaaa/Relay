@@ -1,0 +1,16 @@
+{
+  "name": "@relay/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "start": "node src/cli.ts serve"
+  },
+  "dependencies": {
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
+  }
+}
