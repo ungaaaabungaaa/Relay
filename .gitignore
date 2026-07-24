@@ -9,8 +9,8 @@ local.properties
 .env.*
 !.env.example
 node_modules/
+.pnpm-store/
 dist/
 coverage/
 *.log
 .superpowers/
-

@@ -1,0 +1,11 @@
+{
+  "name": "relay",
+  "private": true,
+  "packageManager": "pnpm@11.16.0",
+  "scripts": {
+    "generate:codex": "node scripts/generate-codex-protocol.mjs",
+    "test": "node --test packages/*/test/*.test.ts apps/*/test/*.test.ts",
+    "test:protocol": "node --test packages/codex-protocol/test/*.test.ts",
+    "typecheck": "node scripts/check-types.mjs"
+  }
+}
