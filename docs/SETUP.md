@@ -4,14 +4,15 @@ This guide uses the Galaxy Watch6 itself for development. Do not create an Andro
 
 ## 1. Mac prerequisites
 
-Current machine inventory on 2026-07-22:
+Current machine inventory verified on 2026-07-24:
 
 - macOS 26.5.2
 - Node.js 24.18.0: installed
 - pnpm 11.13.0: installed
 - Codex CLI 0.144.5: installed
-- Android Studio: not installed
-- Android platform tools (`adb`): not installed
+- Android Studio 2026.1: installed
+- Android SDK 36.1 and Build Tools 36.0.0: installed
+- Android platform tools (`adb` 37): installed
 - Tailscale CLI: not installed
 
 ### Install Android Studio without an emulator
@@ -65,7 +66,7 @@ Enter the watch pairing code when requested. `adb devices` should list one conne
 
 ## 3. Open and deploy Relay
 
-These steps become active after the Wear OS module is implemented:
+The Wear OS module is implemented:
 
 - [ ] Open the repository root in Android Studio.
 - [ ] Allow Gradle to sync using Android Studio's bundled JDK.
@@ -74,11 +75,17 @@ These steps become active after the Wear OS module is implemented:
 - [ ] Accept the install/debug prompt on the watch if shown.
 - [ ] Confirm the pairing screen renders without clipped controls.
 
-Command-line deployment will also be available:
+Command-line deployment:
 
 ```bash
 ./gradlew :wear:installDebug
 adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
+```
+
+For local development, keep the bridge bound to localhost and forward the port over the authenticated ADB connection:
+
+```bash
+adb reverse tcp:43117 tcp:43117
 ```
 
 ## 4. Configure the Mac bridge
@@ -136,4 +143,3 @@ tailscale funnel 43117 off
 - Build only the physical-watch debug APK during development.
 - Periodically remove local Gradle build outputs with the repository cleanup task once it exists.
 - Keep Gradle caches shared rather than vendoring dependencies into the repository.
-

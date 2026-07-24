@@ -1,0 +1,205 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import type { CodexAdapter } from "./codex/adapter.ts";
+import { verifyRequest } from "./security/authentication.ts";
+import { PairingService } from "./security/pairing.ts";
+import type { SecurityStore } from "./security/store.ts";
+
+type Adapter = Pick<
+  CodexAdapter,
+  | "listTasks"
+  | "readTask"
+  | "listModels"
+  | "approvals"
+  | "questions"
+  | "answerApproval"
+  | "answerQuestion"
+  | "sendInstruction"
+  | "steerTask"
+  | "stopTask"
+  | "startTask"
+>;
+
+type HandlerOptions = {
+  store: SecurityStore;
+  adapter: Partial<Adapter> & Pick<Adapter, "listTasks" | "readTask" | "listModels" | "approvals" | "questions">;
+};
+
+const json = (body: unknown, status = 200) =>
+  Response.json(body, {
+    status,
+    headers: { "cache-control": "no-store" },
+  });
+
+async function parseJson(request: Request) {
+  if (!request.body) return {};
+  const text = await request.text();
+  if (!text) return {};
+  if (text.length > 1_000_000) throw new Error("body too large");
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
+export function createRequestHandler(options: HandlerOptions) {
+  const pairing = new PairingService(options.store);
+  return async (request: Request): Promise<Response> => {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return json({ ok: true, service: "relay" });
+    }
+    if (request.method === "POST" && url.pathname === "/v1/pair") {
+      try {
+        const body = await parseJson(request);
+        if (
+          typeof body.code !== "string" ||
+          typeof body.name !== "string" ||
+          typeof body.publicKey !== "string"
+        ) {
+          return json({ error: "invalid request" }, 400);
+        }
+        const device = pairing.exchange(body.code, body.name, body.publicKey);
+        return json({ deviceId: device.id });
+      } catch {
+        return json({ error: "pairing failed" }, 401);
+      }
+    }
+    if (!url.pathname.startsWith("/v1/")) return json({ error: "not found" }, 404);
+
+    const bodyBytes = new Uint8Array(await request.clone().arrayBuffer());
+    let deviceId: string;
+    try {
+      deviceId = verifyRequest(options.store, {
+        deviceId: request.headers.get("x-relay-device") ?? "",
+        method: request.method,
+        path: `${url.pathname}${url.search}`,
+        body: bodyBytes,
+        timestamp: Number(request.headers.get("x-relay-timestamp")),
+        nonce: request.headers.get("x-relay-nonce") ?? "",
+        signature: request.headers.get("x-relay-signature") ?? "",
+      });
+    } catch {
+      return json({ error: "unauthorized" }, 401);
+    }
+
+    try {
+      if (request.method === "GET" && url.pathname === "/v1/tasks") {
+        return json(await options.adapter.listTasks(url.searchParams.get("cursor")));
+      }
+      const taskMatch = url.pathname.match(/^\/v1\/tasks\/([^/]+)$/);
+      if (request.method === "GET" && taskMatch?.[1]) {
+        return json(await options.adapter.readTask(taskMatch[1]));
+      }
+      if (request.method === "GET" && url.pathname === "/v1/models") {
+        return json({ data: await options.adapter.listModels() });
+      }
+      if (request.method === "GET" && url.pathname === "/v1/inbox") {
+        return json({
+          approvals: options.adapter.approvals(),
+          questions: options.adapter.questions(),
+        });
+      }
+      if (request.method === "GET" && url.pathname === "/v1/folders") {
+        const path = resolve(url.searchParams.get("path") || process.env.HOME || "/");
+        const entries = await readdir(path, { withFileTypes: true });
+        return json({
+          path,
+          entries: entries
+            .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .slice(0, 100)
+            .map((entry) => ({ name: entry.name, path: resolve(path, entry.name) })),
+        });
+      }
+      if (request.method === "POST") {
+        const body = await parseJson(request);
+        const approval = url.pathname.match(/^\/v1\/approvals\/([^/]+)$/);
+        if (approval?.[1] && options.adapter.answerApproval) {
+          options.adapter.answerApproval(approval[1], body.decision === "approve");
+          return json({ ok: true });
+        }
+        const question = url.pathname.match(/^\/v1\/questions\/([^/]+)$/);
+        if (question?.[1] && options.adapter.answerQuestion) {
+          options.adapter.answerQuestion(
+            question[1],
+            (body.answers ?? {}) as Record<string, string[]>,
+          );
+          return json({ ok: true });
+        }
+        if (url.pathname === "/v1/tasks" && options.adapter.startTask) {
+          return json(
+            await options.adapter.startTask({
+              cwd: String(body.cwd),
+              model: String(body.model),
+              effort: String(body.effort),
+              prompt: String(body.prompt),
+            }),
+            201,
+          );
+        }
+        const instruction = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/instructions$/);
+        if (instruction?.[1] && options.adapter.sendInstruction) {
+          return json(
+            await options.adapter.sendInstruction(instruction[1], String(body.text)),
+          );
+        }
+        const steer = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/steer$/);
+        if (steer?.[1] && options.adapter.steerTask) {
+          return json(
+            await options.adapter.steerTask(
+              steer[1],
+              String(body.turnId),
+              String(body.text),
+            ),
+          );
+        }
+        const stop = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/stop$/);
+        if (stop?.[1] && options.adapter.stopTask) {
+          return json(
+            await options.adapter.stopTask(stop[1], String(body.turnId)),
+          );
+        }
+      }
+      return json({ error: "not found" }, 404);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "request failed";
+      return json({ error: message }, message.includes("expired") ? 409 : 400);
+    } finally {
+      void deviceId;
+    }
+  };
+}
+
+async function nodeRequest(request: IncomingMessage, limit = 8_000_000) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) throw new Error("body too large");
+    chunks.push(buffer);
+  }
+  const host = request.headers.host ?? "127.0.0.1";
+  return new Request(`http://${host}${request.url ?? "/"}`, {
+    method: request.method,
+    headers: request.headers as HeadersInit,
+    ...(chunks.length ? { body: Buffer.concat(chunks), duplex: "half" } : {}),
+  } as RequestInit);
+}
+
+async function sendNodeResponse(response: Response, target: ServerResponse) {
+  target.statusCode = response.status;
+  response.headers.forEach((value, name) => target.setHeader(name, value));
+  target.end(Buffer.from(await response.arrayBuffer()));
+}
+
+export function createRelayServer(options: HandlerOptions) {
+  const handler = createRequestHandler(options);
+  return createServer(async (request, response) => {
+    try {
+      await sendNodeResponse(await handler(await nodeRequest(request)), response);
+    } catch {
+      response.statusCode = 400;
+      response.end(JSON.stringify({ error: "invalid request" }));
+    }
+  });
+}

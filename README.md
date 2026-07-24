@@ -67,4 +67,26 @@ The bridge is the trust boundary. OpenAI and Codex credentials never live on the
 
 ## Current status
 
-Design approved; implementation has not started. The repository intentionally contains no emulator configuration or system image requirement.
+The repository contains a runnable Relay MVP:
+
+- native Kotlin/Compose Wear OS application in `wear/`;
+- localhost-only Node 24 Mac bridge in `apps/bridge/`;
+- generated bindings for the installed Codex app-server protocol;
+- public-key watch pairing and signed-request replay protection;
+- live Codex task/model discovery, approvals, questions, instructions, steering, and stop APIs;
+- physical-watch-only build and deployment workflow.
+
+Automated tests, Android lint, APK assembly, and a live Codex task/model smoke
+test pass. Physical Watch6 installation and interaction QA remain pending until
+the reset watch is paired to ADB. Voice upload/transcription, resumable
+WebSocket delivery, Funnel ingress, and release signing remain tracked in
+`docs/TODO.md`; the current build uses authenticated HTTP polling over
+`adb reverse` for its safe local development loop.
+
+Build the APK with:
+
+```bash
+./gradlew :wear:assembleDebug
+```
+
+Follow [docs/PHYSICAL-WATCH-TEST.md](docs/PHYSICAL-WATCH-TEST.md) to connect and install on a Galaxy Watch6.
