@@ -34,6 +34,10 @@ importers:
         specifier: ^8.18.1
         version: 8.18.1
 
+  apps/cloud: {}
+
+  packages/cloud-protocol: {}
+
   packages/codex-protocol: {}
 
 packages:
