@@ -9,7 +9,7 @@ published. Use the developer path today.
 - macOS 14 or newer;
 - Codex installed, signed in, and able to open a task;
 - Tailscale on the Mac; its free plan is enough;
-- a Wear OS 4+ watch;
+- a Wear OS 3+ watch;
 - Wi-Fi shared by the Mac and watch for the one-time install.
 
 A reset Bluetooth/Wi-Fi Galaxy Watch6 normally needs the Galaxy Wearable app on
@@ -36,20 +36,24 @@ release.
 5. Open Relay. macOS should accept the Developer ID and notarization without a
    security override.
 6. Open the Relay dashboard from the menu-bar icon.
-7. Install Tailscale from its official Mac download, sign in, and return to
-   Relay.
+7. Install Tailscale from its official Mac download. Relay opens Tailscale's
+   browser sign-in and checks status for up to two minutes.
 8. In **Setup**, choose **Install verified tools**. Relay downloads only the
    pinned official Android Platform Tools archive; it does not install Android
    Studio or an emulator.
 9. On the watch, enable Developer Options and Wireless Debugging using the
    steps below.
 10. In **Watches**, pair, connect, and install Relay.
-11. Create the short Relay pairing code in the Mac app and enter it on the
-    watch. Confirm the Mac identity shown on both devices.
-12. Add only the Mac workspace folders you want the watch to browse.
-13. In **Remote Access**, run checks, then enable Funnel.
-14. Test once with the watch on a different Wi-Fi network.
-15. Turn Wireless Debugging off on the watch.
+11. Start secure pairing in the Mac app. Relay opens a temporary,
+    security-checked Funnel endpoint for pairing. The watch discovers it over
+    Bonjour.
+12. Compare the Mac fingerprint, enter the six-character code, then compare
+    the watch fingerprint before you approve it on the Mac. Relay closes the
+    temporary pairing endpoint after approval, denial, or session expiry.
+13. Add only the Mac workspace folders you want the watch to browse.
+14. In **Remote Access**, run checks, then enable permanent access.
+15. Test once with the watch on a different Wi-Fi network.
+16. Turn Wireless Debugging off on the watch.
 
 Remote Access is deliberately last. The bridge stays private until the local
 security self-test passes.
@@ -142,13 +146,10 @@ export CODEWATCH_ADMIN_HOST=127.0.0.1
 node apps/bridge/src/cli.ts serve
 ```
 
-In another terminal, create a five-minute Relay pairing code:
-
-```bash
-node apps/bridge/src/cli.ts pair
-```
-
-Do not paste the admin token into source, `.env` files, issues, or logs.
+Use the Mac app for release-style pairing. The old unrestricted `/v1/pair`
+route remains available for debug migration and will be removed after both
+watch clients use session pairing. Do not paste the admin token into source,
+`.env` files, issues, or logs.
 
 ## Optional reviewed voice
 
@@ -169,7 +170,7 @@ Install and sign in to the official Tailscale Mac app. Relay runs:
 
 ```bash
 tailscale status --json
-tailscale funnel --bg 43117
+TAILSCALE_BE_CLI=1 tailscale funnel --bg http://127.0.0.1:43117
 tailscale funnel status --json
 ```
 

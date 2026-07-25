@@ -1,9 +1,8 @@
 # Third-party notices
 
-This inventory is derived from `pnpm-lock.yaml` and
-`gradle/libs.versions.toml` for the checked-in release source. The exact
-resolved dependency graph remains recorded in those files and in the Gradle
-release build output.
+This inventory is derived from `pnpm-lock.yaml`, `gradle/libs.versions.toml`,
+and `mac/Package.resolved` for the checked-in release source. Those files and
+the Gradle release output record the resolved dependency graph.
 
 ## Shipped components
 
@@ -19,6 +18,7 @@ release build output.
 | AndroidX WorkManager | 2.11.2 | Apache-2.0 |
 | Kotlin coroutines | 1.10.2 | Apache-2.0 |
 | OkHttp | 5.1.0 | Apache-2.0 |
+| Sparkle | 2.9.2 | MIT with bundled third-party notices |
 
 ## Build and test components
 
@@ -40,9 +40,10 @@ the build and test tools, including Chai, cac, debug, deep-eql, magic-string,
 nanoid, picocolors, picomatch, postcss, source-map-js, tinybench, tinypool,
 tinyspy, and their declared helpers.
 
-The Relay Mac application has no third-party Swift package dependency. It uses
+The Relay Mac application embeds Sparkle 2.9.2 for signed updates and also uses
 Apple system frameworks including SwiftUI, Foundation, Security, and
-CryptoKit.
+CryptoKit. Sparkle's source package carries the copyright and third-party
+notices that apply to its bundled update components.
 
 License identifiers above are informational summaries. The authoritative
 license text and copyright notices are shipped by each dependency in its

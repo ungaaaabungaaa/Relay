@@ -1,6 +1,26 @@
 const watchScreens = {
-  home: {
+  pairing: {
     index: "01",
+    title: "Secure pairing",
+    body: "The watch finds the five-minute Bonjour session, reads pairing details over HTTPS, and waits for explicit Mac approval.",
+    rule: "Both people-visible fingerprints must match",
+    render: () => `
+      <span class="watch-time">PAIRING · 04:38</span>
+      <p class="watch-kicker">Studio Mac</p>
+      <h3 class="watch-title">Confirm Mac</h3>
+      <article class="watch-card">
+        <small>MAC FINGERPRINT</small>
+        <strong class="mono-small">630D:CD29:66C4:3366</strong>
+        <p>Enter the six-character code shown on the Mac.</p>
+      </article>
+      <div class="code-cells" aria-label="Pairing code">
+        <span>R</span><span>7</span><span>K</span><span>2</span><span>M</span><span>Q</span>
+      </div>
+      <button class="watch-button primary wide" data-jump="home">Request Mac approval</button>
+    `,
+  },
+  home: {
+    index: "02",
     title: "Home",
     body: "The urgent thing is always first. A pending approval outranks active work, recent tasks, and connection details.",
     rule: "Two meaningful taps or fewer",
@@ -11,7 +31,7 @@ const watchScreens = {
       <article class="watch-card urgent">
         <small>CODEWATCH · 22 SEC</small>
         <strong>Ship release checkpoint</strong>
-        <p>git push origin feat/relay-mvp</p>
+        <p>git push origin main</p>
       </article>
       <button class="watch-button primary wide" data-jump="approval">Review approval</button>
       <div class="watch-actions">
@@ -21,7 +41,7 @@ const watchScreens = {
     `,
   },
   approval: {
-    index: "02",
+    index: "03",
     title: "Approval",
     body: "Relay shows the exact operation and consequence. Dangerous work uses a deliberate 1.5-second hold; moving away cancels it.",
     rule: "Unknown risk fails into dangerous",
@@ -31,7 +51,7 @@ const watchScreens = {
       <h3 class="watch-title">Push branch?</h3>
       <article class="watch-card urgent">
         <small>NETWORK + REPOSITORY</small>
-        <strong>git push origin feat/relay-mvp</strong>
+        <strong>git push origin main</strong>
         <p>~/Developer/SandBox/codewatch</p>
       </article>
       <button class="watch-button primary wide hold-button" style="--hold:0%">Hold to approve</button>
@@ -39,7 +59,7 @@ const watchScreens = {
     `,
   },
   task: {
-    index: "03",
+    index: "04",
     title: "Task timeline",
     body: "The watch summarizes activity instead of shrinking a terminal. Commands and consequences remain available where they matter.",
     rule: "Useful signal, not raw terminal noise",
@@ -61,7 +81,7 @@ const watchScreens = {
     `,
   },
   voice: {
-    index: "04",
+    index: "05",
     title: "Reviewed voice",
     body: "Voice is never auto-sent. Record, transcribe on the Mac, review the words, and only then steer Codex.",
     rule: "Transcript review before every send",
@@ -77,7 +97,7 @@ const watchScreens = {
     `,
   },
   "new-task": {
-    index: "05",
+    index: "06",
     title: "New task",
     body: "A short guided flow chooses an approved workspace, current Codex model, reasoning effort, permission profile, and prompt.",
     rule: "Never hard-code Codex capabilities",
@@ -95,7 +115,7 @@ const watchScreens = {
     `,
   },
   offline: {
-    index: "06",
+    index: "07",
     title: "Honest offline state",
     body: "Relay shows cached summaries as stale and disables actions. It never silently queues an approval for later.",
     rule: "Offline means read-only",
@@ -114,16 +134,20 @@ const watchScreens = {
 const dashboardPanels = {
   setup: {
     eyebrow: "Start here",
-    title: "Make the watch connection boring",
-    subtitle: "Relay checks each moving part locally. Remote access stays off until every security check passes.",
+    title: "Nine steps, one installer",
+    subtitle: "The wizard resumes at the first unfinished step and keeps permanent remote access off until the end.",
     rows: [
-      ["CX", "Codex", "Existing Mac tasks remain the source of truth.", "Ready", true],
-      ["TS", "Tailscale", "Free private transport with optional Funnel.", "Needs setup", false],
-      ["LK", "Bridge security", "Loopback, strong admin token, signed requests.", "Ready", true],
-      ["W6", "Watch", "Install and pair the physical Wear OS watch.", "Needs setup", false],
-      ["RA", "Remote access", "Off until the safe preflight passes.", "Off · safe", true],
+      ["01", "Relay and Codex", "Verify the arm64 sidecar and installed Codex.", "Done", true],
+      ["02", "Official Tailscale", "Install or open the signed Mac app.", "Done", true],
+      ["03", "Tailscale sign-in", "Complete the official browser login.", "Done", true],
+      ["04", "Security preflight", "Both Relay ports remain loopback-only.", "Done", true],
+      ["05", "Platform Tools", "Google archive verified by SHA-256.", "Current", false],
+      ["06", "Watch install", "Wireless ADB installs the bundled APK.", "Waiting", false],
+      ["07", "Pair and approve", "Compare Mac and watch fingerprints.", "Waiting", false],
+      ["08", "Workspaces", "Choose the only folders visible to Relay.", "Waiting", false],
+      ["09", "Remote access", "Permanent Funnel access stays off.", "Off · safe", true],
     ],
-    action: "Run checks",
+    action: "Install verified tools",
   },
   watches: {
     eyebrow: "Physical devices",
@@ -172,8 +196,8 @@ const dashboardPanels = {
     title: "Update without guessing",
     subtitle: "Relay verifies the Ed25519 manifest, Apple silicon architecture, tag, version, and SHA-256 before offering an update.",
     rows: [
-      ["MAC", "Relay for Mac", "Installed 0.1.0", "Current", true],
-      ["APK", "Relay for Wear OS", "Bundled 0.1.0 · version code 1", "Current", true],
+      ["MAC", "Relay for Mac", "Sparkle stable or beta signed feed.", "Current", true],
+      ["APK", "Relay for Wear OS 3+", "Bundled version comes from release metadata.", "Current", true],
       ["CDX", "Codex compatibility", "Supported range comes from the release manifest.", "Checked", true],
     ],
     action: "Check again",
@@ -188,6 +212,17 @@ const dashboardPanels = {
       ["DB", "Local data", "Device, nonce, audit, and event metadata only.", "Healthy", true],
     ],
     action: "Copy redacted report",
+  },
+  about: {
+    eyebrow: "One Relay product",
+    title: "Native where it matters",
+    subtitle: "The first GitHub DMG contains the Mac app, bridge, and Wear OS APK. Apple Watch follows through TestFlight.",
+    rows: [
+      ["MAC", "Apple silicon", "macOS 14+ · menu-bar control room.", "Initial", true],
+      ["WEAR", "Wear OS 3+", "One APK · round and square.", "Initial", true],
+      ["AW", "watchOS 10+", "Independent app · App Store delivery.", "Phase 2", false],
+    ],
+    action: "Apache 2.0",
   },
 };
 
@@ -207,7 +242,7 @@ function showWatchScreen(name) {
   void watchScreen.offsetWidth;
   watchScreen.classList.add("watch-screen");
   watchScreen.innerHTML = screen.render();
-  noteIndex.textContent = `SCREEN ${screen.index} / 06`;
+  noteIndex.textContent = `SCREEN ${screen.index} / 07`;
   noteTitle.textContent = screen.title;
   noteBody.textContent = screen.body;
   noteRule.textContent = screen.rule;
@@ -311,5 +346,17 @@ sideItems.forEach((item) => {
   item.addEventListener("click", () => showDashboardPanel(item.dataset.panel));
 });
 
-showWatchScreen("home");
+document.querySelectorAll("[data-shape]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const square = button.dataset.shape === "square";
+    document.querySelector(".watch").classList.toggle("square", square);
+    document.querySelectorAll("[data-shape]").forEach((shapeButton) => {
+      const active = shapeButton === button;
+      shapeButton.classList.toggle("active", active);
+      shapeButton.setAttribute("aria-pressed", String(active));
+    });
+  });
+});
+
+showWatchScreen("pairing");
 showDashboardPanel("setup");

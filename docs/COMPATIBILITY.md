@@ -23,21 +23,31 @@ installed Codex app-server does not advertise the needed capability.
 
 | Item | Support |
 | --- | --- |
-| Operating system | Wear OS 4 or newer |
-| Android API | API 33 or newer |
-| Shape | Round layouts are the primary design |
+| Operating system | Wear OS 3 or newer |
+| Android API | API 30 or newer |
+| Shape | Round and square |
 | Networking | Wi-Fi; LTE may work when the watch and plan permit normal HTTPS |
 | Install method | Wireless ADB from the Relay Mac wizard |
 | Phone requirement after setup | None for Relay itself |
 
-Galaxy Watch6 is the required project release device. Its physical acceptance
-run is still pending. Other Wear OS 4+ watches are supported by design but must
-be labelled **community-tested** until a reproducible physical result is added
-to this file.
+Galaxy Watch6 is the first beta release device. Its physical acceptance run
+is still pending. Stable `v1.0.0` also requires three watches across two OEMs,
+including one Wear OS 3 device and two screen-size classes.
 
 | Device | Wear OS | Result | Tester |
 | --- | --- | --- | --- |
-| Samsung Galaxy Watch6 | 4+ | Release gate pending | Project |
+| Samsung Galaxy Watch6 | 4+ | Beta release gate pending | Project |
+| Wear OS 3 device | 3 | Stable release gate pending | Project |
+
+## Apple Watch phase
+
+The `apple-watch/` project targets watchOS 10+ as an independent watch-only
+app. TestFlight and the App Store will deliver it after the Wear OS beta. The
+source and Xcode project exist, and CI type-checks the full app for both watch
+architectures plus the platform-neutral protocol and identity tests. A signed
+target build requires a matching Xcode watchOS runtime and Apple team. Apple
+Watch hardware, Wi-Fi/cellular transitions, battery, revocation, and TestFlight
+updates remain open gates.
 
 ## Feature requirements
 
@@ -46,8 +56,9 @@ to this file.
 - System keyboard/dictation requires no OpenAI key.
 - Optional hold-to-record transcription requires an OpenAI API key stored in
   macOS Keychain.
-- Relay does not support Android phones, Apple Watch, Intel Macs, or a
-  cloud-hosted Mac replacement in version 1.
+- The Wear APK does not support Android phones, Apple Watch, Garmin,
+  HarmonyOS, or Zepp devices.
+- Relay does not support Intel Macs or a cloud-hosted Mac replacement.
 
 ## How to contribute a watch result
 

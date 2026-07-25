@@ -41,7 +41,6 @@ export async function createReleasePayload({
   const artifactDefinitions = [
     ["Relay.dmg", "arm64", true],
     ["relay-wear.apk", "universal", true],
-    ["relay-bridge-arm64", "arm64", true],
     [`Relay-${version}.tar.gz`, "source", false],
     ["LICENSE", "text", false],
     ["NOTICE", "text", false],

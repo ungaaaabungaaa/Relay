@@ -336,6 +336,18 @@ h1 {
   border-radius: 50%;
 }
 
+.watch.square,
+.watch.square::before,
+.watch.square .watch-glass,
+.watch.square .watch-screen,
+.watch.square .watch-glass::after {
+  border-radius: 28%;
+}
+
+.watch.square {
+  transform: scale(.92);
+}
+
 .crown {
   position: absolute;
   z-index: -1;
@@ -454,6 +466,32 @@ h1 {
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mono-small {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px !important;
+  letter-spacing: -.04em;
+}
+
+.code-cells {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin: 10px 0;
+}
+
+.code-cells span {
+  display: grid;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  background: #0d1210;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .watch-actions {
@@ -660,6 +698,37 @@ h1 {
   font-size: 9px;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+
+.shape-switch {
+  position: absolute;
+  z-index: 5;
+  top: 24px;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(5, 7, 6, .88);
+}
+
+.shape-switch button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.shape-switch button.active,
+.shape-switch button:focus-visible {
+  background: var(--mint);
+  color: var(--ink);
+  outline: none;
 }
 
 .mouse-icon {
@@ -1071,7 +1140,7 @@ footer a {
   }
 
   .build-chip::after {
-    content: "Prototype";
+    content: "Checkpoint";
     font-size: 9px;
   }
 

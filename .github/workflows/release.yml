@@ -128,6 +128,9 @@ jobs:
           pnpm typecheck
           ./gradlew :wear:testDebugUnitTest :wear:lintDebug
           swift test --package-path mac
+          swift test --package-path apple-watch
+          scripts/check-watchos-source.sh
+          xcodebuild -list -project apple-watch/RelayWatch.xcodeproj
       - name: Build and verify signed watch APK
         run: |
           ./gradlew :wear:assembleRelease
@@ -148,7 +151,6 @@ jobs:
           pnpm smoke:bridge-sea
           RELAY_APK_PATH="${GITHUB_WORKSPACE}/release/out/relay-wear.apk" \
             scripts/package-mac-app.sh
-          cp dist/relay-bridge-arm64 release/out/relay-bridge-arm64
       - name: Notarize and staple
         run: |
           xcrun notarytool submit release/out/Relay.dmg \
@@ -187,29 +189,12 @@ jobs:
           shasum -a 256 \
             Relay.dmg \
             relay-wear.apk \
-            relay-bridge-arm64 \
             "Relay-${RELAY_VERSION}.tar.gz" \
             LICENSE \
             NOTICE \
             THIRD_PARTY_NOTICES.md \
             COMPATIBILITY.md \
             release-manifest.json > SHA256SUMS
-      - name: Upload verified GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: |
-            release/out/Relay.dmg
-            release/out/relay-wear.apk
-            release/out/relay-bridge-arm64
-            release/out/Relay-*.tar.gz
-            release/out/SHA256SUMS
-            release/out/release-manifest.json
-            release/out/LICENSE
-            release/out/NOTICE
-            release/out/THIRD_PARTY_NOTICES.md
-            release/out/COMPATIBILITY.md
       - name: Generate signed stable or beta Sparkle feed
         run: |
           mkdir -p release/appcast-work release/pages
@@ -239,6 +224,21 @@ jobs:
               --ed-key-file - \
               --verify \
               "release/pages/${feed_name}"
+      - name: Upload verified GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release/out/Relay.dmg
+            release/out/relay-wear.apk
+            release/out/Relay-*.tar.gz
+            release/out/SHA256SUMS
+            release/out/release-manifest.json
+            release/out/LICENSE
+            release/out/NOTICE
+            release/out/THIRD_PARTY_NOTICES.md
+            release/out/COMPATIBILITY.md
       - name: Upload signed appcasts for GitHub Pages
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:

@@ -22,13 +22,13 @@
         <span>RELAY</span>
       </a>
       <p>Watch Codex move.</p>
-      <span class="build-chip"><i></i> Interactive prototype</span>
+      <span class="build-chip"><i></i> Launch checkpoint</span>
     </header>
 
     <main id="preview">
       <section class="hero" aria-labelledby="preview-title">
         <div class="hero-copy">
-          <p class="eyebrow">Wear OS + Apple silicon Mac</p>
+          <p class="eyebrow">Wear OS 3+ + Apple silicon Mac</p>
           <h1 id="preview-title">Your Codex tasks,<br>one turn away.</h1>
           <p class="hero-detail">
             Click through the real Relay screen map. The watch stays focused on
@@ -41,31 +41,34 @@
           </div>
         </div>
         <div class="coordinate" aria-hidden="true">
-          <span>ROUND / 40MM</span>
-          <span>WEAR OS 4+</span>
-          <span>PROTO / 0.1</span>
+          <span>ROUND + SQUARE</span>
+          <span>WEAR OS 3+</span>
+          <span>PROTO / 0.2</span>
         </div>
       </section>
 
       <section class="stage" aria-label="Interactive Relay watch preview">
         <div class="screen-rail" role="tablist" aria-label="Watch screens">
-          <button class="rail-button active" role="tab" aria-selected="true" data-screen="home">
-            <span>01</span> Home
+          <button class="rail-button active" role="tab" aria-selected="true" data-screen="pairing">
+            <span>01</span> Pairing
+          </button>
+          <button class="rail-button" role="tab" aria-selected="false" data-screen="home">
+            <span>02</span> Home
           </button>
           <button class="rail-button" role="tab" aria-selected="false" data-screen="approval">
-            <span>02</span> Approval
+            <span>03</span> Approval
           </button>
           <button class="rail-button" role="tab" aria-selected="false" data-screen="task">
-            <span>03</span> Task
+            <span>04</span> Task
           </button>
           <button class="rail-button" role="tab" aria-selected="false" data-screen="voice">
-            <span>04</span> Voice
+            <span>05</span> Voice
           </button>
           <button class="rail-button" role="tab" aria-selected="false" data-screen="new-task">
-            <span>05</span> New task
+            <span>06</span> New task
           </button>
           <button class="rail-button" role="tab" aria-selected="false" data-screen="offline">
-            <span>06</span> Offline
+            <span>07</span> Offline
           </button>
         </div>
 
@@ -78,6 +81,10 @@
               <div id="watch-screen" class="watch-screen" aria-live="polite"></div>
             </div>
           </div>
+          <div class="shape-switch" aria-label="Preview watch shape">
+            <button class="active" data-shape="round" aria-pressed="true">Round</button>
+            <button data-shape="square" aria-pressed="false">Square</button>
+          </div>
           <p class="interaction-hint">
             <span class="mouse-icon" aria-hidden="true"></span>
             Controls work in this preview
@@ -85,15 +92,15 @@
         </div>
 
         <aside class="screen-notes" aria-live="polite">
-          <p class="note-index" id="note-index">SCREEN 01 / 06</p>
-          <h2 id="note-title">Home</h2>
+          <p class="note-index" id="note-index">SCREEN 01 / 07</p>
+          <h2 id="note-title">Secure pairing</h2>
           <p id="note-body">
-            The urgent thing is always first. A pending approval outranks active
-            work, recent tasks, and connection details.
+            The watch finds a five-minute session on local Wi-Fi, compares the
+            Mac fingerprint, and waits for Mac approval.
           </p>
           <div class="principle">
             <span>DESIGN RULE</span>
-            <strong id="note-rule">Two meaningful taps or fewer</strong>
+            <strong id="note-rule">Both people-visible fingerprints must match</strong>
           </div>
           <div class="status-readout">
             <div><span>Bridge</span><strong>Local / ready</strong></div>
@@ -136,6 +143,7 @@
               <button class="side-item" data-panel="voice">Voice</button>
               <button class="side-item" data-panel="updates">Updates</button>
               <button class="side-item" data-panel="diagnostics">Diagnostics</button>
+              <button class="side-item" data-panel="about">About</button>
               <div class="bridge-state"><i></i> Local bridge ready</div>
             </nav>
             <div id="dashboard-panel" class="dashboard-panel" aria-live="polite"></div>

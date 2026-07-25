@@ -104,5 +104,5 @@ Also confirm:
 - audio is deleted after transcription failure as well as success;
 - Emergency Stop disables remote access and leaves Codex tasks running.
 
-Turn Wireless Debugging off after the run. Add other Wear OS 4+ devices to
+Turn Wireless Debugging off after the run. Add other Wear OS 3+ devices to
 `docs/COMPATIBILITY.md` only after a documented physical result.

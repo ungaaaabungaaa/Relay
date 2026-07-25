@@ -2,7 +2,7 @@
 .idea/
 .gradle/
 **/build/
-mac/.build/
+**/.build/
 .build-release/
 local.properties
 *.jks

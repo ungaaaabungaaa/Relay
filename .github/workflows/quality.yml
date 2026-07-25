@@ -97,6 +97,11 @@ jobs:
         run: |
           swift test --package-path mac
           swift build --package-path mac --configuration release --arch arm64
+      - name: Check Apple Watch phase 2 foundation
+        run: |
+          swift test --package-path apple-watch
+          scripts/check-watchos-source.sh
+          xcodebuild -list -project apple-watch/RelayWatch.xcodeproj
       - name: Upload bridge sidecar
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

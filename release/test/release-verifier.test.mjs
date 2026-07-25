@@ -19,12 +19,20 @@ import {
   canonicalizeManifestPayload,
   verifyRelease,
 } from "../../scripts/verify-release.mjs";
+import { createReleasePayload } from "../../scripts/create-release-manifest.mjs";
 
 const VERSION = "1.2.3";
 const TAG = `v${VERSION}`;
 
 test("accepts a signed, internally consistent Apple silicon release", async () => {
   await withFixture(async ({ directory, manifest, publicKey }) => {
+    const generated = await createReleasePayload({
+      artifactsDirectory: directory,
+      tag: TAG,
+      watchVersionCode: 10203,
+      codexMinimumVersion: "0.144.0",
+      codexMaximumVersion: "0.144.x",
+    });
     const result = await verifyRelease({
       manifest,
       artifactsDirectory: directory,
@@ -35,6 +43,10 @@ test("accepts a signed, internally consistent Apple silicon release", async () =
     assert.equal(result.version, VERSION);
     assert.equal(result.mac.architecture, "arm64");
     assert.equal(result.watch.versionName, VERSION);
+    assert.equal(
+      generated.artifacts.some(({ name }) => name === "relay-bridge-arm64"),
+      false,
+    );
     assert.deepEqual(result.codex, {
       minimumVersion: "0.144.0",
       maximumVersion: "0.144.x",
@@ -157,7 +169,6 @@ async function withFixture(assertion, mutate = () => {}) {
     const files = new Map([
       ["Relay.dmg", "arm64 mac image"],
       ["relay-wear.apk", "signed watch package"],
-      ["relay-bridge-arm64", "arm64 bridge"],
       [`Relay-${VERSION}.tar.gz`, "source archive"],
       ["LICENSE", "Apache License Version 2.0"],
       ["NOTICE", "Relay notices"],
@@ -177,8 +188,7 @@ async function withFixture(assertion, mutate = () => {}) {
         architecture: architectureFor(name),
         sha256: sha256(await readFile(join(directory, name))),
         signed: name === "Relay.dmg"
-          || name === "relay-wear.apk"
-          || name === "relay-bridge-arm64",
+          || name === "relay-wear.apk",
       });
     }
     const payload = {
@@ -222,7 +232,7 @@ async function withFixture(assertion, mutate = () => {}) {
 }
 
 function architectureFor(name) {
-  if (name === "Relay.dmg" || name === "relay-bridge-arm64") {
+  if (name === "Relay.dmg") {
     return "arm64";
   }
   if (name === "relay-wear.apk") {

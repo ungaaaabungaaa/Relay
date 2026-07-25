@@ -77,29 +77,37 @@ printf '{"version":"%s","watchVersionCode":%s,"apiVersion":1}\n' \
   > "${resources_path}/relay-release.json"
 chmod 0755 "${macos_path}/Relay" "${resources_path}/relay-bridge-arm64"
 
-iconset_path="${output_directory}/Relay.iconset"
-rm -rf "${iconset_path}"
-mkdir -p "${iconset_path}"
+asset_catalog_path="${output_directory}/RelayAssets.xcassets"
+app_icon_set_path="${asset_catalog_path}/AppIcon.appiconset"
+rm -rf "${asset_catalog_path}"
+cp -R "${repository_root}/mac/Resources/AppIconTemplate.xcassets" "${asset_catalog_path}"
 for size in 16 32 128 256 512
 do
   /usr/bin/sips \
     -z "${size}" "${size}" \
     "${repository_root}/mac/Resources/AppIconSource.png" \
-    --out "${iconset_path}/icon_${size}x${size}.png" >/dev/null
+    --out "${app_icon_set_path}/icon_${size}x${size}.png" >/dev/null
   retina_size=$((size * 2))
   /usr/bin/sips \
     -z "${retina_size}" "${retina_size}" \
     "${repository_root}/mac/Resources/AppIconSource.png" \
-    --out "${iconset_path}/icon_${size}x${size}@2x.png" >/dev/null
+    --out "${app_icon_set_path}/icon_${size}x${size}@2x.png" >/dev/null
 done
-/usr/bin/iconutil -c icns "${iconset_path}" -o "${resources_path}/Relay.icns"
-rm -rf "${iconset_path}"
+xcrun actool \
+  --compile "${resources_path}" \
+  --platform macosx \
+  --minimum-deployment-target 14.0 \
+  --app-icon AppIcon \
+  --output-partial-info-plist "${output_directory}/asset-info.plist" \
+  "${asset_catalog_path}" >/dev/null
+test -f "${resources_path}/AppIcon.icns"
+rm -rf "${asset_catalog_path}" "${output_directory}/asset-info.plist"
 
 /usr/libexec/PlistBuddy -c "Add :CFBundleDevelopmentRegion string en" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Relay" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.ungaaaabungaaa.relay.mac" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleInfoDictionaryVersion string 6.0" "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Relay" "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleName string Relay" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${relay_version}" "${contents_path}/Info.plist"

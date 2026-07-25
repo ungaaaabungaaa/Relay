@@ -49,7 +49,6 @@ export async function verifyRelease({
   const requiredArtifacts = new Map([
     ["Relay.dmg", { architecture: "arm64", signed: true }],
     ["relay-wear.apk", { architecture: "universal", signed: true }],
-    ["relay-bridge-arm64", { architecture: "arm64", signed: true }],
     [`Relay-${payload.version}.tar.gz`, { architecture: "source", signed: false }],
     ["LICENSE", { architecture: "text", signed: false }],
     ["NOTICE", { architecture: "text", signed: false }],
@@ -81,7 +80,7 @@ export async function verifyRelease({
       throw new Error(`required artifact ${name} is missing`);
     }
     if (artifact.architecture !== expected.architecture) {
-      if (name === "Relay.dmg" || name === "relay-bridge-arm64") {
+      if (name === "Relay.dmg") {
         throw new Error(`${name} must be Apple silicon arm64`);
       }
       throw new Error(`${name} has an unexpected architecture`);

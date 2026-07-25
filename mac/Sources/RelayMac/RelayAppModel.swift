@@ -26,6 +26,7 @@ final class RelayAppModel: ObservableObject {
     @Published var tailscaleSignedIn = false
     @Published var tailscaleLoginInProgress = false
     @Published var funnelOrigin: URL?
+    @Published var temporaryPairingTransport = false
     @Published var watchInstalled = false
     @Published var emergencyStopResult: EmergencyStopResult?
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
@@ -36,6 +37,7 @@ final class RelayAppModel: ObservableObject {
     private var adbWizard: ADBWizard?
     private var tailscaleClient: TailscaleClient?
     private let discoveryAdvertiser = PairingDiscoveryAdvertiser()
+    private let pairingTransportLease = TemporaryPairingTransportLease()
     let updateController = RelayUpdateController()
     private var tailscaleLoginTask: Task<Void, Never>?
 
@@ -133,11 +135,21 @@ final class RelayAppModel: ObservableObject {
     }
 
     func createSecurePairingSession() async {
-        guard let origin = funnelOrigin else {
-            lastError = "Enable secure remote access before starting watch pairing."
+        guard tailscaleSignedIn, let tailscaleClient else {
+            lastError = "Sign in to Tailscale before starting watch pairing."
             return
         }
         do {
+            let origin: URL
+            if let existing = funnelOrigin {
+                origin = existing
+            } else {
+                origin = try await tailscaleClient.enableFunnel {
+                    try await self.adminClient.securitySelfTest()
+                }
+                funnelOrigin = origin
+                temporaryPairingTransport = true
+            }
             let identity = try RelayHostIdentity.loadOrCreate(in: secrets)
             hostFingerprint = identity.fingerprint
             let session = try await adminClient.createPairingSession(
@@ -145,13 +157,30 @@ final class RelayAppModel: ObservableObject {
                 macName: Host.current().localizedName ?? "Relay Mac",
                 macFingerprint: identity.fingerprint
             )
+            let sessionID = session.id
             pairingSession = session
             pendingPairings = []
             discoveryAdvertiser.publish(session: session)
+            if temporaryPairingTransport {
+                let remainingMilliseconds = max(
+                    0,
+                    session.expiresAt - Int64(Date().timeIntervalSince1970 * 1_000)
+                )
+                await pairingTransportLease.start(
+                    for: .milliseconds(remainingMilliseconds)
+                ) { [weak self] in
+                    await self?.expireTemporaryPairingTransport(
+                        expectedSessionID: sessionID
+                    )
+                }
+            }
             lastError = nil
             diagnostic = "Pairing is discoverable on this Wi-Fi for five minutes."
         } catch {
-            lastError = "Relay could not start secure watch pairing."
+            let closed = await closeTemporaryPairingTransport()
+            if closed {
+                lastError = "Relay could not start secure watch pairing."
+            }
         }
     }
 
@@ -170,7 +199,11 @@ final class RelayAppModel: ObservableObject {
             discoveryAdvertiser.stop()
             pairingSession = nil
             pendingPairings = []
+            let closed = await closeTemporaryPairingTransport()
             await refresh()
+            if !closed {
+                reportTemporaryPairingCloseFailure()
+            }
         } catch {
             lastError = "That pairing request expired. Start pairing again."
         }
@@ -182,7 +215,10 @@ final class RelayAppModel: ObservableObject {
             discoveryAdvertiser.stop()
             pairingSession = nil
             pendingPairings = []
-            lastError = nil
+            let closed = await closeTemporaryPairingTransport()
+            if closed {
+                lastError = nil
+            }
         } catch {
             lastError = "That pairing request is no longer available."
         }
@@ -224,6 +260,8 @@ final class RelayAppModel: ObservableObject {
 
     func emergencyStop() async {
         funnelEnabled = false
+        temporaryPairingTransport = false
+        await pairingTransportLease.promote()
         if let tailscaleClient {
             emergencyStopResult = await tailscaleClient.emergencyStop {
                 try await self.adminClient.shutdown()
@@ -374,10 +412,19 @@ final class RelayAppModel: ObservableObject {
             return
         }
         do {
-            funnelOrigin = try await tailscaleClient.enableFunnel {
-                try await self.adminClient.securitySelfTest()
+            if temporaryPairingTransport {
+                let preflight = try await adminClient.securitySelfTest()
+                guard preflight.ok else {
+                    throw TailscaleClientError.bridgeSecurityCheckFailed
+                }
+                await pairingTransportLease.promote()
+            } else {
+                funnelOrigin = try await tailscaleClient.enableFunnel {
+                    try await self.adminClient.securitySelfTest()
+                }
             }
             funnelEnabled = true
+            temporaryPairingTransport = false
             lastError = nil
             diagnostic = "Funnel exposes only the authenticated watch port. Admin stays local."
         } catch {
@@ -392,10 +439,20 @@ final class RelayAppModel: ObservableObject {
             funnelEnabled = false
             return
         }
+        if temporaryPairingTransport {
+            let closed = await closeTemporaryPairingTransport()
+            funnelEnabled = !closed
+            if closed {
+                lastError = nil
+            }
+            updateSetupState(bridgeReady: bridgeState == .running)
+            return
+        }
         do {
             try await tailscaleClient.disableFunnel()
             funnelEnabled = false
             funnelOrigin = nil
+            temporaryPairingTransport = false
             lastError = nil
         } catch {
             lastError = "Relay could not confirm that Funnel was disabled."
@@ -406,6 +463,7 @@ final class RelayAppModel: ObservableObject {
     func quit() async {
         cancelTailscaleLogin()
         discoveryAdvertiser.stop()
+        await closeTemporaryPairingTransport()
         try? await adminClient.shutdown()
         await supervisor?.stop()
     }
@@ -470,6 +528,42 @@ final class RelayAppModel: ObservableObject {
             .first(where: { fileManager.fileExists(atPath: $0.path) })
             .flatMap { try? Data(contentsOf: $0) }
             .flatMap { try? BundledReleaseMetadata.decode($0) }
+    }
+
+    @discardableResult
+    private func closeTemporaryPairingTransport() async -> Bool {
+        await pairingTransportLease.finish()
+        if temporaryPairingTransport {
+            await expireTemporaryPairingTransport()
+        }
+        return !temporaryPairingTransport
+    }
+
+    private func expireTemporaryPairingTransport(
+        expectedSessionID: String? = nil
+    ) async {
+        if let expectedSessionID, pairingSession?.id != expectedSessionID {
+            return
+        }
+        guard temporaryPairingTransport, let tailscaleClient else {
+            return
+        }
+        discoveryAdvertiser.stop()
+        pairingSession = nil
+        pendingPairings = []
+        do {
+            try await tailscaleClient.disableFunnel()
+            temporaryPairingTransport = false
+            funnelOrigin = nil
+            diagnostic = "The temporary pairing endpoint closed."
+        } catch {
+            reportTemporaryPairingCloseFailure()
+        }
+    }
+
+    private func reportTemporaryPairingCloseFailure() {
+        diagnostic = "Temporary access may still be open. Use Emergency Stop and check Tailscale."
+        lastError = "Relay could not confirm that temporary pairing access closed."
     }
 
     private func detectLocalDependencies() async {

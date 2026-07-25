@@ -8,9 +8,9 @@ created until the clean-Mac and physical Galaxy Watch6 checklist in
 
 - notarized Apple silicon `Relay.dmg`;
 - signed `relay-wear.apk`;
-- signed arm64 `relay-bridge-arm64`;
 - source archive for the exact tag;
 - `SHA256SUMS` and Ed25519-signed `release-manifest.json`;
+- Sparkle-signed `appcast.xml` and `appcast-beta.xml` on GitHub Pages;
 - Apache 2.0 license, notice, third-party notices, and compatibility matrix;
 - generated GitHub release notes.
 
@@ -32,6 +32,7 @@ deployment branches to protected tags. Add these environment secrets:
 | `ANDROID_KEY_ALIAS` | Android signing alias |
 | `ANDROID_KEY_PASSWORD` | Android key password |
 | `RELAY_RELEASE_PRIVATE_KEY_BASE64` | Base64 PKCS#8 Ed25519 private key |
+| `SPARKLE_PRIVATE_KEY` | Sparkle Ed25519 private key from `generate_keys` |
 
 Add these non-secret repository or environment variables:
 
@@ -39,11 +40,14 @@ Add these non-secret repository or environment variables:
 | --- | --- |
 | `RELAY_RELEASE_PUBLIC_KEY_BASE64` | Raw 32-byte Ed25519 public key in base64 |
 | `RELAY_WATCH_VERSION_CODE` | `10000` |
+| `RELAY_SPARKLE_PUBLIC_KEY` | Sparkle `SUPublicEDKey` value |
+| `RELAY_SPARKLE_STABLE_FEED_URL` | `https://ungaaaabungaaa.github.io/Relay/appcast.xml` |
+| `RELAY_SPARKLE_BETA_FEED_URL` | `https://ungaaaabungaaa.github.io/Relay/appcast-beta.xml` |
 | `CODEX_MIN_VERSION` | `0.144.0` |
 | `CODEX_MAX_VERSION` | `0.144.x` |
 
-Keep the Android key and update-signing private key in a separate encrypted
-backup. Losing either key prevents safe upgrades. Never put a private key,
+Keep the Android key and both update-signing private keys in an encrypted
+backup. Losing a key blocks upgrades for that channel. Never put a private key,
 certificate password, OpenAI key, device key, or admin token in a GitHub issue,
 workflow file, release asset, or diagnostic report.
 
@@ -60,18 +64,21 @@ workflow file, release asset, or diagnostic report.
 
 ## Publish
 
-Create and push only a semantic `v*` tag:
+The first beta uses `v0.2.0-beta.1`. Stable stays at `v1.0.0` until the wider
+physical matrix passes. Create and push one signed semantic `v*` tag:
 
 ```bash
-git tag -s v1.0.0 -m "Relay 1.0.0"
-git push origin v1.0.0
+git tag -s v0.2.0-beta.1 -m "Relay 0.2.0 beta 1"
+git push origin v0.2.0-beta.1
 ```
 
 The release workflow uses the standard arm64 `macos-15` GitHub-hosted runner.
 It imports signing material into a temporary keychain, runs the full automated
 suite, signs the APK and nested Mac executables, notarizes and staples the DMG,
-creates and signs the manifest, verifies every digest and signature, and then
-creates the GitHub Release. The cleanup step deletes temporary signing files.
+creates and signs the manifest and Sparkle feed, verifies every digest and
+signature, and only then creates the GitHub Release and deploys the feed
+through GitHub Pages. The bridge remains embedded inside `Relay.dmg`; it is not
+a separate user download. The cleanup step deletes temporary signing files.
 
 If any check fails, no GitHub Release is created.
 

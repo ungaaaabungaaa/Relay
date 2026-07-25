@@ -16,10 +16,10 @@ In plain English:
 Relay has no hosted cloud service and no subscription. Version 1 is planned for
 GitHub Releases only under Apache License 2.0.
 
-> **Checkpoint status:** the applications and automated release pipeline are
-> implemented on `feat/relay-mvp`, but there is no public easy-install release
-> yet. A notarized DMG must not be published until the physical Galaxy Watch6
-> and clean-Mac release gates pass.
+> **Checkpoint status:** `main` contains the launch implementation and automated
+> release pipeline. No public installer exists yet. The project still needs the
+> physical Wear OS matrix, protected signing credentials, notarization, and a
+> clean-Mac install before `v0.2.0-beta.1`.
 
 ## See the UI now
 
@@ -34,11 +34,11 @@ Open [http://127.0.0.1:4173](http://127.0.0.1:4173). You can click Home,
 Approval, Task, Voice, New task, Offline, and every Mac dashboard section. The
 preview uses no account and sends no data. It is not the Wear OS application.
 
-## All 28 watch screens
+## All 28 Wear OS screens
 
-These boards show the complete native screen map, not just the six clickable
-demo states. They follow the circular Galaxy Watch6 safe area and keep risky
-commands, folders, models, and consequences readable. The native Compose
+These boards show the complete native screen map, not just the seven clickable
+demo states. They keep risky commands, folders, models, and consequences
+readable on round and square watches. The native Compose
 implementation is the source of truth; a repository test checks that every
 `Screen` enum entry appears here exactly once.
 
@@ -70,7 +70,8 @@ pnpm generate:readme-screens
 ### Watch
 
 - native Kotlin and Compose for Wear OS application;
-- onboarding, pairing, offline, revoked, and compatibility states;
+- Bonjour discovery, fingerprint comparison, approval-gated pairing, offline,
+  revoked, and compatibility states;
 - Home, inbox, approvals, questions, tasks, activity timeline, steering, and
   stop controls;
 - system keyboard/dictation and optional reviewed voice transcription;
@@ -78,24 +79,27 @@ pnpm generate:readme-screens
   and new-task review;
 - visible Live Monitoring with a four-hour limit and low-battery cutoff;
 - periodic battery-aware refresh when Live Monitoring is off;
-- circular layouts, rotary navigation, haptics, accessibility labels, and safe
-  dangerous-action hold confirmation.
+- Wear OS 3+ support, round and square safe areas, rotary navigation, touch
+  fallback, accessibility labels, and dangerous-action hold confirmation.
 
 ### Mac
 
 - native SwiftUI menu-bar application and dashboard;
 - self-contained arm64 bridge sidecar;
-- Keychain-backed local admin token and optional OpenAI key;
+- Keychain-backed Mac identity, local admin token, and optional OpenAI key;
 - watch install wizard using verified Android Platform Tools;
-- Tailscale sign-in checks, Funnel preflight, enable/disable, and Emergency
-  Stop;
+- resumable nine-step setup, official Tailscale browser sign-in, temporary
+  pairing transport, Funnel controls, and Emergency Stop;
 - paired-watch revocation, approved workspaces, redacted diagnostics, and
-  signed-update verification.
+  signed APK verification;
+- Sparkle 2 Mac updates, stable and beta appcasts, Login Item control, hardened
+  runtime entitlements, and a production app icon.
 
 ### Bridge and security
 
 - localhost-only watch and admin listeners;
-- short-lived pairing codes and per-watch public-key credentials;
+- tokenized five-minute discovery sessions, two-minute Mac approval, hashed
+  pairing secrets, rate limits, and per-watch public-key credentials;
 - signed requests, timestamp checks, nonce replay rejection, and revocation;
 - idempotent state changes and redacted local audit records;
 - resumable WebSocket events with snapshot fallback;
@@ -115,6 +119,10 @@ Wear OS watch
                  └─ optional OpenAI transcription
 ```
 
+The repository also contains an independent watchOS 10 SwiftUI target for Phase
+2. Apple will distribute that app through TestFlight and the App Store. It is
+not part of the first GitHub DMG.
+
 Codex credentials, the OpenAI key, Mac password, repository contents, and raw
 audio do not live on the watch. The Mac remains the source of truth and must be
 awake for Relay to work.
@@ -124,6 +132,7 @@ awake for Relay to work.
 - New user: [docs/SETUP.md](docs/SETUP.md)
 - Physical Watch6 test: [docs/PHYSICAL-WATCH-TEST.md](docs/PHYSICAL-WATCH-TEST.md)
 - Supported hardware: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
+- Apple Watch phase: [apple-watch/README.md](apple-watch/README.md)
 - Security boundaries: [docs/SECURITY.md](docs/SECURITY.md)
 - Remaining gates: [docs/TODO.md](docs/TODO.md)
 - Maintainer release process: [docs/RELEASE.md](docs/RELEASE.md)
@@ -149,6 +158,10 @@ export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 pnpm build:bridge-sea
 xcrun swift test --package-path mac
 xcrun swift run --package-path mac RelayMac
+
+# Phase 2 watchOS 10+ source and project checks.
+scripts/check-watchos-source.sh
+xcodebuild -list -project apple-watch/RelayWatch.xcodeproj
 ```
 
 Then follow the Wireless ADB steps in

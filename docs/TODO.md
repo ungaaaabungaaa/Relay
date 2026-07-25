@@ -9,6 +9,8 @@ This is the short release scoreboard. The detailed engineering record is in
 - [x] Localhost-only bridge and separate authenticated admin API
 - [x] Device pairing, signatures, timestamp checks, nonce replay rejection,
       revocation, rate limits, and generic unauthorized responses
+- [x] Tokenized Bonjour pairing sessions, hashed codes and tokens, pending Mac
+      approval, pairing metadata, expiry, and global/source throttles
 - [x] Idempotent approvals, questions, instructions, steering, stop, and new
       task
 - [x] Canonical approved-workspace boundaries
@@ -19,6 +21,12 @@ This is the short release scoreboard. The detailed engineering record is in
 - [x] Native Apple silicon Mac menu app and dashboard
 - [x] Verified Platform Tools download, Wireless ADB wizard, and APK installer
 - [x] Tailscale preflight, Funnel controls, and Emergency Stop
+- [x] Official Tailscale browser login with cancellation and timeout
+- [x] Resumable nine-step Mac setup and off-by-default Login Item
+- [x] Wear OS 3/API 30 policy and round/square layouts
+- [x] Sparkle 2, signed stable/beta appcast workflow, version-aware APK install,
+      production icon, and hardened DMG packaging
+- [x] Independent watchOS 10 source target and Xcode project foundation
 - [x] Self-contained arm64 bridge sidecar
 - [x] Apache 2.0 license, third-party notices, compatibility and release docs
 - [x] Node, Wear OS, Swift, secret-scan, package, manifest, and GitHub workflow
@@ -36,9 +44,12 @@ This is the short release scoreboard. The detailed engineering record is in
 - [ ] Complete a one-hour battery observation in normal and Live Monitoring
       modes
 - [ ] Configure protected Apple Developer ID, notarization, Android signing,
-      and Ed25519 update-signing material in GitHub
+      Relay manifest Ed25519, and Sparkle Ed25519 material in GitHub
 - [ ] Install the notarized DMG on a clean Apple silicon Mac
 - [ ] Tag and publish the first verified GitHub Release
+- [x] Type-check the Apple Watch target against the watchOS 10+ SDK in CI
+- [ ] Sign and run the Apple Watch target, then complete the
+      physical/TestFlight Phase 2 matrix
 
 ## Release rule
 
