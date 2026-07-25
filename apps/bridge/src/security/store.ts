@@ -4,8 +4,40 @@ export type StoredDevice = {
   id: string;
   name: string;
   publicKey: string;
+  metadata?: DeviceMetadata;
   revokedAt: number | null;
   createdAt: number;
+};
+
+export type DeviceMetadata = {
+  platform: "wear-os" | "watch-os";
+  manufacturer: string;
+  model: string;
+  osVersion: string;
+  appVersion: string;
+  screenShape: "round" | "square";
+};
+
+export type StoredPendingPairing = {
+  id: string;
+  pollTokenHash: string;
+  expiresAt: number;
+  name: string;
+  publicKey: string;
+  metadata: DeviceMetadata;
+};
+
+export type StoredPairingSession = {
+  id: string;
+  tokenHash: string;
+  codeHash: string;
+  origin: string;
+  macName: string;
+  macFingerprint: string;
+  expiresAt: number;
+  state: "active" | "pending" | "approved" | "denied";
+  pending?: StoredPendingPairing;
+  approvedDeviceId?: string;
 };
 
 export type PairingCode = { expiresAt: number; used: boolean };
@@ -25,12 +57,22 @@ export type AuditEvent = {
 };
 
 export interface SecurityStore {
-  addDevice(publicId: string, publicKey: string, name?: string, now?: number): StoredDevice;
+  addDevice(
+    publicId: string,
+    publicKey: string,
+    name?: string,
+    now?: number,
+    metadata?: DeviceMetadata,
+  ): StoredDevice;
   getDevice(id: string): StoredDevice | undefined;
   consumeNonce(deviceId: string, nonce: string, now?: number): boolean;
   revokeDevice(id: string, now?: number): void;
   savePairingCode(code: string, expiresAt: number): void;
   consumePairingCode(code: string): PairingCode | undefined;
+  replacePairingSession(session: StoredPairingSession): void;
+  updatePairingSession(session: StoredPairingSession): void;
+  getPairingSessionByTokenHash(tokenHash: string): StoredPairingSession | undefined;
+  listPairingSessions(): StoredPairingSession[];
   listDevices(): StoredDevice[];
   getActionResult(deviceId: string, idempotencyKey: string): StoredActionResult | undefined;
   claimAction(
@@ -52,14 +94,22 @@ export class InMemorySecurityStore {
   readonly devices = new Map<string, StoredDevice>();
   readonly nonces = new Set<string>();
   readonly codes = new Map<string, PairingCode>();
+  readonly pairingSessions = new Map<string, StoredPairingSession>();
   readonly actions = new Map<string, StoredActionResult>();
   readonly auditEvents: AuditEvent[] = [];
 
-  addDevice(publicId: string, publicKey: string, name = "Relay Watch", now = Date.now()) {
+  addDevice(
+    publicId: string,
+    publicKey: string,
+    name = "Relay Watch",
+    now = Date.now(),
+    metadata?: DeviceMetadata,
+  ) {
     const device = {
       id: publicId || randomUUID(),
       name,
       publicKey,
+      ...(metadata ? { metadata } : {}),
       revokedAt: null,
       createdAt: now,
     };
@@ -92,6 +142,28 @@ export class InMemorySecurityStore {
     if (!stored || stored.used) return undefined;
     stored.used = true;
     return stored;
+  }
+
+  replacePairingSession(session: StoredPairingSession) {
+    this.pairingSessions.clear();
+    this.pairingSessions.set(session.id, structuredClone(session));
+  }
+
+  updatePairingSession(session: StoredPairingSession) {
+    this.pairingSessions.set(session.id, structuredClone(session));
+  }
+
+  getPairingSessionByTokenHash(tokenHash: string) {
+    const session = [...this.pairingSessions.values()].find(
+      (candidate) => candidate.tokenHash === tokenHash,
+    );
+    return session ? structuredClone(session) : undefined;
+  }
+
+  listPairingSessions() {
+    return [...this.pairingSessions.values()].map((session) =>
+      structuredClone(session)
+    );
   }
 
   listDevices() {

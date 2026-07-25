@@ -10,6 +10,7 @@ import type { EventHub } from "./events/event-hub.ts";
 import { attachEventWebSocket } from "./events/websocket-server.ts";
 import { verifyRequest } from "./security/authentication.ts";
 import { PairingService } from "./security/pairing.ts";
+import type { PairingSessionService } from "./security/pairing-session.ts";
 import type { SecurityStore } from "./security/store.ts";
 import {
   WorkspacePolicyError,
@@ -35,6 +36,8 @@ type Adapter = Pick<
 
 type HandlerOptions = {
   store: SecurityStore;
+  pairingSessions?: PairingSessionService;
+  pairingSource?: (request: Request) => string;
   adapter: Partial<Adapter> & Pick<Adapter, "listTasks" | "readTask" | "listModels" | "approvals" | "questions">;
   workspacePolicy: WorkspacePolicy;
   transcriber?: Transcriber;
@@ -67,6 +70,53 @@ export function createRequestHandler(options: HandlerOptions) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, service: "relay" });
+    }
+    const pairingStatus = url.pathname.match(
+      /^\/v1\/pairing-sessions\/([a-f0-9]{32})\/status$/,
+    );
+    if (
+      request.method === "GET" &&
+      pairingStatus?.[1] &&
+      options.pairingSessions
+    ) {
+      try {
+        return json(
+          options.pairingSessions.poll(
+            pairingStatus[1],
+            url.searchParams.get("pollToken") ?? "",
+          ),
+        );
+      } catch {
+        return json({ error: "not found" }, 404);
+      }
+    }
+    const pairingSession = url.pathname.match(
+      /^\/v1\/pairing-sessions\/([a-f0-9]{32})$/,
+    );
+    if (pairingSession?.[1] && options.pairingSessions) {
+      try {
+        if (request.method === "GET") {
+          return json(options.pairingSessions.discover(pairingSession[1]));
+        }
+        if (request.method === "POST") {
+          const body = await parseJson(request);
+          return json(
+            options.pairingSessions.submit(
+              pairingSession[1],
+              options.pairingSource?.(request) ??
+                request.headers.get("x-relay-source-internal") ??
+                "unknown",
+              body as never,
+            ),
+            202,
+          );
+        }
+      } catch {
+        return json({ error: "pairing failed" }, 401);
+      }
+    }
+    if (url.pathname.startsWith("/v1/pairing-sessions/")) {
+      return json({ error: "not found" }, 404);
     }
     if (request.method === "POST" && url.pathname === "/v1/pair") {
       try {
@@ -312,9 +362,14 @@ async function nodeRequest(request: IncomingMessage, limit = 8_000_000) {
     chunks.push(buffer);
   }
   const host = request.headers.host ?? "127.0.0.1";
+  const headers = new Headers(request.headers as HeadersInit);
+  headers.set(
+    "x-relay-source-internal",
+    request.socket.remoteAddress ?? "unknown",
+  );
   return new Request(`http://${host}${request.url ?? "/"}`, {
     method: request.method,
-    headers: request.headers as HeadersInit,
+    headers,
     ...(chunks.length ? { body: Buffer.concat(chunks), duplex: "half" } : {}),
   } as RequestInit);
 }

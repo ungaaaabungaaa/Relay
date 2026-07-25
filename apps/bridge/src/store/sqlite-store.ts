@@ -1,7 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { PairingCode, SecurityStore, StoredDevice } from "../security/store.ts";
+import type {
+  DeviceMetadata,
+  PairingCode,
+  SecurityStore,
+  StoredDevice,
+  StoredPairingSession,
+} from "../security/store.ts";
 
 export class SqliteStore implements SecurityStore {
   private readonly db: DatabaseSync;
@@ -13,7 +19,7 @@ export class SqliteStore implements SecurityStore {
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS devices (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, public_key TEXT NOT NULL,
-        created_at INTEGER NOT NULL, revoked_at INTEGER
+        created_at INTEGER NOT NULL, revoked_at INTEGER, metadata_json TEXT
       );
       CREATE TABLE IF NOT EXISTS pairing_codes (
         code TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0
@@ -32,27 +38,64 @@ export class SqliteStore implements SecurityStore {
         response_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
         PRIMARY KEY (device_id, idempotency_key)
       );
+      CREATE TABLE IF NOT EXISTS pairing_sessions (
+        id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+        session_json TEXT NOT NULL
+      );
     `);
+    const deviceColumns = this.db
+      .prepare("PRAGMA table_info(devices)")
+      .all() as Array<{ name: string }>;
+    if (!deviceColumns.some((column) => column.name === "metadata_json")) {
+      this.db.exec("ALTER TABLE devices ADD COLUMN metadata_json TEXT");
+    }
   }
 
-  addDevice(id: string, publicKey: string, name = "Relay Watch", now = Date.now()) {
+  addDevice(
+    id: string,
+    publicKey: string,
+    name = "Relay Watch",
+    now = Date.now(),
+    metadata?: DeviceMetadata,
+  ) {
     this.db
-      .prepare("INSERT INTO devices(id,name,public_key,created_at) VALUES(?,?,?,?)")
-      .run(id, name, publicKey, now);
-    return { id, name, publicKey, createdAt: now, revokedAt: null };
+      .prepare(
+        "INSERT INTO devices(id,name,public_key,created_at,metadata_json) VALUES(?,?,?,?,?)",
+      )
+      .run(id, name, publicKey, now, metadata ? JSON.stringify(metadata) : null);
+    return {
+      id,
+      name,
+      publicKey,
+      ...(metadata ? { metadata } : {}),
+      createdAt: now,
+      revokedAt: null,
+    };
   }
 
   getDevice(id: string): StoredDevice | undefined {
     const row = this.db
-      .prepare("SELECT id,name,public_key,created_at,revoked_at FROM devices WHERE id=?")
+      .prepare(
+        "SELECT id,name,public_key,created_at,revoked_at,metadata_json FROM devices WHERE id=?",
+      )
       .get(id) as
-      | { id: string; name: string; public_key: string; created_at: number; revoked_at: number | null }
+      | {
+          id: string;
+          name: string;
+          public_key: string;
+          created_at: number;
+          revoked_at: number | null;
+          metadata_json: string | null;
+        }
       | undefined;
     return row
       ? {
           id: row.id,
           name: row.name,
           publicKey: row.public_key,
+          ...(row.metadata_json
+            ? { metadata: JSON.parse(row.metadata_json) as DeviceMetadata }
+            : {}),
           createdAt: row.created_at,
           revokedAt: row.revoked_at,
         }
@@ -98,6 +141,50 @@ export class SqliteStore implements SecurityStore {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  replacePairingSession(session: StoredPairingSession) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec("DELETE FROM pairing_sessions");
+      this.db
+        .prepare(
+          "INSERT INTO pairing_sessions(id,token_hash,session_json) VALUES(?,?,?)",
+        )
+        .run(session.id, session.tokenHash, JSON.stringify(session));
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  updatePairingSession(session: StoredPairingSession) {
+    this.db
+      .prepare(
+        "UPDATE pairing_sessions SET token_hash=?,session_json=? WHERE id=?",
+      )
+      .run(session.tokenHash, JSON.stringify(session), session.id);
+  }
+
+  getPairingSessionByTokenHash(tokenHash: string) {
+    const row = this.db
+      .prepare(
+        "SELECT session_json FROM pairing_sessions WHERE token_hash=?",
+      )
+      .get(tokenHash) as { session_json: string } | undefined;
+    return row
+      ? JSON.parse(row.session_json) as StoredPairingSession
+      : undefined;
+  }
+
+  listPairingSessions() {
+    const rows = this.db
+      .prepare("SELECT session_json FROM pairing_sessions")
+      .all() as Array<{ session_json: string }>;
+    return rows.map(
+      (row) => JSON.parse(row.session_json) as StoredPairingSession,
+    );
   }
 
   getActionResult(deviceId: string, idempotencyKey: string) {
@@ -176,18 +263,24 @@ export class SqliteStore implements SecurityStore {
 
   listDevices(): StoredDevice[] {
     const rows = this.db
-      .prepare("SELECT id,name,public_key,created_at,revoked_at FROM devices ORDER BY created_at DESC")
+      .prepare(
+        "SELECT id,name,public_key,created_at,revoked_at,metadata_json FROM devices ORDER BY created_at DESC",
+      )
       .all() as Array<{
       id: string;
       name: string;
       public_key: string;
       created_at: number;
       revoked_at: number | null;
+      metadata_json: string | null;
     }>;
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
       publicKey: row.public_key,
+      ...(row.metadata_json
+        ? { metadata: JSON.parse(row.metadata_json) as DeviceMetadata }
+        : {}),
       createdAt: row.created_at,
       revokedAt: row.revoked_at,
     }));

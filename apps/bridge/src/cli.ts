@@ -7,6 +7,7 @@ import {
 } from "./admin/admin-server.ts";
 import { CodexAdapter } from "./codex/adapter.ts";
 import { PairingService } from "./security/pairing.ts";
+import { PairingSessionService } from "./security/pairing-session.ts";
 import { createRelayServer } from "./server.ts";
 import { SqliteStore } from "./store/sqlite-store.ts";
 import { OpenAITranscriber } from "./transcription/openai-transcriber.ts";
@@ -16,6 +17,7 @@ const dataDir =
   process.env.CODEWATCH_DATA_DIR ??
   join(homedir(), "Library", "Application Support", "Relay");
 const store = new SqliteStore(join(dataDir, "relay.sqlite"));
+const pairingSessions = new PairingSessionService(store);
 const workspacePolicy = new WorkspacePolicy(
   (process.env.CODEWATCH_WORKSPACE_ROOTS ?? "")
     .split(delimiter)
@@ -50,6 +52,7 @@ if (command === "serve") {
   );
   const server = createRelayServer({
     store,
+    pairingSessions,
     adapter,
     workspacePolicy,
     eventHub: adapter.events,
@@ -78,6 +81,7 @@ if (command === "serve") {
     {
       token: adminToken,
       store,
+      pairingSessions,
       workspacePolicy,
       adminBindHost: adminHost,
       watchBindHost: host,

@@ -7,6 +7,7 @@ import {
 } from "node:http";
 import type { AddressInfo } from "node:net";
 import { PairingService } from "../security/pairing.ts";
+import type { PairingSessionService } from "../security/pairing-session.ts";
 import type { SecurityStore } from "../security/store.ts";
 import {
   WorkspacePolicyError,
@@ -18,6 +19,7 @@ type CodexStatus = "ready" | "starting" | "unavailable";
 export type AdminServerOptions = {
   token: string;
   store: SecurityStore;
+  pairingSessions?: PairingSessionService;
   workspacePolicy: WorkspacePolicy;
   adminBindHost: string;
   watchBindHost: string;
@@ -115,6 +117,67 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
         const now = Date.now();
         const code = new PairingService(options.store, () => now).createCode();
         return json({ code, expiresAt: now + 300_000 }, 201);
+      }
+      if (
+        request.method === "POST" &&
+        url.pathname === "/v1/pairing-sessions"
+      ) {
+        if (!options.pairingSessions) {
+          return json({ error: "pairing unavailable" }, 503);
+        }
+        const body = await parseJson(request);
+        if (
+          typeof body.origin !== "string" ||
+          typeof body.macName !== "string" ||
+          typeof body.macFingerprint !== "string"
+        ) {
+          return json({ error: "invalid request" }, 400);
+        }
+        return json(
+          options.pairingSessions.create({
+            origin: body.origin,
+            macName: body.macName,
+            macFingerprint: body.macFingerprint,
+          }),
+          201,
+        );
+      }
+      if (
+        request.method === "GET" &&
+        url.pathname === "/v1/pairing-sessions/pending"
+      ) {
+        return json({
+          pairings: options.pairingSessions?.listPending() ?? [],
+        });
+      }
+      const pairingDecision = url.pathname.match(
+        /^\/v1\/pairing-sessions\/([^/]+)\/(approve|deny)$/,
+      );
+      if (
+        request.method === "POST" &&
+        pairingDecision?.[1] &&
+        pairingDecision[2] &&
+        options.pairingSessions
+      ) {
+        const pairingId = decodeURIComponent(pairingDecision[1]);
+        if (pairingDecision[2] === "approve") {
+          const device = options.pairingSessions.approve(pairingId);
+          options.store.audit(
+            null,
+            "device.pair.approve",
+            device.id,
+            "succeeded",
+          );
+          return json({ device: publicDevice(device) });
+        }
+        options.pairingSessions.deny(pairingId);
+        options.store.audit(
+          null,
+          "device.pair.deny",
+          pairingId,
+          "succeeded",
+        );
+        return json({ denied: true });
       }
       if (request.method === "GET" && url.pathname === "/v1/devices") {
         return json({ devices: options.store.listDevices().map(publicDevice) });
