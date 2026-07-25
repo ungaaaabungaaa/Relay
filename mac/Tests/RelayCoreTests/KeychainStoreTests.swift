@@ -35,6 +35,29 @@ func keychainErrorsNeverIncludeTheSecretValue() {
     }
 }
 
+@Test
+func hostIdentityIsStableAndExposesOnlyAShortFingerprint() throws {
+    let store = KeychainStore(
+        service: "dev.ungaaaabungaaa.relay.host-tests",
+        backend: MemoryKeychainBackend()
+    )
+    let bytes = Array(0..<32).map(UInt8.init)
+
+    let first = try RelayHostIdentity.loadOrCreate(
+        in: store,
+        randomBytes: { bytes }
+    )
+    let second = try RelayHostIdentity.loadOrCreate(
+        in: store,
+        randomBytes: { Array(repeating: 255, count: 32) }
+    )
+
+    #expect(first == second)
+    #expect(first.fingerprint == "630D:CD29:66C4:3366")
+    #expect(!String(describing: first).contains(Data(bytes).base64EncodedString()))
+    #expect(try store.value(for: .hostIdentity) == Data(bytes).base64EncodedString())
+}
+
 private final class MemoryKeychainBackend: KeychainBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: Data] = [:]

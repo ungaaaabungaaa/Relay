@@ -55,6 +55,108 @@ func adminClientReturnsGenericErrorsWithoutResponseSecrets() async {
     }
 }
 
+@Test
+func adminClientCreatesATokenizedPairingSession() async throws {
+    let transport = RecordingAdminTransport(
+        statusCode: 201,
+        body: """
+        {
+          "id":"session-1",
+          "discoveryToken":"0123456789abcdef0123456789abcdef",
+          "code":"A7K9Q2",
+          "expiresAt":310000,
+          "macFingerprint":"ABCD:1234",
+          "origin":"https://relay.example.ts.net"
+        }
+        """
+    )
+    let client = AdminClient(
+        baseURL: URL(string: "http://127.0.0.1:43118")!,
+        token: { "admin-secret" },
+        transport: transport
+    )
+
+    let session = try await client.createPairingSession(
+        origin: URL(string: "https://relay.example.ts.net")!,
+        macName: "Studio Mac",
+        macFingerprint: "ABCD:1234"
+    )
+
+    #expect(session.code == "A7K9Q2")
+    #expect(session.discoveryToken == "0123456789abcdef0123456789abcdef")
+    #expect(session.origin == URL(string: "https://relay.example.ts.net")!)
+    let request = await transport.lastRequest
+    #expect(request?.httpMethod == "POST")
+    #expect(request?.url?.path == "/v1/pairing-sessions")
+    let body = try #require(request?.httpBody)
+    let document = try #require(
+        JSONSerialization.jsonObject(with: body) as? [String: String]
+    )
+    #expect(document == [
+        "origin": "https://relay.example.ts.net",
+        "macName": "Studio Mac",
+        "macFingerprint": "ABCD:1234",
+    ])
+}
+
+@Test
+func adminClientListsAndApprovesPendingWatchMetadata() async throws {
+    let transport = SequencedAdminTransport(
+        responses: [
+            (
+                200,
+                """
+                {
+                  "pairings":[{
+                    "id":"pending-1",
+                    "name":"Pixel Watch",
+                    "fingerprint":"ABCD:1234",
+                    "metadata":{
+                      "platform":"wear-os",
+                      "manufacturer":"Google",
+                      "model":"Pixel Watch",
+                      "osVersion":"4",
+                      "appVersion":"0.2.0",
+                      "screenShape":"round"
+                    },
+                    "expiresAt":310000
+                  }]
+                }
+                """
+            ),
+            (
+                200,
+                """
+                {
+                  "device":{
+                    "id":"device-1",
+                    "name":"Pixel Watch",
+                    "fingerprint":"ABCD:1234",
+                    "createdAt":10000,
+                    "revokedAt":null
+                  }
+                }
+                """
+            ),
+        ]
+    )
+    let client = AdminClient(
+        baseURL: URL(string: "http://127.0.0.1:43118")!,
+        token: { "admin-secret" },
+        transport: transport
+    )
+
+    let pending = try await client.pendingPairings()
+    #expect(pending.first?.metadata.platform == "wear-os")
+    #expect(pending.first?.metadata.model == "Pixel Watch")
+    let device = try await client.approvePairing(id: "pending-1")
+    #expect(device.id == "device-1")
+    #expect(await transport.requests.map(\.url?.path) == [
+        "/v1/pairing-sessions/pending",
+        "/v1/pairing-sessions/pending-1/approve",
+    ])
+}
+
 private actor RecordingAdminTransport: AdminTransport {
     private let statusCode: Int
     private let body: Data
@@ -74,5 +176,28 @@ private actor RecordingAdminTransport: AdminTransport {
             headerFields: ["content-type": "application/json"]
         )!
         return (body, response)
+    }
+}
+
+private actor SequencedAdminTransport: AdminTransport {
+    private var responses: [(Int, Data)]
+    private(set) var requests: [URLRequest] = []
+
+    init(responses: [(Int, String)]) {
+        self.responses = responses.map { ($0.0, Data($0.1.utf8)) }
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        let response = responses.removeFirst()
+        return (
+            response.1,
+            HTTPURLResponse(
+                url: request.url!,
+                statusCode: response.0,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["content-type": "application/json"]
+            )!
+        )
     }
 }

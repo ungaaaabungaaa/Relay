@@ -5,30 +5,79 @@ import Testing
 @Test
 func tailscalePlansAlwaysTargetTheRelayWatchPort() {
     let tailscale = URL(fileURLWithPath: "/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+    let cliEnvironment = ["TAILSCALE_BE_CLI": "1"]
 
     #expect(
         TailscaleCommandPlan.status(tailscale: tailscale) == CommandInvocation(
             executableURL: tailscale,
-            arguments: ["status", "--json"]
+            arguments: ["status", "--json"],
+            environment: cliEnvironment
+        )
+    )
+    #expect(
+        TailscaleCommandPlan.login(tailscale: tailscale) == CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["login", "--timeout=2m"],
+            environment: cliEnvironment
         )
     )
     #expect(
         TailscaleCommandPlan.enableFunnel(tailscale: tailscale) == CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "--bg", "43117"]
+            arguments: [
+                "funnel",
+                "--bg",
+                "http://127.0.0.1:43117",
+            ],
+            environment: cliEnvironment
         )
     )
     #expect(
         TailscaleCommandPlan.disableFunnel(tailscale: tailscale) == CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "43117", "off"]
+            arguments: ["funnel", "43117", "off"],
+            environment: cliEnvironment
         )
     )
     #expect(
         TailscaleCommandPlan.funnelStatus(tailscale: tailscale) == CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "status", "--json"]
+            arguments: ["funnel", "status", "--json"],
+            environment: cliEnvironment
         )
+    )
+}
+
+@Test
+func tailscaleLoginUsesTheOfficialFlowWithoutAcceptingAnAuthKey() async throws {
+    let runner = QueueCommandRunner(
+        results: [
+            CommandResult(exitCode: 0, standardOutput: "", standardError: ""),
+            CommandResult(
+                exitCode: 0,
+                standardOutput: #"{"BackendState":"Running","Self":{"DNSName":"relay.tailnet.ts.net."}}"#,
+                standardError: ""
+            ),
+        ]
+    )
+    let client = TailscaleClient(
+        executableURL: URL(fileURLWithPath: "/usr/local/bin/tailscale"),
+        runner: runner
+    )
+
+    let status = try await client.login()
+
+    #expect(status.signedIn)
+    #expect(status.dnsName == "relay.tailnet.ts.net")
+    #expect(await runner.invocations.map(\.arguments) == [
+        ["login", "--timeout=2m"],
+        ["status", "--json"],
+    ])
+    #expect(
+        await runner.invocations.allSatisfy {
+            $0.environment == ["TAILSCALE_BE_CLI": "1"]
+                && !$0.arguments.contains(where: { $0.contains("auth-key") })
+        }
     )
 }
 

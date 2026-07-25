@@ -55,12 +55,52 @@ public struct AdminPairingCode: Codable, Equatable, Sendable {
     public var expiresAt: Int64
 }
 
+public struct AdminPairingSession: Codable, Equatable, Sendable {
+    public var id: String
+    public var discoveryToken: String
+    public var code: String
+    public var expiresAt: Int64
+    public var macFingerprint: String
+    public var origin: URL
+}
+
+private struct AdminPairingSessionRequest: Codable, Sendable {
+    var origin: String
+    var macName: String
+    var macFingerprint: String
+}
+
 public struct AdminDevice: Codable, Identifiable, Equatable, Sendable {
     public var id: String
     public var name: String
     public var fingerprint: String
     public var createdAt: Int64
     public var revokedAt: Int64?
+}
+
+public struct AdminDeviceMetadata: Codable, Equatable, Sendable {
+    public var platform: String
+    public var manufacturer: String
+    public var model: String
+    public var osVersion: String
+    public var appVersion: String
+    public var screenShape: String
+}
+
+public struct AdminPendingPairing: Codable, Identifiable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public var fingerprint: String
+    public var metadata: AdminDeviceMetadata
+    public var expiresAt: Int64
+}
+
+private struct AdminPendingPairings: Codable, Sendable {
+    var pairings: [AdminPendingPairing]
+}
+
+private struct AdminApprovedPairing: Codable, Sendable {
+    var device: AdminDevice
 }
 
 public struct AdminDevices: Codable, Equatable, Sendable {
@@ -108,8 +148,49 @@ public struct AdminClient: Sendable {
         try await request(["v1", "pairing-code"], method: "POST")
     }
 
+    public func createPairingSession(
+        origin: URL,
+        macName: String,
+        macFingerprint: String
+    ) async throws -> AdminPairingSession {
+        let body = try JSONEncoder().encode(
+            AdminPairingSessionRequest(
+                origin: origin.absoluteString,
+                macName: macName,
+                macFingerprint: macFingerprint
+            )
+        )
+        return try await request(
+            ["v1", "pairing-sessions"],
+            method: "POST",
+            body: body
+        )
+    }
+
     public func devices() async throws -> [AdminDevice] {
         try await request(["v1", "devices"], as: AdminDevices.self).devices
+    }
+
+    public func pendingPairings() async throws -> [AdminPendingPairing] {
+        try await request(
+            ["v1", "pairing-sessions", "pending"],
+            as: AdminPendingPairings.self
+        ).pairings
+    }
+
+    public func approvePairing(id: String) async throws -> AdminDevice {
+        try await request(
+            ["v1", "pairing-sessions", id, "approve"],
+            method: "POST",
+            as: AdminApprovedPairing.self
+        ).device
+    }
+
+    public func denyPairing(id: String) async throws {
+        let _: AdminOK = try await request(
+            ["v1", "pairing-sessions", id, "deny"],
+            method: "POST"
+        )
     }
 
     public func revoke(deviceID: String) async throws {

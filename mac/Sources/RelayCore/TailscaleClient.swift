@@ -8,31 +8,49 @@ public enum TailscaleClientError: Error, Equatable, Sendable {
 }
 
 public enum TailscaleCommandPlan {
+    private static let cliEnvironment = ["TAILSCALE_BE_CLI": "1"]
+
     public static func status(tailscale: URL) -> CommandInvocation {
         CommandInvocation(
             executableURL: tailscale,
-            arguments: ["status", "--json"]
+            arguments: ["status", "--json"],
+            environment: cliEnvironment
+        )
+    }
+
+    public static func login(tailscale: URL) -> CommandInvocation {
+        CommandInvocation(
+            executableURL: tailscale,
+            arguments: ["login", "--timeout=2m"],
+            environment: cliEnvironment
         )
     }
 
     public static func enableFunnel(tailscale: URL) -> CommandInvocation {
         CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "--bg", "43117"]
+            arguments: [
+                "funnel",
+                "--bg",
+                "http://127.0.0.1:43117",
+            ],
+            environment: cliEnvironment
         )
     }
 
     public static func disableFunnel(tailscale: URL) -> CommandInvocation {
         CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "43117", "off"]
+            arguments: ["funnel", "43117", "off"],
+            environment: cliEnvironment
         )
     }
 
     public static func funnelStatus(tailscale: URL) -> CommandInvocation {
         CommandInvocation(
             executableURL: tailscale,
-            arguments: ["funnel", "status", "--json"]
+            arguments: ["funnel", "status", "--json"],
+            environment: cliEnvironment
         )
     }
 }
@@ -102,6 +120,20 @@ public struct TailscaleClient: Sendable {
                 in: CharacterSet(charactersIn: ".")
             )
         )
+    }
+
+    public func login() async throws -> TailscaleStatus {
+        let result = try await runner.run(
+            TailscaleCommandPlan.login(tailscale: executableURL)
+        )
+        guard result.exitCode == 0 else {
+            throw TailscaleClientError.commandFailed
+        }
+        let current = try await status()
+        guard current.signedIn else {
+            throw TailscaleClientError.notSignedIn
+        }
+        return current
     }
 
     public func enableFunnel(

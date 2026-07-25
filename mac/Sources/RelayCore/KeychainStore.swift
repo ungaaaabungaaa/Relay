@@ -3,6 +3,7 @@ import Security
 
 public enum RelaySecret: String, CaseIterable, Sendable {
     case adminToken = "admin-token"
+    case hostIdentity = "host-identity"
     case openAIAPIKey = "openai-api-key"
 }
 

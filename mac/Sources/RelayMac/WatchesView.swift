@@ -64,19 +64,67 @@ struct WatchesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if let pairing = model.pairingCode {
+                if let pairing = model.pairingSession {
                     RelayPanel {
-                        HStack {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("Enter on the watch")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(pairing.code)
+                                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                                        .tracking(4)
+                                }
+                                Spacer()
+                                StatusPill(text: "Valid 5 minutes", ready: true)
+                            }
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("Enter on the watch")
+                                Text("Compare this Mac fingerprint")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(pairing.code)
-                                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                                    .tracking(4)
+                                Text(pairing.macFingerprint)
+                                    .font(.callout.monospaced())
                             }
-                            Spacer()
-                            StatusPill(text: "Valid 5 minutes", ready: true)
+                            Button("Check for watch request") {
+                                Task { await model.refreshPendingPairings() }
+                            }
+                        }
+                    }
+                }
+                ForEach(model.pendingPairings) { pairing in
+                    RelayPanel {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "applewatch.radiowaves.left.and.right")
+                                    .font(.title2)
+                                    .foregroundStyle(RelayPalette.accent)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(pairing.name).font(.headline)
+                                    Text(
+                                        "\(pairing.metadata.manufacturer) \(pairing.metadata.model) · \(pairing.metadata.screenShape)"
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                StatusPill(text: "Approval needed", ready: false)
+                            }
+                            Text(pairing.fingerprint)
+                                .font(.callout.monospaced())
+                            Text("Only approve if this fingerprint matches the watch.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Button("Deny", role: .destructive) {
+                                    Task { await model.denyPairing(pairing) }
+                                }
+                                Button("Approve watch") {
+                                    Task { await model.approvePairing(pairing) }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(RelayPalette.accent)
+                            }
                         }
                     }
                 }
@@ -113,11 +161,17 @@ struct WatchesView: View {
                         }
                     }
                 }
-                Button("Create pairing code") {
-                    Task { await model.createPairingCode() }
+                Button("Start secure pairing") {
+                    Task { await model.createSecurePairingSession() }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(RelayPalette.accent)
+                .disabled(!model.funnelEnabled)
+                if !model.funnelEnabled {
+                    Text("Enable secure remote access first so the watch receives a valid HTTPS address.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .onChange(of: model.adbWizardState) { _, state in

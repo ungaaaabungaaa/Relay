@@ -11,6 +11,9 @@ final class RelayAppModel: ObservableObject {
     @Published var workspaces: [String] = []
     @Published var voiceConfigured = false
     @Published var pairingCode: AdminPairingCode?
+    @Published var pairingSession: AdminPairingSession?
+    @Published var pendingPairings: [AdminPendingPairing] = []
+    @Published var hostFingerprint = "Loading…"
     @Published var pendingActionCount = 0
     @Published var updateAvailable = false
     @Published var lastError: String?
@@ -28,6 +31,7 @@ final class RelayAppModel: ObservableObject {
     private var supervisor: BridgeSupervisor?
     private var adbWizard: ADBWizard?
     private var tailscaleClient: TailscaleClient?
+    private let discoveryAdvertiser = PairingDiscoveryAdvertiser()
 
     init() {
         let secrets = KeychainStore()
@@ -53,6 +57,9 @@ final class RelayAppModel: ObservableObject {
     func bootstrap() async {
         await detectLocalDependencies()
         do {
+            hostFingerprint = try RelayHostIdentity.loadOrCreate(
+                in: secrets
+            ).fingerprint
             let token = try ensureAdminToken()
             guard let executableURL = locateBridgeExecutable() else {
                 bridgeState = .failed
@@ -78,6 +85,7 @@ final class RelayAppModel: ObservableObject {
             let status = try await adminClient.status()
             let selfTest = try await adminClient.securitySelfTest()
             devices = try await adminClient.devices()
+            pendingPairings = try await adminClient.pendingPairings()
             workspaces = try await adminClient.workspaces()
             voiceConfigured = try await adminClient.voiceStatus().configured
             bridgeState = selfTest.ok ? .running : .failed
@@ -101,6 +109,62 @@ final class RelayAppModel: ObservableObject {
             lastError = nil
         } catch {
             lastError = "Relay could not create a pairing code."
+        }
+    }
+
+    func createSecurePairingSession() async {
+        guard let origin = funnelOrigin else {
+            lastError = "Enable secure remote access before starting watch pairing."
+            return
+        }
+        do {
+            let identity = try RelayHostIdentity.loadOrCreate(in: secrets)
+            hostFingerprint = identity.fingerprint
+            let session = try await adminClient.createPairingSession(
+                origin: origin,
+                macName: Host.current().localizedName ?? "Relay Mac",
+                macFingerprint: identity.fingerprint
+            )
+            pairingSession = session
+            pendingPairings = []
+            discoveryAdvertiser.publish(session: session)
+            lastError = nil
+            diagnostic = "Pairing is discoverable on this Wi-Fi for five minutes."
+        } catch {
+            lastError = "Relay could not start secure watch pairing."
+        }
+    }
+
+    func refreshPendingPairings() async {
+        do {
+            pendingPairings = try await adminClient.pendingPairings()
+            lastError = nil
+        } catch {
+            lastError = "Relay could not refresh pending watch approvals."
+        }
+    }
+
+    func approvePairing(_ pairing: AdminPendingPairing) async {
+        do {
+            _ = try await adminClient.approvePairing(id: pairing.id)
+            discoveryAdvertiser.stop()
+            pairingSession = nil
+            pendingPairings = []
+            await refresh()
+        } catch {
+            lastError = "That pairing request expired. Start pairing again."
+        }
+    }
+
+    func denyPairing(_ pairing: AdminPendingPairing) async {
+        do {
+            try await adminClient.denyPairing(id: pairing.id)
+            discoveryAdvertiser.stop()
+            pairingSession = nil
+            pendingPairings = []
+            lastError = nil
+        } catch {
+            lastError = "That pairing request is no longer available."
         }
     }
 
@@ -267,6 +331,7 @@ final class RelayAppModel: ObservableObject {
     }
 
     func quit() async {
+        discoveryAdvertiser.stop()
         try? await adminClient.shutdown()
         await supervisor?.stop()
     }
@@ -331,6 +396,9 @@ final class RelayAppModel: ObservableObject {
             if let status = try? await client.status() {
                 tailscaleSignedIn = status.signedIn
                 funnelEnabled = (try? await client.funnelEnabled()) ?? false
+                if funnelEnabled, let dnsName = status.dnsName {
+                    funnelOrigin = URL(string: "https://\(dnsName)")
+                }
             }
         }
         updateSetupState(bridgeReady: bridgeState == .running)
