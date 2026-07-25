@@ -74,6 +74,7 @@ CREATE TABLE pairing_sessions (
   account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
   session_nonce TEXT NOT NULL,
+  mac_fingerprint TEXT NOT NULL DEFAULT '',
   attempt_count INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,

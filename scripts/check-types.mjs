@@ -1,6 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import ts from "typescript";
 
 function collect(directory) {
   const files = [];
@@ -29,14 +29,33 @@ const roots = ["apps", "packages"]
   });
 
 for (const file of roots.flatMap(collect)) {
-  const checked = spawnSync(
-    process.execPath,
-    ["--experimental-strip-types", "--check", file],
-    { encoding: "utf8" },
+  const source = ts.sys.readFile(file);
+  if (source === undefined) {
+    process.stderr.write(`Unable to read ${file}\n`);
+    process.exit(1);
+  }
+  const result = ts.transpileModule(source, {
+    fileName: file,
+    reportDiagnostics: true,
+    compilerOptions: {
+      erasableSyntaxOnly: true,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  const errors = (result.diagnostics ?? []).filter(
+    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
   );
-  if (checked.status !== 0) {
-    process.stderr.write(checked.stderr);
-    process.exit(checked.status ?? 1);
+  if (errors.length > 0) {
+    process.stderr.write(
+      ts.formatDiagnosticsWithColorAndContext(errors, {
+        getCanonicalFileName: (name) => name,
+        getCurrentDirectory: () => process.cwd(),
+        getNewLine: () => "\n",
+      }),
+    );
+    process.exit(1);
   }
 }
 

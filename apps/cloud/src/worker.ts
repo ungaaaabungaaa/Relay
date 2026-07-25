@@ -111,6 +111,12 @@ export function createWorker(gateway: CommandGateway): {
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
       if (request.method === "GET") {
+        if (url.pathname === "/sign-in") {
+          return publicPage(
+            "Check your email",
+            "Use the single-use sign-in link we sent, then return to Relay on your Mac.",
+          );
+        }
         if (url.pathname === "/privacy") {
           return publicPage(
             "Privacy",
@@ -130,10 +136,28 @@ export function createWorker(gateway: CommandGateway): {
           );
         }
         if (url.pathname === "/cloud/v1/auth/verify") {
-          return publicPage(
-            "Sign-in verified",
-            "Return to Relay on your Mac. This link can be used only once.",
-          );
+          try {
+            await gateway.command(
+              "auth.magicLinks.verify",
+              {
+                body: {
+                  session: url.searchParams.get("session"),
+                  token: url.searchParams.get("token"),
+                },
+                params: [],
+              },
+              request,
+            );
+            return publicPage(
+              "Sign-in verified",
+              "Return to Relay on your Mac. This link can be used only once.",
+            );
+          } catch {
+            return publicPage(
+              "Sign-in failed",
+              "This sign-in link is invalid or expired. Start again from Relay on your Mac.",
+            );
+          }
         }
         if (
           url.pathname === "/cloud/v1/connect/host" ||
@@ -168,6 +192,14 @@ export function createWorker(gateway: CommandGateway): {
         );
         return json(result);
       } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          error.status === 202
+        ) {
+          return json({ status: "pending" }, 202);
+        }
         if (error instanceof RangeError) {
           return json(
             { error: { code: "request_too_large", message: "Request too large" } },
