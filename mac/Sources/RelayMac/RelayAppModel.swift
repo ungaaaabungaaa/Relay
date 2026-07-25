@@ -33,6 +33,7 @@ final class RelayAppModel: ObservableObject {
     @Published var cloudSignedIn = false
     @Published var cloudConnected = false
     @Published var cloudLoginInProgress = false
+    @Published var cloudPairingSession: RelayCloudPairingSession?
 
     private let secrets: KeychainStore
     private let adminClient: AdminClient
@@ -138,52 +139,29 @@ final class RelayAppModel: ObservableObject {
     }
 
     func createSecurePairingSession() async {
-        guard tailscaleSignedIn, let tailscaleClient else {
-            lastError = "Sign in to Tailscale before starting watch pairing."
+        guard
+            cloudConnected,
+            let accessToken = cloudAccessToken,
+            let hostID = try? secrets.value(for: .cloudHostID),
+            !hostID.isEmpty
+        else {
+            lastError = "Connect Relay Cloud before starting watch pairing."
             return
         }
         do {
-            let origin: URL
-            if let existing = funnelOrigin {
-                origin = existing
-            } else {
-                origin = try await tailscaleClient.enableFunnel {
-                    try await self.adminClient.securitySelfTest()
-                }
-                funnelOrigin = origin
-                temporaryPairingTransport = true
-            }
-            let identity = try RelayHostIdentity.loadOrCreate(in: secrets)
-            hostFingerprint = identity.fingerprint
-            let session = try await adminClient.createPairingSession(
-                origin: origin,
-                macName: Host.current().localizedName ?? "Relay Mac",
-                macFingerprint: identity.fingerprint
+            let keys = try RelayCloudHostKeys.loadOrCreate(in: secrets)
+            hostFingerprint = keys.fingerprint
+            cloudPairingSession = try await cloudClient.createPairingSession(
+                accessToken: accessToken,
+                hostID: hostID,
+                macFingerprint: keys.fingerprint
             )
-            let sessionID = session.id
-            pairingSession = session
             pendingPairings = []
-            discoveryAdvertiser.publish(session: session)
-            if temporaryPairingTransport {
-                let remainingMilliseconds = max(
-                    0,
-                    session.expiresAt - Int64(Date().timeIntervalSince1970 * 1_000)
-                )
-                await pairingTransportLease.start(
-                    for: .milliseconds(remainingMilliseconds)
-                ) { [weak self] in
-                    await self?.expireTemporaryPairingTransport(
-                        expectedSessionID: sessionID
-                    )
-                }
-            }
             lastError = nil
-            diagnostic = "Pairing is discoverable on this Wi-Fi for five minutes."
+            diagnostic = "Cloud pairing is open for five minutes."
         } catch {
-            let closed = await closeTemporaryPairingTransport()
-            if closed {
-                lastError = "Relay could not start secure watch pairing."
-            }
+            cloudPairingSession = nil
+            lastError = "Relay could not start secure watch pairing."
         }
     }
 
@@ -348,6 +326,22 @@ final class RelayAppModel: ObservableObject {
                             tokens.refreshToken,
                             for: .cloudRefreshToken
                         )
+                        let keys = try RelayCloudHostKeys.loadOrCreate(
+                            in: secrets
+                        )
+                        if try secrets.value(for: .cloudHostID) == nil {
+                            let host = try await cloudClient.registerHost(
+                                accessToken: tokens.accessToken,
+                                name: Host.current().localizedName ?? "Relay Mac",
+                                signingPublicKey: keys.signingPublicKey,
+                                agreementPublicKey: keys.agreementPublicKey
+                            )
+                            try secrets.set(host.id, for: .cloudHostID)
+                            try secrets.set(
+                                host.credential,
+                                for: .cloudHostCredential
+                            )
+                        }
                         cloudAccessToken = tokens.accessToken
                         cloudSignedIn = true
                         cloudConnected = true
@@ -382,6 +376,7 @@ final class RelayAppModel: ObservableObject {
             try? await cloudClient.logout(refreshToken: refreshToken)
         }
         try? secrets.remove(.cloudRefreshToken)
+        try? secrets.remove(.cloudHostCredential)
         cloudAccessToken = nil
         cloudSignedIn = false
         cloudConnected = false

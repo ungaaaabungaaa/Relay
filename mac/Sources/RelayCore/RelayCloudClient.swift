@@ -16,6 +16,19 @@ public struct RelayCloudTokens: Codable, Equatable, Sendable {
     public var refreshExpiresAt: Int64
 }
 
+public struct RelayCloudHost: Codable, Equatable, Sendable {
+    public var id: String
+    public var credential: String
+}
+
+public struct RelayCloudPairingSession: Codable, Equatable, Sendable {
+    public var token: String
+    public var code: String
+    public var expiresAt: Int64
+    public var sessionNonce: String
+    public var macFingerprint: String
+}
+
 public enum RelayCloudClientError: Error, Equatable, Sendable {
     case invalidResponse
     case authenticationFailed
@@ -115,7 +128,62 @@ public struct RelayCloudClient: Sendable {
         }
     }
 
-    private func request(path: String, method: String, body: Data) -> URLRequest {
+    public func registerHost(
+        accessToken: String,
+        name: String,
+        signingPublicKey: String,
+        agreementPublicKey: String
+    ) async throws -> RelayCloudHost {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "name": name,
+            "signingPublicKey": signingPublicKey,
+            "agreementPublicKey": agreementPublicKey,
+        ])
+        let (data, response) = try await transport(
+            request(
+                path: "/cloud/v1/hosts",
+                method: "POST",
+                body: body,
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
+        return try JSONDecoder().decode(RelayCloudHost.self, from: data)
+    }
+
+    public func createPairingSession(
+        accessToken: String,
+        hostID: String,
+        macFingerprint: String
+    ) async throws -> RelayCloudPairingSession {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "macFingerprint": macFingerprint,
+        ])
+        let (data, response) = try await transport(
+            request(
+                path: "/cloud/v1/hosts/\(hostID)/pairing-sessions",
+                method: "POST",
+                body: body,
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
+        return try JSONDecoder().decode(
+            RelayCloudPairingSession.self,
+            from: data
+        )
+    }
+
+    private func request(
+        path: String,
+        method: String,
+        body: Data,
+        accessToken: String? = nil
+    ) -> URLRequest {
         var request = URLRequest(
             url: URL(string: path, relativeTo: apiOrigin)!.absoluteURL
         )
@@ -123,6 +191,12 @@ public struct RelayCloudClient: Sendable {
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue("no-store", forHTTPHeaderField: "cache-control")
+        if let accessToken {
+            request.setValue(
+                "Bearer \(accessToken)",
+                forHTTPHeaderField: "authorization"
+            )
+        }
         return request
     }
 

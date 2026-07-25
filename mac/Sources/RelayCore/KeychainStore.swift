@@ -6,8 +6,11 @@ public enum RelaySecret: String, CaseIterable, Sendable {
     case hostIdentity = "host-identity"
     case openAIAPIKey = "openai-api-key"
     case cloudRefreshToken = "cloud-refresh-token"
+    case cloudSigningPrivateKey = "cloud-signing-private-key"
     case cloudAgreementPrivateKey = "cloud-agreement-private-key"
     case cloudRootKeys = "cloud-root-keys"
+    case cloudHostID = "cloud-host-id"
+    case cloudHostCredential = "cloud-host-credential"
 }
 
 public enum KeychainStoreError: Error, Equatable, Sendable {
