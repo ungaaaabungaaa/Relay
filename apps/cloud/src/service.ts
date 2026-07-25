@@ -24,6 +24,7 @@ type DeviceLogin = {
   email: string;
   pkceChallenge: string;
   status: "pending" | "verified" | "consumed";
+  magicLinkHash?: string;
   expiresAt: number;
 };
 type PairingRequest = {
@@ -65,6 +66,10 @@ function opaqueCredential(): string {
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("base64url");
 }
 
 function pairingCode(): string {
@@ -118,6 +123,61 @@ export class RelayCloudService {
     };
     this.store.deviceLogins.set(login.id, login);
     return login;
+  }
+
+  async issueMagicLink(sessionId: string): Promise<string> {
+    const session = this.store.deviceLogins.get(sessionId);
+    if (
+      !session ||
+      session.status !== "pending" ||
+      session.expiresAt < this.#now()
+    ) {
+      throw new Error(GENERIC_AUTH_ERROR);
+    }
+    const token = opaqueCredential();
+    session.magicLinkHash = sha256(token);
+    return token;
+  }
+
+  async verifyMagicLink(sessionId: string, token: string): Promise<void> {
+    const session = this.store.deviceLogins.get(sessionId);
+    if (
+      !session ||
+      session.status !== "pending" ||
+      session.expiresAt < this.#now() ||
+      !session.magicLinkHash ||
+      session.magicLinkHash !== sha256(token)
+    ) {
+      throw new Error(GENERIC_AUTH_ERROR);
+    }
+    session.status = "verified";
+    delete session.magicLinkHash;
+  }
+
+  async exchangeDeviceLogin(
+    sessionId: string,
+    pkceVerifier: string,
+  ): Promise<Account> {
+    const session = this.store.deviceLogins.get(sessionId);
+    if (
+      !session ||
+      session.status !== "verified" ||
+      session.expiresAt < this.#now() ||
+      sha256(pkceVerifier) !== session.pkceChallenge
+    ) {
+      throw new Error(GENERIC_AUTH_ERROR);
+    }
+    const invite = this.store.invites.get(session.email);
+    if (!invite || invite.used) throw new Error(GENERIC_AUTH_ERROR);
+    invite.used = true;
+    session.status = "consumed";
+    const account: Account = {
+      id: randomUUID(),
+      email: session.email,
+      createdAt: this.#now(),
+    };
+    this.store.accounts.set(account.id, account);
+    return structuredClone(account);
   }
 
   async createTestAccount(email: string): Promise<Account> {

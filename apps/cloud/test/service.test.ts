@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { InMemoryCloudStore, RelayCloudService } from "../src/service.ts";
 
@@ -23,6 +24,54 @@ describe("invite-only accounts", () => {
         email: "stranger@example.com",
         pkceChallenge: "challenge",
       }),
+      /authentication failed/i,
+    );
+  });
+
+  it("verifies a single-use magic link and exchanges only the matching PKCE verifier", async () => {
+    const { cloud } = service();
+    await cloud.createInvite("owner@example.com", "admin-secret");
+    const verifier = "a-valid-pkce-verifier-with-at-least-forty-three-characters";
+    const challenge = createHash("sha256")
+      .update(verifier)
+      .digest("base64url");
+    const session = await cloud.startDeviceLogin({
+      email: "owner@example.com",
+      pkceChallenge: challenge,
+    });
+    const magicLink = await cloud.issueMagicLink(session.id);
+
+    await cloud.verifyMagicLink(session.id, magicLink);
+    await assert.rejects(
+      cloud.verifyMagicLink(session.id, magicLink),
+      /authentication failed/i,
+    );
+    await assert.rejects(
+      cloud.exchangeDeviceLogin(session.id, "wrong-verifier"),
+      /authentication failed/i,
+    );
+    const account = await cloud.exchangeDeviceLogin(session.id, verifier);
+    assert.equal(account.email, "owner@example.com");
+    await assert.rejects(
+      cloud.exchangeDeviceLogin(session.id, verifier),
+      /authentication failed/i,
+    );
+  });
+
+  it("expires unverified device login sessions after ten minutes", async () => {
+    let now = 1_000;
+    const store = new InMemoryCloudStore();
+    const cloud = new RelayCloudService(store, { now: () => now });
+    await cloud.createInvite("owner@example.com", "admin-secret");
+    const session = await cloud.startDeviceLogin({
+      email: "owner@example.com",
+      pkceChallenge: "a-valid-challenge",
+    });
+    const magicLink = await cloud.issueMagicLink(session.id);
+    now += 10 * 60_000 + 1;
+
+    await assert.rejects(
+      cloud.verifyMagicLink(session.id, magicLink),
       /authentication failed/i,
     );
   });
