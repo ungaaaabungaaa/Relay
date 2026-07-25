@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -21,6 +23,9 @@ jobs:
       RELAY_VERSION: ${{ github.ref_name }}
       RELAY_WATCH_VERSION_CODE: ${{ vars.RELAY_WATCH_VERSION_CODE }}
       RELAY_RELEASE_PUBLIC_KEY_BASE64: ${{ vars.RELAY_RELEASE_PUBLIC_KEY_BASE64 }}
+      RELAY_SPARKLE_PUBLIC_KEY: ${{ vars.RELAY_SPARKLE_PUBLIC_KEY }}
+      RELAY_SPARKLE_STABLE_FEED_URL: ${{ vars.RELAY_SPARKLE_STABLE_FEED_URL }}
+      RELAY_SPARKLE_BETA_FEED_URL: ${{ vars.RELAY_SPARKLE_BETA_FEED_URL }}
       CODEX_MIN_VERSION: ${{ vars.CODEX_MIN_VERSION }}
       CODEX_MAX_VERSION: ${{ vars.CODEX_MAX_VERSION }}
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -34,6 +39,7 @@ jobs:
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       RELAY_RELEASE_PRIVATE_KEY_BASE64: ${{ secrets.RELAY_RELEASE_PRIVATE_KEY_BASE64 }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - name: Check out the exact tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -46,6 +52,9 @@ jobs:
           [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
           test -n "${RELAY_WATCH_VERSION_CODE}"
           test -n "${RELAY_RELEASE_PUBLIC_KEY_BASE64}"
+          test -n "${RELAY_SPARKLE_PUBLIC_KEY}"
+          [[ "${RELAY_SPARKLE_STABLE_FEED_URL}" == https://* ]]
+          [[ "${RELAY_SPARKLE_BETA_FEED_URL}" == https://* ]]
           test -n "${CODEX_MIN_VERSION}"
           test -n "${CODEX_MAX_VERSION}"
           test -n "${APPLE_SIGNING_IDENTITY}"
@@ -59,6 +68,7 @@ jobs:
           test -n "${ANDROID_KEY_ALIAS}"
           test -n "${ANDROID_KEY_PASSWORD}"
           test -n "${RELAY_RELEASE_PRIVATE_KEY_BASE64}"
+          test -n "${SPARKLE_PRIVATE_KEY}"
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${RELAY_VERSION}")"
           echo "RELAY_VERSION=${version}" >> "${GITHUB_ENV}"
       - name: Set up Node 24
@@ -200,6 +210,39 @@ jobs:
             release/out/NOTICE
             release/out/THIRD_PARTY_NOTICES.md
             release/out/COMPATIBILITY.md
+      - name: Generate signed stable or beta Sparkle feed
+        run: |
+          mkdir -p release/appcast-work release/pages
+          curl -fsSL "${RELAY_SPARKLE_STABLE_FEED_URL}" \
+            -o release/pages/appcast.xml || true
+          curl -fsSL "${RELAY_SPARKLE_BETA_FEED_URL}" \
+            -o release/pages/appcast-beta.xml || true
+          feed_name=appcast.xml
+          if [[ "${RELAY_VERSION}" == *-beta.* ]]; then
+            feed_name=appcast-beta.xml
+          fi
+          if [[ -f "release/pages/${feed_name}" ]]; then
+            cp "release/pages/${feed_name}" "release/appcast-work/${feed_name}"
+          fi
+          cp release/out/Relay.dmg release/appcast-work/Relay.dmg
+          sparkle_tools="${GITHUB_WORKSPACE}/mac/.build/artifacts/sparkle/Sparkle/bin"
+          printf '%s' "${SPARKLE_PRIVATE_KEY}" |
+            "${sparkle_tools}/generate_appcast" \
+              --ed-key-file - \
+              --download-url-prefix \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${RELAY_VERSION}/" \
+              -o "${feed_name}" \
+              release/appcast-work
+          cp "release/appcast-work/${feed_name}" "release/pages/${feed_name}"
+          printf '%s' "${SPARKLE_PRIVATE_KEY}" |
+            "${sparkle_tools}/sign_update" \
+              --ed-key-file - \
+              --verify \
+              "release/pages/${feed_name}"
+      - name: Upload signed appcasts for GitHub Pages
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: release/pages
       - name: Remove temporary signing material
         if: always()
         run: |
@@ -207,3 +250,18 @@ jobs:
           rm -f \
             "${RUNNER_TEMP}/relay-signing/developer-id.p12" \
             "${RUNNER_TEMP}/relay-signing/relay-android.jks"
+
+  deploy-pages:
+    name: Publish signed Sparkle feeds
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

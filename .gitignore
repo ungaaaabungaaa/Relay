@@ -3,6 +3,7 @@
 .gradle/
 **/build/
 mac/.build/
+.build-release/
 local.properties
 *.jks
 *.keystore

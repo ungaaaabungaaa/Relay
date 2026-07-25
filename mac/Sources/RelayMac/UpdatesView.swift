@@ -15,7 +15,7 @@ struct UpdatesView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Relay development build").font(.headline)
-                            Text("Apple silicon · Wear OS 4+")
+                            Text("Apple silicon · Wear OS 3+")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -38,6 +38,11 @@ struct UpdatesView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+                Button("Check for Mac update") {
+                    model.updateController.checkForUpdates()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(RelayPalette.accent)
                 RelayPanel {
                     Label("Rollback protection", systemImage: "checkmark.shield.fill")
                         .font(.headline)

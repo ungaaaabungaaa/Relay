@@ -15,9 +15,9 @@ func tailscalePlansAlwaysTargetTheRelayWatchPort() {
         )
     )
     #expect(
-        TailscaleCommandPlan.login(tailscale: tailscale) == CommandInvocation(
+        TailscaleCommandPlan.loginURL(tailscale: tailscale) == CommandInvocation(
             executableURL: tailscale,
-            arguments: ["login", "--timeout=2m"],
+            arguments: ["login", "--timeout=1s"],
             environment: cliEnvironment
         )
     )
@@ -50,9 +50,19 @@ func tailscalePlansAlwaysTargetTheRelayWatchPort() {
 
 @Test
 func tailscaleLoginUsesTheOfficialFlowWithoutAcceptingAnAuthKey() async throws {
+    let opened = URLRecorder()
     let runner = QueueCommandRunner(
         results: [
-            CommandResult(exitCode: 0, standardOutput: "", standardError: ""),
+            CommandResult(
+                exitCode: 1,
+                standardOutput: "",
+                standardError: "Open https://login.tailscale.com/a/sensitive-token to authenticate"
+            ),
+            CommandResult(
+                exitCode: 0,
+                standardOutput: #"{"BackendState":"NeedsLogin"}"#,
+                standardError: ""
+            ),
             CommandResult(
                 exitCode: 0,
                 standardOutput: #"{"BackendState":"Running","Self":{"DNSName":"relay.tailnet.ts.net."}}"#,
@@ -65,20 +75,88 @@ func tailscaleLoginUsesTheOfficialFlowWithoutAcceptingAnAuthKey() async throws {
         runner: runner
     )
 
-    let status = try await client.login()
+    let status = try await client.login(
+        openURL: { url in await opened.record(url) },
+        sleep: {},
+        maximumPolls: 2
+    )
 
     #expect(status.signedIn)
     #expect(status.dnsName == "relay.tailnet.ts.net")
     #expect(await runner.invocations.map(\.arguments) == [
-        ["login", "--timeout=2m"],
+        ["login", "--timeout=1s"],
+        ["status", "--json"],
         ["status", "--json"],
     ])
+    #expect(await opened.urls == [URL(string: "https://login.tailscale.com/a/sensitive-token")!])
     #expect(
         await runner.invocations.allSatisfy {
             $0.environment == ["TAILSCALE_BE_CLI": "1"]
                 && !$0.arguments.contains(where: { $0.contains("auth-key") })
         }
     )
+}
+
+@Test
+func tailscaleLoginCanBeCancelledWhilePolling() async {
+    let runner = QueueCommandRunner(
+        results: [
+            CommandResult(
+                exitCode: 1,
+                standardOutput: "https://login.tailscale.com/a/cancel",
+                standardError: ""
+            ),
+            CommandResult(
+                exitCode: 0,
+                standardOutput: #"{"BackendState":"NeedsLogin"}"#,
+                standardError: ""
+            ),
+        ]
+    )
+    let client = TailscaleClient(
+        executableURL: URL(fileURLWithPath: "/usr/local/bin/tailscale"),
+        runner: runner
+    )
+
+    await #expect(throws: CancellationError.self) {
+        try await client.login(
+            openURL: { _ in },
+            sleep: { throw CancellationError() },
+            maximumPolls: 2
+        )
+    }
+}
+
+@Test
+func tailscaleLoginTimesOutWithoutSavingCredentials() async {
+    let needsLogin = CommandResult(
+        exitCode: 0,
+        standardOutput: #"{"BackendState":"NeedsLogin"}"#,
+        standardError: ""
+    )
+    let runner = QueueCommandRunner(
+        results: [
+            CommandResult(
+                exitCode: 1,
+                standardOutput: "https://login.tailscale.com/a/timeout",
+                standardError: ""
+            ),
+            needsLogin,
+            needsLogin,
+        ]
+    )
+    let client = TailscaleClient(
+        executableURL: URL(fileURLWithPath: "/usr/local/bin/tailscale"),
+        runner: runner
+    )
+
+    await #expect(throws: TailscaleClientError.loginTimedOut) {
+        try await client.login(
+            openURL: { _ in },
+            sleep: {},
+            maximumPolls: 2
+        )
+    }
 }
 
 @Test
@@ -151,5 +229,13 @@ private actor BridgeShutdownRecorder {
 
     func stop() {
         stopped = true
+    }
+}
+
+private actor URLRecorder {
+    private(set) var urls: [URL] = []
+
+    func record(_ url: URL) {
+        urls.append(url)
     }
 }

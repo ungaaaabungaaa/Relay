@@ -11,6 +11,12 @@ let package = Package(
         .library(name: "RelayCore", targets: ["RelayCore"]),
         .executable(name: "RelayMac", targets: ["RelayMac"]),
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            exact: "2.9.2"
+        ),
+    ],
     targets: [
         .target(
             name: "RelayCore",
@@ -24,7 +30,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "RelayMac",
-            dependencies: ["RelayCore"]
+            dependencies: [
+                "RelayCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ]
         ),
         .testTarget(
             name: "RelayMacTests",

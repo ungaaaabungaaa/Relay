@@ -72,7 +72,7 @@ export async function createReleasePayload({
       versionName: version,
       versionCode: Number(watchVersionCode),
       artifact: "relay-wear.apk",
-      minimumWearOS: 4,
+      minimumWearOS: 3,
     },
     codex: {
       minimumVersion: codexMinimumVersion,

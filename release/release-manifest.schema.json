@@ -63,7 +63,7 @@
         "versionName": { "type": "string" },
         "versionCode": { "type": "integer", "minimum": 1 },
         "artifact": { "const": "relay-wear.apk" },
-        "minimumWearOS": { "const": 4 }
+        "minimumWearOS": { "const": 3 }
       }
     },
     "codex": {

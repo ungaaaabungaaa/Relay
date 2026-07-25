@@ -6,6 +6,9 @@ repository_root=${0:A:h:h}
 relay_version=${RELAY_VERSION:?Set RELAY_VERSION to a semantic version such as 1.0.0}
 sign_identity=${RELAY_SIGN_IDENTITY:--}
 release_public_key=${RELAY_RELEASE_PUBLIC_KEY_BASE64:-}
+sparkle_public_key=${RELAY_SPARKLE_PUBLIC_KEY:-}
+sparkle_stable_feed=${RELAY_SPARKLE_STABLE_FEED_URL:-}
+sparkle_beta_feed=${RELAY_SPARKLE_BETA_FEED_URL:-}
 output_directory=${RELAY_OUTPUT_DIR:-"${repository_root}/release/out"}
 apk_path=${RELAY_APK_PATH:-"${repository_root}/wear/build/outputs/apk/release/wear-release.apk"}
 swift_scratch=${RELAY_SWIFT_SCRATCH:-"${repository_root}/.build-release"}
@@ -13,6 +16,7 @@ application_path="${output_directory}/Relay.app"
 contents_path="${application_path}/Contents"
 macos_path="${contents_path}/MacOS"
 resources_path="${contents_path}/Resources"
+frameworks_path="${contents_path}/Frameworks"
 disk_image_path="${output_directory}/Relay.dmg"
 volume_root="${output_directory}/dmg-root"
 
@@ -23,6 +27,10 @@ fi
 
 if [[ "${sign_identity}" != "-" && -z "${release_public_key}" ]]; then
   print -u2 "RELAY_RELEASE_PUBLIC_KEY_BASE64 is required for a signed release."
+  exit 1
+fi
+if [[ "${sign_identity}" != "-" && ( -z "${sparkle_public_key}" || -z "${sparkle_stable_feed}" || -z "${sparkle_beta_feed}" ) ]]; then
+  print -u2 "Sparkle public key and both HTTPS feed URLs are required for a signed release."
   exit 1
 fi
 
@@ -40,7 +48,7 @@ do
 done
 
 rm -rf "${application_path}" "${volume_root}" "${disk_image_path}"
-mkdir -p "${macos_path}" "${resources_path}" "${volume_root}"
+mkdir -p "${macos_path}" "${resources_path}" "${frameworks_path}" "${volume_root}"
 
 swift build \
   --disable-sandbox \
@@ -57,17 +65,41 @@ swift_binary_path=$(swift build \
   --show-bin-path)
 
 cp "${swift_binary_path}/RelayMac" "${macos_path}/Relay"
+cp -R "${swift_binary_path}/Sparkle.framework" "${frameworks_path}/Sparkle.framework"
 cp "${repository_root}/dist/relay-bridge-arm64" "${resources_path}/relay-bridge-arm64"
 cp "${apk_path}" "${resources_path}/relay-wear.apk"
 cp "${repository_root}/LICENSE" "${resources_path}/LICENSE"
 cp "${repository_root}/NOTICE" "${resources_path}/NOTICE"
 cp "${repository_root}/THIRD_PARTY_NOTICES.md" "${resources_path}/THIRD_PARTY_NOTICES.md"
+printf '{"version":"%s","watchVersionCode":%s,"apiVersion":1}\n' \
+  "${relay_version}" \
+  "${RELAY_WATCH_VERSION_CODE:?Set RELAY_WATCH_VERSION_CODE}" \
+  > "${resources_path}/relay-release.json"
 chmod 0755 "${macos_path}/Relay" "${resources_path}/relay-bridge-arm64"
+
+iconset_path="${output_directory}/Relay.iconset"
+rm -rf "${iconset_path}"
+mkdir -p "${iconset_path}"
+for size in 16 32 128 256 512
+do
+  /usr/bin/sips \
+    -z "${size}" "${size}" \
+    "${repository_root}/mac/Resources/AppIconSource.png" \
+    --out "${iconset_path}/icon_${size}x${size}.png" >/dev/null
+  retina_size=$((size * 2))
+  /usr/bin/sips \
+    -z "${retina_size}" "${retina_size}" \
+    "${repository_root}/mac/Resources/AppIconSource.png" \
+    --out "${iconset_path}/icon_${size}x${size}@2x.png" >/dev/null
+done
+/usr/bin/iconutil -c icns "${iconset_path}" -o "${resources_path}/Relay.icns"
+rm -rf "${iconset_path}"
 
 /usr/libexec/PlistBuddy -c "Add :CFBundleDevelopmentRegion string en" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Relay" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.ungaaaabungaaa.relay.mac" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleInfoDictionaryVersion string 6.0" "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Relay" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleName string Relay" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${relay_version}" "${contents_path}/Info.plist"
@@ -75,13 +107,31 @@ chmod 0755 "${macos_path}/Relay" "${resources_path}/relay-bridge-arm64"
 /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 14.0" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string Relay records only while you hold the watch record control." "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :NSLocalNetworkUsageDescription string Relay discovers your watch only during a five-minute pairing session." "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :NSBonjourServices array" "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :NSBonjourServices:0 string _relay-pair._tcp" "${contents_path}/Info.plist"
 if [[ -n "${release_public_key}" ]]; then
   /usr/libexec/PlistBuddy -c "Add :RelayReleasePublicKey string ${release_public_key}" "${contents_path}/Info.plist"
+fi
+if [[ -n "${sparkle_public_key}" ]]; then
+  selected_feed="${sparkle_stable_feed}"
+  if [[ "${relay_version}" == *-beta.* ]]; then
+    selected_feed="${sparkle_beta_feed}"
+  fi
+  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string ${sparkle_public_key}" "${contents_path}/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${selected_feed}" "${contents_path}/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "${contents_path}/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :SUAllowsAutomaticUpdates bool true" "${contents_path}/Info.plist"
 fi
 
 if [[ "${sign_identity}" == "-" ]]; then
   /usr/bin/codesign --force --sign - "${resources_path}/relay-bridge-arm64"
-  /usr/bin/codesign --force --deep --sign - "${application_path}"
+  /usr/bin/codesign \
+    --force \
+    --deep \
+    --entitlements "${repository_root}/mac/Relay.entitlements" \
+    --sign - \
+    "${application_path}"
 else
   /usr/bin/codesign \
     --force \
@@ -93,6 +143,7 @@ else
     --force \
     --deep \
     --options runtime \
+    --entitlements "${repository_root}/mac/Relay.entitlements" \
     --timestamp \
     --sign "${sign_identity}" \
     "${application_path}"

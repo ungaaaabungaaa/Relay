@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import RelayCore
+import ServiceManagement
 
 @MainActor
 final class RelayAppModel: ObservableObject {
@@ -22,9 +24,11 @@ final class RelayAppModel: ObservableObject {
     @Published var adbWizardState: ADBWizardState = .idle
     @Published var tailscaleInstalled = false
     @Published var tailscaleSignedIn = false
+    @Published var tailscaleLoginInProgress = false
     @Published var funnelOrigin: URL?
     @Published var watchInstalled = false
     @Published var emergencyStopResult: EmergencyStopResult?
+    @Published var startAtLogin = SMAppService.mainApp.status == .enabled
 
     private let secrets: KeychainStore
     private let adminClient: AdminClient
@@ -32,6 +36,8 @@ final class RelayAppModel: ObservableObject {
     private var adbWizard: ADBWizard?
     private var tailscaleClient: TailscaleClient?
     private let discoveryAdvertiser = PairingDiscoveryAdvertiser()
+    let updateController = RelayUpdateController()
+    private var tailscaleLoginTask: Task<Void, Never>?
 
     init() {
         let secrets = KeychainStore()
@@ -52,6 +58,20 @@ final class RelayAppModel: ObservableObject {
 
     var activeDeviceCount: Int {
         devices.filter { $0.revokedAt == nil }.count
+    }
+
+    var setupJourney: SetupJourney {
+        SetupJourney(
+            codexAndIntegrityReady: codexStatus.lowercased() == "ready",
+            tailscaleInstalled: tailscaleInstalled,
+            tailscaleSignedIn: tailscaleSignedIn,
+            bridgePreflightPassed: bridgeState == .running,
+            platformToolsReady: platformToolsReady,
+            watchInstalled: watchInstalled || !devices.isEmpty,
+            watchPaired: activeDeviceCount > 0,
+            workspacesSelected: !workspaces.isEmpty,
+            remoteAccessEnabled: funnelEnabled
+        )
     }
 
     func bootstrap() async {
@@ -238,6 +258,55 @@ final class RelayAppModel: ObservableObject {
         }
     }
 
+    func signInToTailscale() {
+        guard let client = tailscaleClient else {
+            lastError = "Install the official Tailscale Mac app first."
+            return
+        }
+        tailscaleLoginTask?.cancel()
+        tailscaleLoginInProgress = true
+        lastError = nil
+        tailscaleLoginTask = Task {
+            do {
+                let status = try await client.login { url in
+                    await MainActor.run {
+                        _ = NSWorkspace.shared.open(url)
+                    }
+                }
+                tailscaleSignedIn = status.signedIn
+                tailscaleLoginInProgress = false
+                diagnostic = "Tailscale sign-in completed through the official browser flow."
+                updateSetupState(bridgeReady: bridgeState == .running)
+            } catch is CancellationError {
+                tailscaleLoginInProgress = false
+                lastError = "Tailscale sign-in was cancelled."
+            } catch {
+                tailscaleLoginInProgress = false
+                lastError = "Tailscale sign-in did not finish within two minutes."
+            }
+        }
+    }
+
+    func cancelTailscaleLogin() {
+        tailscaleLoginTask?.cancel()
+        tailscaleLoginTask = nil
+    }
+
+    func setStartAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            startAtLogin = SMAppService.mainApp.status == .enabled
+            lastError = nil
+        } catch {
+            startAtLogin = SMAppService.mainApp.status == .enabled
+            lastError = "macOS could not change Relay’s login-item setting."
+        }
+    }
+
     func discoverWatch() async {
         guard let adbWizard else {
             lastError = "Install or locate Android Platform Tools first."
@@ -278,10 +347,14 @@ final class RelayAppModel: ObservableObject {
             lastError = "The bundled Relay watch APK could not be found."
             return
         }
+        guard let metadata = bundledReleaseMetadata() else {
+            lastError = "The bundled watch release metadata is missing or invalid."
+            return
+        }
         await adbWizard.install(
             apk: apk,
             packageID: "dev.ungaaaabungaaa.relay",
-            expectedVersionCode: 1,
+            expectedVersionCode: metadata.watchVersionCode,
             component: "dev.ungaaaabungaaa.relay/.MainActivity"
         )
         adbWizardState = await adbWizard.state
@@ -331,6 +404,7 @@ final class RelayAppModel: ObservableObject {
     }
 
     func quit() async {
+        cancelTailscaleLogin()
         discoveryAdvertiser.stop()
         try? await adminClient.shutdown()
         await supervisor?.stop()
@@ -382,6 +456,20 @@ final class RelayAppModel: ObservableObject {
         return candidates
             .compactMap { $0 }
             .first { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private func bundledReleaseMetadata() -> BundledReleaseMetadata? {
+        let fileManager = FileManager.default
+        let candidates: [URL?] = [
+            Bundle.main.url(forResource: "relay-release", withExtension: "json"),
+            URL(fileURLWithPath: fileManager.currentDirectoryPath)
+                .appendingPathComponent("release/bundled-metadata.json"),
+        ]
+        return candidates
+            .compactMap { $0 }
+            .first(where: { fileManager.fileExists(atPath: $0.path) })
+            .flatMap { try? Data(contentsOf: $0) }
+            .flatMap { try? BundledReleaseMetadata.decode($0) }
     }
 
     private func detectLocalDependencies() async {

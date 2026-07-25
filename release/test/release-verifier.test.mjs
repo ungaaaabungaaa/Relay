@@ -195,7 +195,7 @@ async function withFixture(assertion, mutate = () => {}) {
         versionName: VERSION,
         versionCode: 10203,
         artifact: "relay-wear.apk",
-        minimumWearOS: 4,
+        minimumWearOS: 3,
       },
       codex: {
         minimumVersion: "0.144.0",

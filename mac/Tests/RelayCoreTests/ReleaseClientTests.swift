@@ -4,6 +4,24 @@ import Testing
 @testable import RelayCore
 
 @Test
+func bundledReleaseMetadataProvidesTheExpectedApkVersion() throws {
+    let data = Data(
+        #"{"version":"0.2.0-beta.1","watchVersionCode":20001,"apiVersion":1}"#.utf8
+    )
+
+    let metadata = try BundledReleaseMetadata.decode(data)
+
+    #expect(metadata.version == "0.2.0-beta.1")
+    #expect(metadata.watchVersionCode == 20_001)
+    #expect(metadata.apiVersion == 1)
+    #expect(throws: BundledReleaseMetadataError.invalid) {
+        try BundledReleaseMetadata.decode(
+            Data(#"{"version":"","watchVersionCode":0,"apiVersion":2}"#.utf8)
+        )
+    }
+}
+
+@Test
 func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
     let signingKey = Curve25519.Signing.PrivateKey()
     let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
@@ -21,7 +39,7 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
             versionName: "1.1.0",
             versionCode: 10100,
             artifact: "relay-wear.apk",
-            minimumWearOS: 4
+            minimumWearOS: 3
         ),
         codex: CodexCompatibility(
             minimumVersion: "0.144.0",
@@ -81,7 +99,7 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
             versionName: "2.0.0",
             versionCode: 20000,
             artifact: "relay-wear.apk",
-            minimumWearOS: 4
+            minimumWearOS: 3
         ),
         codex: CodexCompatibility(
             minimumVersion: "0.144.0",

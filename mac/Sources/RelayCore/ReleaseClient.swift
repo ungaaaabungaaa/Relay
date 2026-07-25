@@ -151,7 +151,7 @@ public struct ReleaseClient: Sendable {
             manifest.payload.watch.versionName == manifest.payload.version,
             manifest.payload.watch.artifact == "relay-wear.apk",
             manifest.payload.watch.versionCode > 0,
-            manifest.payload.watch.minimumWearOS == 4,
+            manifest.payload.watch.minimumWearOS == 3,
             Self.isCodexVersion(manifest.payload.codex.minimumVersion),
             Self.isCodexVersion(manifest.payload.codex.maximumVersion),
             let available = SemanticVersion(manifest.payload.version),

@@ -141,7 +141,7 @@ function assertReleaseShape(payload, expectedTag) {
     || payload.watch.artifact !== "relay-wear.apk"
     || !Number.isSafeInteger(payload.watch.versionCode)
     || payload.watch.versionCode < 1
-    || payload.watch.minimumWearOS !== 4
+    || payload.watch.minimumWearOS !== 3
   ) {
     throw new Error("watch version, version code, artifact, or Wear OS floor is invalid");
   }

@@ -5,6 +5,8 @@ public enum TailscaleClientError: Error, Equatable, Sendable {
     case notSignedIn
     case bridgeSecurityCheckFailed
     case invalidStatus
+    case loginURLMissing
+    case loginTimedOut
 }
 
 public enum TailscaleCommandPlan {
@@ -18,10 +20,10 @@ public enum TailscaleCommandPlan {
         )
     }
 
-    public static func login(tailscale: URL) -> CommandInvocation {
+    public static func loginURL(tailscale: URL) -> CommandInvocation {
         CommandInvocation(
             executableURL: tailscale,
-            arguments: ["login", "--timeout=2m"],
+            arguments: ["login", "--timeout=1s"],
             environment: cliEnvironment
         )
     }
@@ -122,18 +124,33 @@ public struct TailscaleClient: Sendable {
         )
     }
 
-    public func login() async throws -> TailscaleStatus {
+    public func login(
+        openURL: @Sendable (URL) async -> Void,
+        sleep: @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .seconds(2))
+        },
+        maximumPolls: Int = 60
+    ) async throws -> TailscaleStatus {
         let result = try await runner.run(
-            TailscaleCommandPlan.login(tailscale: executableURL)
+            TailscaleCommandPlan.loginURL(tailscale: executableURL)
         )
-        guard result.exitCode == 0 else {
-            throw TailscaleClientError.commandFailed
+        guard let loginURL = Self.officialLoginURL(
+            in: result.standardOutput + "\n" + result.standardError
+        ) else {
+            throw TailscaleClientError.loginURLMissing
         }
-        let current = try await status()
-        guard current.signedIn else {
-            throw TailscaleClientError.notSignedIn
+        await openURL(loginURL)
+        for poll in 0..<maximumPolls {
+            try Task.checkCancellation()
+            let current = try await status()
+            if current.signedIn {
+                return current
+            }
+            if poll + 1 < maximumPolls {
+                try await sleep()
+            }
         }
-        return current
+        throw TailscaleClientError.loginTimedOut
     }
 
     public func enableFunnel(
@@ -221,5 +238,21 @@ public struct TailscaleClient: Sendable {
             }
         }
         return false
+    }
+
+    private static func officialLoginURL(in output: String) -> URL? {
+        output
+            .split(whereSeparator: \.isWhitespace)
+            .lazy
+            .map {
+                $0.trimmingCharacters(
+                    in: CharacterSet(charactersIn: "<>()[]{}.,;\"'")
+                )
+            }
+            .compactMap(URL.init(string:))
+            .first {
+                $0.scheme == "https" &&
+                    $0.host?.lowercased() == "login.tailscale.com"
+            }
     }
 }
