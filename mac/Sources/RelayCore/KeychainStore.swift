@@ -29,7 +29,7 @@ public struct KeychainStore: SecretStoring, Sendable, CustomStringConvertible {
     private let backend: any KeychainBackend
 
     public init(
-        service: String = "dev.ungaaaabungaaa.relay",
+        service: String = "com.relayforcodex.mac",
         backend: any KeychainBackend = SecurityKeychainBackend()
     ) {
         self.service = service

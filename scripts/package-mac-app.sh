@@ -105,7 +105,7 @@ rm -rf "${asset_catalog_path}" "${output_directory}/asset-info.plist"
 
 /usr/libexec/PlistBuddy -c "Add :CFBundleDevelopmentRegion string en" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Relay" "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.ungaaaabungaaa.relay.mac" "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.relayforcodex.mac" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleInfoDictionaryVersion string 6.0" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleName string Relay" "${contents_path}/Info.plist"
