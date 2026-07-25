@@ -89,7 +89,8 @@ From the repository root:
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build:bridge-sea
-swift run --package-path mac RelayMac
+export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+xcrun swift run --package-path mac RelayMac
 ```
 
 Relay creates a random 32-byte admin token and stores it in macOS Keychain. The
@@ -100,28 +101,31 @@ app starts one local bridge process, checks Codex, and never prints the token.
 You can use the Relay Watches screen or Android Studio's Terminal:
 
 ```bash
-adb pair WATCH_IP:PAIRING_PORT
-adb connect WATCH_IP:CONNECTION_PORT
-adb devices
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+ADB="$ANDROID_HOME/platform-tools/adb"
+"$ADB" pair WATCH_IP:PAIRING_PORT
+"$ADB" connect WATCH_IP:CONNECTION_PORT
+"$ADB" devices
 ```
 
-Enter the six-digit Wireless ADB code. `adb devices` must list exactly the
+Enter the six-digit Wireless ADB code. `"$ADB" devices` must list exactly the
 watch you intend to use.
 
 ### 4. Install the debug APK
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export ANDROID_HOME="$HOME/Library/Android/sdk"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+ADB="$ANDROID_HOME/platform-tools/adb"
 ./gradlew :wear:installDebug
-adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
+"$ADB" shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
 ```
 
 For the safe local development loop, keep the bridge on localhost and forward
 the watch-local port through ADB:
 
 ```bash
-adb reverse tcp:43117 tcp:43117
+"$ADB" reverse tcp:43117 tcp:43117
 ```
 
 The watch can then use `http://127.0.0.1:43117` without exposing the bridge.

@@ -22,17 +22,29 @@ export class CodexRpcClient {
 
   async start() {
     if (this.process) return;
-    this.process = spawn("codex", ["app-server", "--stdio"], {
+    const child = spawn("codex", ["app-server", "--stdio"], {
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const lines = createInterface({ input: this.process.stdout });
-    lines.on("line", (line) => this.onLine(line));
-    this.process.on("exit", () => {
+    this.process = child;
+    const fail = (error: Error) => {
+      if (this.process !== child) return;
       for (const pending of this.pending.values()) {
-        pending.reject(new Error("Codex app-server exited"));
+        pending.reject(error);
       }
       this.pending.clear();
       this.process = null;
+    };
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      fail(
+        new Error(
+          `Codex app-server could not start (${error.code ?? "UNKNOWN"})`,
+        ),
+      );
+    });
+    const lines = createInterface({ input: child.stdout });
+    lines.on("line", (line) => this.onLine(line));
+    child.on("exit", () => {
+      fail(new Error("Codex app-server exited"));
     });
     await this.request("initialize", {
       clientInfo: { name: "relay", title: "Relay Watch Bridge", version: "0.1.0" },

@@ -2,6 +2,7 @@
 .idea/
 .gradle/
 **/build/
+mac/.build/
 local.properties
 *.jks
 *.keystore

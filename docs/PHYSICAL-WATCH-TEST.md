@@ -23,20 +23,23 @@ After setup:
 Use the Relay Mac wizard. For command-line diagnosis:
 
 ```bash
-adb pair WATCH_IP:PAIRING_PORT
-adb connect WATCH_IP:CONNECTION_PORT
-adb devices
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+ADB="$ANDROID_HOME/platform-tools/adb"
+"$ADB" pair WATCH_IP:PAIRING_PORT
+"$ADB" connect WATCH_IP:CONNECTION_PORT
+"$ADB" devices
 ./gradlew :wear:installDebug
-adb shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
+"$ADB" shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
 ```
 
-The pairing and connection ports are different. Confirm `adb devices` lists
+The pairing and connection ports are different. Confirm `"$ADB" devices` lists
 the expected watch before installing.
 
 For local development only:
 
 ```bash
-adb reverse tcp:43117 tcp:43117
+"$ADB" reverse tcp:43117 tcp:43117
 ```
 
 After installation, create the five-minute Relay code in the Mac app, enter it
@@ -46,7 +49,7 @@ Mac Watches screen.
 ## Automated physical navigation
 
 The instrumentation APK can be compiled without a device. Run it only after
-the Watch6 appears in `adb devices`:
+the Watch6 appears in `"$ADB" devices`:
 
 ```bash
 ./gradlew :wear:connectedDebugAndroidTest
