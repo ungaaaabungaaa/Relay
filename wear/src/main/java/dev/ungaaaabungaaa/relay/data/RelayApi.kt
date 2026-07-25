@@ -24,7 +24,7 @@ class RelayApi(
     private val identity: DeviceIdentity,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
-    suspend fun pair(code: String, name: String = "Galaxy Watch6") = withContext(Dispatchers.IO) {
+    suspend fun pairLegacy(code: String, name: String) = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("code", code.uppercase())
             .put("name", name)
@@ -37,6 +37,82 @@ class RelayApi(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("Pairing failed")
             preferences.deviceId = JSONObject(response.body.string()).getString("deviceId")
+        }
+    }
+
+    suspend fun discoverPairing(record: PairingDiscoveryRecord): PairingMac =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(record.origin + PairingContract.sessionPath(record.discoveryToken))
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("Pairing session is unavailable")
+                val body = JSONObject(response.body.string())
+                PairingMac(
+                    name = body.getString("macName"),
+                    fingerprint = body.getString("macFingerprint"),
+                    apiVersion = body.getInt("apiVersion"),
+                    expiresAt = body.getLong("expiresAt"),
+                )
+            }
+        }
+
+    suspend fun submitPairing(
+        record: PairingDiscoveryRecord,
+        code: String,
+        metadata: PairingDeviceMetadata,
+    ): PendingPairing = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("code", code.uppercase())
+            .put("name", metadata.displayName)
+            .put("publicKey", identity.publicKeyPem())
+            .put("metadata", JSONObject(metadata.toJson()))
+            .toString()
+        val request = Request.Builder()
+            .url(record.origin + PairingContract.sessionPath(record.discoveryToken))
+            .post(body.toRequestBody(JSON))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Pairing failed")
+            val result = JSONObject(response.body.string())
+            PendingPairing(
+                pairingId = result.getString("pairingId"),
+                pollToken = result.getString("pollToken"),
+                expiresAt = result.getLong("expiresAt"),
+            )
+        }
+    }
+
+    suspend fun pollPairing(
+        record: PairingDiscoveryRecord,
+        pollToken: String,
+    ): PairingPollResult = withContext(Dispatchers.IO) {
+        val url = okhttp3.HttpUrl.Builder()
+            .scheme("https")
+            .host(java.net.URI(record.origin).host)
+            .apply {
+                java.net.URI(record.origin).port.takeIf { it > 0 }?.let(::port)
+            }
+            .addPathSegments(
+                PairingContract.statusPath(record.discoveryToken).trimStart('/'),
+            )
+            .addQueryParameter("pollToken", pollToken)
+            .build()
+        val request = Request.Builder().url(url).get().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Pairing approval expired")
+            val body = JSONObject(response.body.string())
+            when (body.getString("state")) {
+                "pending" -> PairingPollResult.Pending
+                "denied" -> PairingPollResult.Denied
+                "approved" -> PairingPollResult.Approved(
+                    deviceId = body.getString("deviceId"),
+                    origin = body.getString("origin"),
+                    apiVersion = body.getInt("apiVersion"),
+                )
+                else -> error("Unsupported pairing response")
+            }
         }
     }
 

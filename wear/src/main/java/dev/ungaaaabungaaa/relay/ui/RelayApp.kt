@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.ungaaaabungaaa.relay.domain.Screen
+import dev.ungaaaabungaaa.relay.BuildConfig
+import dev.ungaaaabungaaa.relay.platform.RuntimeCapabilityPolicy
 import dev.ungaaaabungaaa.relay.ui.components.RelayLabel
 import dev.ungaaaabungaaa.relay.ui.screens.AboutScreen
 import dev.ungaaaabungaaa.relay.ui.screens.ApprovalScreen
@@ -55,6 +57,7 @@ fun RelayApp(viewModel: RelayViewModel) {
     val state = viewModel.state
     val canMutate = state.connected && !state.stale
     val context = LocalContext.current
+    val runtimePolicy = remember { RuntimeCapabilityPolicy() }
     var microphoneGranted by remember {
         mutableStateOf(
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
@@ -63,7 +66,8 @@ fun RelayApp(viewModel: RelayViewModel) {
     }
     var notificationGranted by remember {
         mutableStateOf(
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            !runtimePolicy.requiresNotificationPermission ||
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED,
         )
     }
@@ -94,15 +98,20 @@ fun RelayApp(viewModel: RelayViewModel) {
                 Screen.PairingCode -> PairingCodeScreen(
                     bridgeUrl = viewModel.bridgeUrl,
                     pairingCode = viewModel.pairingCode,
+                    macName = viewModel.pairingMac?.name,
+                    discovering = viewModel.discoveringMac,
+                    showManualOrigin = BuildConfig.DEBUG,
                     onBridgeUrlChange = { viewModel.bridgeUrl = it },
                     onPairingCodeChange = { viewModel.pairingCode = it },
                     onPair = viewModel::pair,
+                    onRetryDiscovery = viewModel::retryPairingDiscovery,
                     onAbout = { viewModel.navigate(Screen.About) },
                 )
                 Screen.MacIdentity -> MacIdentityScreen(
-                    macName = "Your Mac",
-                    fingerprint = viewModel.bridgeUrl,
-                    onConfirm = viewModel::pair,
+                    macName = viewModel.pairingMac?.name ?: "Relay Mac",
+                    fingerprint = viewModel.pairingMac?.fingerprint ?: "Unavailable",
+                    watchFingerprint = viewModel.watchFingerprint,
+                    onConfirm = viewModel::confirmMacIdentity,
                     onBack = { viewModel.navigate(Screen.PairingCode) },
                 )
                 Screen.Connecting -> ConnectingScreen()
@@ -276,7 +285,7 @@ fun RelayApp(viewModel: RelayViewModel) {
                     onToggleLiveMonitoring = {
                         if (viewModel.liveMonitoringEnabled) {
                             viewModel.stopLiveMonitoring()
-                        } else if (notificationGranted) {
+                        } else if (!runtimePolicy.requiresNotificationPermission || notificationGranted) {
                             viewModel.startLiveMonitoring()
                         } else {
                             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

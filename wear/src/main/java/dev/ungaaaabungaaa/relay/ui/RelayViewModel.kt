@@ -2,6 +2,7 @@ package dev.ungaaaabungaaa.relay.ui
 
 import android.app.Application
 import android.content.Intent
+import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -13,6 +14,11 @@ import dev.ungaaaabungaaa.relay.audio.consume
 import dev.ungaaaabungaaa.relay.background.LiveMonitoringService
 import dev.ungaaaabungaaa.relay.background.RelayRefreshWorker
 import dev.ungaaaabungaaa.relay.data.RelayApi
+import dev.ungaaaabungaaa.relay.data.PairingDeviceMetadata
+import dev.ungaaaabungaaa.relay.data.PairingDiscovery
+import dev.ungaaaabungaaa.relay.data.PairingDiscoveryRecord
+import dev.ungaaaabungaaa.relay.data.PairingMac
+import dev.ungaaaabungaaa.relay.data.PairingPollResult
 import dev.ungaaaabungaaa.relay.data.RelayLiveEvent
 import dev.ungaaaabungaaa.relay.data.RelayPreferences
 import dev.ungaaaabungaaa.relay.data.RelaySocket
@@ -30,12 +36,16 @@ import dev.ungaaaabungaaa.relay.domain.RelayTask
 import dev.ungaaaabungaaa.relay.domain.Screen
 import dev.ungaaaabungaaa.relay.domain.reduce
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
+import dev.ungaaaabungaaa.relay.BuildConfig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class RelayViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = RelayPreferences(application)
     private val identity = DeviceIdentity()
     private val api = RelayApi(preferences, identity)
+    private val pairingDiscovery = PairingDiscovery(application)
+    private var pairingRecord: PairingDiscoveryRecord? = null
 
     var state by mutableStateOf(
         RelayState(
@@ -51,6 +61,12 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var pairingCode by mutableStateOf("")
     var bridgeUrl by mutableStateOf(preferences.bridgeUrl)
+    var pairingMac by mutableStateOf<PairingMac?>(null)
+        private set
+    var discoveringMac by mutableStateOf(false)
+        private set
+    val watchFingerprint: String
+        get() = identity.fingerprint()
     var instruction by mutableStateOf("")
     var questionAnswer by mutableStateOf("")
     var questionReviewing by mutableStateOf(false)
@@ -90,6 +106,8 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
             if (!liveMonitoringEnabled) {
                 RelayRefreshWorker.schedule(application)
             }
+        } else {
+            startPairingDiscovery()
         }
     }
 
@@ -108,9 +126,34 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         dispatch(RelayAction.Navigate(Screen.Connecting))
         viewModelScope.launch {
             runCatching {
-                preferences.bridgeUrl = bridgeUrl
-                api.pair(pairingCode)
+                val record = pairingRecord
+                if (record == null) {
+                    check(BuildConfig.DEBUG) {
+                        "No Relay Mac was discovered. Keep both devices on the same Wi-Fi."
+                    }
+                    preferences.bridgeUrl = bridgeUrl
+                    api.pairLegacy(pairingCode, detectedMetadata().displayName)
+                } else {
+                    val pending = api.submitPairing(
+                        record,
+                        pairingCode,
+                        detectedMetadata(),
+                    )
+                    var approved: PairingPollResult.Approved? = null
+                    while (System.currentTimeMillis() <= pending.expiresAt && approved == null) {
+                        when (val result = api.pollPairing(record, pending.pollToken)) {
+                            PairingPollResult.Pending -> delay(2_000)
+                            PairingPollResult.Denied -> error("Pairing was denied on the Mac")
+                            is PairingPollResult.Approved -> approved = result
+                        }
+                    }
+                    val result = approved ?: error("Pairing approval expired")
+                    check(result.apiVersion == 1) { "Relay update required" }
+                    preferences.deviceId = result.deviceId
+                    preferences.bridgeUrl = result.origin
+                }
             }.onSuccess {
+                pairingDiscovery.stop()
                 dispatch(RelayAction.Connected)
                 refresh(startLiveAfter = true)
             }.onFailure {
@@ -118,6 +161,17 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
                 dispatch(RelayAction.Failure(it.message ?: "Pairing failed"))
             }
         }
+    }
+
+    fun confirmMacIdentity() {
+        dispatch(RelayAction.Navigate(Screen.PairingCode))
+    }
+
+    fun retryPairingDiscovery() {
+        pairingDiscovery.stop()
+        pairingMac = null
+        pairingRecord = null
+        startPairingDiscovery()
     }
 
     fun refresh(
@@ -427,6 +481,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         preferences.clear()
         identity.delete()
         dispatch(RelayAction.Unpaired)
+        startPairingDiscovery()
     }
 
     fun clearError() = dispatch(RelayAction.ClearError)
@@ -475,6 +530,49 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun startPairingDiscovery() {
+        discoveringMac = true
+        pairingDiscovery.start(
+            onDiscovered = { record ->
+                viewModelScope.launch {
+                    runCatching { api.discoverPairing(record) }
+                        .onSuccess { mac ->
+                            if (mac.apiVersion != 1) {
+                                discoveringMac = false
+                                dispatch(
+                                    RelayAction.ConnectionChanged(
+                                        RelayConnectionState.UpdateRequired,
+                                    ),
+                                )
+                            } else {
+                                pairingDiscovery.stop()
+                                pairingRecord = record
+                                pairingMac = mac
+                                bridgeUrl = record.origin
+                                discoveringMac = false
+                                dispatch(RelayAction.Navigate(Screen.MacIdentity))
+                            }
+                        }
+                }
+            },
+            onError = { message ->
+                discoveringMac = false
+                dispatch(RelayAction.Failure(message))
+            },
+        )
+    }
+
+    private fun detectedMetadata(): PairingDeviceMetadata {
+        val configuration = getApplication<Application>().resources.configuration
+        return PairingDeviceMetadata.detected(
+            manufacturer = Build.MANUFACTURER,
+            model = Build.MODEL,
+            osVersion = Build.VERSION.RELEASE,
+            appVersion = BuildConfig.VERSION_NAME,
+            isRound = configuration.isScreenRound,
+        )
+    }
+
     private fun transcribeVoiceClip(clip: VoiceClip) {
         viewModelScope.launch {
             transcribingVoice = true
@@ -497,6 +595,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        pairingDiscovery.stop()
         voiceRecorder.cancel()
         socket.close()
         super.onCleared()

@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -30,13 +31,23 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.ScalingLazyListScope
 import dev.ungaaaabungaaa.relay.ui.theme.RelayColors
+import dev.ungaaaabungaaa.relay.ui.WatchLayoutPolicy
 
 @Composable
 fun RelayScreen(content: @Composable () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val layout = WatchLayoutPolicy.forScreen(
+        widthDp = configuration.screenWidthDp,
+        heightDp = configuration.screenHeightDp,
+        isRound = configuration.isScreenRound,
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 10.dp),
+            .padding(
+                horizontal = layout.horizontalInsetDp.dp,
+                vertical = layout.verticalInsetDp.dp,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         content()
@@ -49,9 +60,20 @@ fun RelayList(
     status: String? = null,
     content: ScalingLazyListScope.() -> Unit,
 ) {
+    val configuration = LocalConfiguration.current
+    val layout = WatchLayoutPolicy.forScreen(
+        widthDp = configuration.screenWidthDp,
+        heightDp = configuration.screenHeightDp,
+        isRound = configuration.isScreenRound,
+    )
     ScalingLazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 28.dp, bottom = 30.dp),
+        contentPadding = PaddingValues(
+            start = layout.horizontalInsetDp.dp,
+            top = if (layout.compact) 24.dp else 28.dp,
+            end = layout.horizontalInsetDp.dp,
+            bottom = if (layout.compact) 26.dp else 30.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "dev.ungaaaabungaaa.relay"
-        minSdk = 33
+        minSdk = 30
         targetSdk = 36
         versionCode = providers.environmentVariable("RELAY_WATCH_VERSION_CODE")
             .orNull?.toIntOrNull() ?: 1

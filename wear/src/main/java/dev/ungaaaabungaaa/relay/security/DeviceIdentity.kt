@@ -5,6 +5,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 
@@ -46,6 +47,13 @@ class DeviceIdentity {
         signature.initSign(keyStore.getKey(alias, null) as java.security.PrivateKey)
         signature.update(value.toByteArray())
         return Base64.encodeToString(signature.sign(), Base64.NO_WRAP)
+    }
+
+    fun fingerprint(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(publicKeyPem().toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return digest.chunked(4).take(8).joinToString(":")
     }
 
     fun delete() {

@@ -42,25 +42,35 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 fun PairingCodeScreen(
     bridgeUrl: String,
     pairingCode: String,
+    macName: String?,
+    discovering: Boolean,
+    showManualOrigin: Boolean,
     onBridgeUrlChange: (String) -> Unit,
     onPairingCodeChange: (String) -> Unit,
     onPair: () -> Unit,
+    onRetryDiscovery: () -> Unit,
     onAbout: () -> Unit,
 ) {
     RelayList(title = "Pair with Mac") {
         item {
             RelayLabel(
-                "On the Mac, open Relay → Add watch",
+                when {
+                    macName != null -> "Found $macName. Enter the code shown on the Mac."
+                    discovering -> "Looking for Relay on this Wi-Fi…"
+                    else -> "Open Relay on the Mac and start secure pairing."
+                },
                 color = RelayColors.Muted,
                 size = 10,
             )
         }
-        item {
-            RelayInput(
-                value = bridgeUrl,
-                hint = "Bridge URL",
-                onChange = onBridgeUrlChange,
-            )
+        if (showManualOrigin) {
+            item {
+                RelayInput(
+                    value = bridgeUrl,
+                    hint = "Debug recovery URL",
+                    onChange = onBridgeUrlChange,
+                )
+            }
         }
         item {
             RelayInput(
@@ -72,10 +82,13 @@ fun PairingCodeScreen(
         item {
             RelayActionButton(
                 "Pair watch",
-                enabled = pairingCode.length == 6,
+                enabled = pairingCode.length == 6 && (macName != null || showManualOrigin),
                 color = RelayColors.Green,
                 onClick = onPair,
             )
+        }
+        if (macName == null) {
+            item { RelayTextButton("Search again", onClick = onRetryDiscovery) }
         }
         item { RelayTextButton("About Relay", onClick = onAbout) }
     }
@@ -85,6 +98,7 @@ fun PairingCodeScreen(
 fun MacIdentityScreen(
     macName: String,
     fingerprint: String,
+    watchFingerprint: String,
     onConfirm: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -95,6 +109,15 @@ fun MacIdentityScreen(
                 fingerprint,
                 color = RelayColors.Muted,
                 size = 9,
+                family = FontFamily.Monospace,
+            )
+        }
+        item {
+            RelayLabel("This watch", color = RelayColors.Muted, size = 9)
+            RelayLabel(
+                watchFingerprint,
+                color = RelayColors.Muted,
+                size = 8,
                 family = FontFamily.Monospace,
             )
         }

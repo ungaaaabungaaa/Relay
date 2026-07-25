@@ -2,6 +2,7 @@ package dev.ungaaaabungaaa.relay.audio
 
 import android.content.Context
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.SystemClock
 import java.io.File
 import java.util.UUID
@@ -115,7 +116,12 @@ private class AndroidRecordingBackend(
     context: Context,
     private val file: File,
 ) : RecordingBackend {
-    private val recorder = MediaRecorder(context)
+    private val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        MediaRecorder(context)
+    } else {
+        @Suppress("DEPRECATION")
+        MediaRecorder()
+    }
     private var started = false
 
     override fun start(onMaximumDuration: () -> Unit) {
