@@ -5,22 +5,20 @@ import Testing
 func setupIsReadyOnlyWhenEveryRequiredCheckPasses() {
     let state = SetupState(
         codex: .ready,
-        tailscale: .ready,
+        account: .ready,
         bridge: .ready,
-        watchInstalled: true,
         watchPaired: true,
-        remoteAccess: .ready
+        cloud: .ready
     )
 
     #expect(state.isReady)
     #expect(
         !SetupState(
             codex: .ready,
-            tailscale: .missing,
+            account: .missing,
             bridge: .ready,
-            watchInstalled: true,
             watchPaired: true,
-            remoteAccess: .ready
+            cloud: .ready
         ).isReady
     )
 }

@@ -166,17 +166,13 @@ struct WatchesView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(RelayPalette.accent)
-                .disabled(!model.tailscaleSignedIn || model.bridgeState != .running)
-                if !model.tailscaleSignedIn {
-                    Text("Sign in to Tailscale first. Relay opens a temporary HTTPS pairing endpoint and closes it after approval.")
+                .disabled(!model.cloudConnected || model.bridgeState != .running)
+                if !model.cloudConnected {
+                    Text("Connect Relay Cloud first. The watch enters this Mac’s six-character pairing code.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if model.bridgeState != .running {
                     Text("Start the local Relay bridge before pairing a watch.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if model.temporaryPairingTransport {
-                    Text("Temporary pairing access is open. Relay will close it when this session ends.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

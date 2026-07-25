@@ -16,7 +16,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .setup: "Setup"
         case .watches: "Watches"
-        case .remoteAccess: "Remote Access"
+        case .remoteAccess: "Relay Cloud"
         case .workspaces: "Workspaces"
         case .voice: "Voice"
         case .updates: "Updates"

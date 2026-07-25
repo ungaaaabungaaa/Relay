@@ -7,47 +7,41 @@ struct RemoteAccessView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 DashboardHeader(
-                    eyebrow: "Private transport",
-                    title: "Remote access",
-                    detail: "Tailscale carries traffic to this Mac. Relay still verifies every watch request cryptographically."
+                    eyebrow: "End-to-end encrypted",
+                    title: "Relay Cloud",
+                    detail: "The Mac makes one outbound connection. Relay Cloud routes encrypted envelopes but cannot read Codex content."
                 )
                 RelayPanel {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             Label(
-                                model.funnelEnabled ? "Funnel enabled" : "Disabled by safe default",
-                                systemImage: model.funnelEnabled ? "network.badge.shield.half.filled" : "network.slash"
+                                model.cloudConnected ? "Encrypted tunnel connected" : "Cloud disconnected",
+                                systemImage: model.cloudConnected
+                                    ? "lock.shield.fill"
+                                    : "network.slash"
                             )
                             .font(.headline)
                             Spacer()
                             StatusPill(
-                                text: model.funnelEnabled ? "Reachable" : "Private",
-                                ready: !model.funnelEnabled
+                                text: model.cloudConnected ? "Online" : "Offline",
+                                ready: model.cloudConnected
                             )
                         }
                         Text(
-                            "Relay will enable only port 43117 after Tailscale sign-in and the local bridge security self-test both pass. The admin port is never exposed."
+                            model.cloudConnected
+                                ? "Approvals and mutations are available while this Mac stays awake and connected."
+                                : "Watches show cached summaries as stale and disable every mutation while the Mac is offline."
                         )
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        HStack {
-                            Button(model.funnelEnabled ? "Disable Funnel" : "Enable Funnel") {
-                                Task {
-                                    if model.funnelEnabled {
-                                        await model.disableRemoteAccess()
-                                    } else {
-                                        await model.enableRemoteAccess()
-                                    }
-                                }
+                        if model.cloudSignedIn {
+                            Button("Sign out") {
+                                Task { await model.signOutOfRelayCloud() }
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(model.funnelEnabled ? RelayPalette.amber : RelayPalette.accent)
-                            .disabled(!model.tailscaleInstalled || !model.tailscaleSignedIn)
-                            if let origin = model.funnelOrigin {
-                                Text(origin.absoluteString)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                            }
+                        } else {
+                            Text("Use Setup to request a single-use email sign-in link.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -56,7 +50,7 @@ struct RemoteAccessView: View {
                         Label("Emergency Stop", systemImage: "hand.raised.fill")
                             .font(.headline)
                             .foregroundStyle(RelayPalette.danger)
-                        Text("Closes Relay watch access while leaving all Codex tasks running on your Mac.")
+                        Text("Disconnects this Mac, revokes watch sessions, and stops the bridge. Existing Codex tasks remain on the Mac.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                         Button("Stop Relay access", role: .destructive) {

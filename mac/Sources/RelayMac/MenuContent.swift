@@ -14,8 +14,8 @@ struct MenuContent: View {
             )
             Label("Codex \(model.codexStatus.lowercased())", systemImage: "terminal")
             Label(
-                model.funnelEnabled ? "Remote access on" : "Remote access off",
-                systemImage: model.funnelEnabled ? "network" : "network.slash"
+                model.cloudConnected ? "Relay Cloud connected" : "Relay Cloud offline",
+                systemImage: model.cloudConnected ? "lock.shield.fill" : "network.slash"
             )
             Label(
                 "\(model.activeDeviceCount) watch\(model.activeDeviceCount == 1 ? "" : "es")",

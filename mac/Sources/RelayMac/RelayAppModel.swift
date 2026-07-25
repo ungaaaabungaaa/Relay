@@ -30,6 +30,9 @@ final class RelayAppModel: ObservableObject {
     @Published var watchInstalled = false
     @Published var emergencyStopResult: EmergencyStopResult?
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var cloudSignedIn = false
+    @Published var cloudConnected = false
+    @Published var cloudLoginInProgress = false
 
     private let secrets: KeychainStore
     private let adminClient: AdminClient
@@ -40,6 +43,9 @@ final class RelayAppModel: ObservableObject {
     private let pairingTransportLease = TemporaryPairingTransportLease()
     let updateController = RelayUpdateController()
     private var tailscaleLoginTask: Task<Void, Never>?
+    private let cloudClient = RelayCloudClient()
+    private var cloudAccessToken: String?
+    private var cloudLoginTask: Task<Void, Never>?
 
     init() {
         let secrets = KeychainStore()
@@ -65,14 +71,11 @@ final class RelayAppModel: ObservableObject {
     var setupJourney: SetupJourney {
         SetupJourney(
             codexAndIntegrityReady: codexStatus.lowercased() == "ready",
-            tailscaleInstalled: tailscaleInstalled,
-            tailscaleSignedIn: tailscaleSignedIn,
-            bridgePreflightPassed: bridgeState == .running,
-            platformToolsReady: platformToolsReady,
-            watchInstalled: watchInstalled || !devices.isEmpty,
+            signedIn: cloudSignedIn,
+            cloudConnected: cloudConnected,
             watchPaired: activeDeviceCount > 0,
             workspacesSelected: !workspaces.isEmpty,
-            remoteAccessEnabled: funnelEnabled
+            startAtLoginEnabled: startAtLogin
         )
     }
 
@@ -323,6 +326,67 @@ final class RelayAppModel: ObservableObject {
                 lastError = "Tailscale sign-in did not finish within two minutes."
             }
         }
+    }
+
+    func signInToRelayCloud(email: String) {
+        cloudLoginTask?.cancel()
+        cloudLoginInProgress = true
+        lastError = nil
+        cloudLoginTask = Task {
+            do {
+                let session = try await cloudClient.startDeviceLogin(email: email)
+                _ = NSWorkspace.shared.open(session.verificationURL)
+                let clock = ContinuousClock()
+                let deadline = clock.now.advanced(by: .seconds(600))
+                while clock.now < deadline {
+                    try Task.checkCancellation()
+                    if let tokens = try await cloudClient.pollForToken(
+                        sessionID: session.id,
+                        pkceVerifier: session.pkceVerifier
+                    ) {
+                        try secrets.set(
+                            tokens.refreshToken,
+                            for: .cloudRefreshToken
+                        )
+                        cloudAccessToken = tokens.accessToken
+                        cloudSignedIn = true
+                        cloudConnected = true
+                        funnelEnabled = true
+                        cloudLoginInProgress = false
+                        diagnostic = "Relay Cloud is connected with end-to-end encryption."
+                        updateSetupState(bridgeReady: bridgeState == .running)
+                        return
+                    }
+                    try await Task.sleep(for: .seconds(2))
+                }
+                throw RelayCloudClientError.authenticationFailed
+            } catch is CancellationError {
+                cloudLoginInProgress = false
+            } catch {
+                cloudLoginInProgress = false
+                cloudSignedIn = false
+                cloudConnected = false
+                lastError = "Relay Cloud sign-in did not complete."
+            }
+        }
+    }
+
+    func cancelRelayCloudLogin() {
+        cloudLoginTask?.cancel()
+        cloudLoginTask = nil
+        cloudLoginInProgress = false
+    }
+
+    func signOutOfRelayCloud() async {
+        if let refreshToken = try? secrets.value(for: .cloudRefreshToken) {
+            try? await cloudClient.logout(refreshToken: refreshToken)
+        }
+        try? secrets.remove(.cloudRefreshToken)
+        cloudAccessToken = nil
+        cloudSignedIn = false
+        cloudConnected = false
+        funnelEnabled = false
+        updateSetupState(bridgeReady: bridgeState == .running)
     }
 
     func cancelTailscaleLogin() {
@@ -652,11 +716,10 @@ final class RelayAppModel: ObservableObject {
     private func updateSetupState(bridgeReady: Bool) {
         setupState = SetupState(
             codex: codexStatus.lowercased() == "ready" ? .ready : .missing,
-            tailscale: tailscaleInstalled && tailscaleSignedIn ? .ready : .missing,
+            account: cloudSignedIn ? .ready : .missing,
             bridge: bridgeReady ? .ready : .missing,
-            watchInstalled: watchInstalled || !devices.isEmpty,
             watchPaired: activeDeviceCount > 0,
-            remoteAccess: funnelEnabled ? .ready : .missing
+            cloud: cloudConnected ? .ready : .missing
         )
     }
 

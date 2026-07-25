@@ -5,37 +5,31 @@ import Testing
 func setupJourneyResumesAtTheFirstIncompleteReleaseStep() {
     let journey = SetupJourney(
         codexAndIntegrityReady: true,
-        tailscaleInstalled: true,
-        tailscaleSignedIn: true,
-        bridgePreflightPassed: true,
-        platformToolsReady: false,
-        watchInstalled: false,
+        signedIn: true,
+        cloudConnected: true,
         watchPaired: false,
         workspacesSelected: false,
-        remoteAccessEnabled: false
+        startAtLoginEnabled: false
     )
 
-    #expect(journey.steps.count == 9)
-    #expect(journey.completedCount == 4)
-    #expect(journey.current?.id == .platformTools)
-    #expect(journey.steps.last?.id == .remoteAccess)
+    #expect(journey.steps.count == 6)
+    #expect(journey.completedCount == 3)
+    #expect(journey.current?.id == .watchPairing)
+    #expect(journey.steps.last?.id == .startAtLogin)
 }
 
 @Test
-func setupJourneyIsCompleteOnlyAfterWorkspaceAndRemoteAccess() {
+func setupJourneyIsCompleteOnlyAfterWorkspaceAndLoginItemChoice() {
     var journey = SetupJourney.complete
     #expect(journey.isComplete)
 
     journey = SetupJourney(
         codexAndIntegrityReady: true,
-        tailscaleInstalled: true,
-        tailscaleSignedIn: true,
-        bridgePreflightPassed: true,
-        platformToolsReady: true,
-        watchInstalled: true,
+        signedIn: true,
+        cloudConnected: true,
         watchPaired: true,
         workspacesSelected: false,
-        remoteAccessEnabled: true
+        startAtLoginEnabled: true
     )
 
     #expect(!journey.isComplete)

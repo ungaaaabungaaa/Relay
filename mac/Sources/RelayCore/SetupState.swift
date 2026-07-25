@@ -2,14 +2,11 @@ import Foundation
 
 public enum SetupJourneyStepID: String, CaseIterable, Sendable {
     case integrityAndCodex
-    case tailscaleInstall
-    case tailscaleLogin
-    case bridgePreflight
-    case platformTools
-    case watchInstall
+    case emailSignIn
+    case relayCloud
     case watchPairing
     case workspaces
-    case remoteAccess
+    case startAtLogin
 }
 
 public struct SetupJourneyStep: Equatable, Identifiable, Sendable {
@@ -24,69 +21,48 @@ public struct SetupJourney: Equatable, Sendable {
 
     public init(
         codexAndIntegrityReady: Bool,
-        tailscaleInstalled: Bool,
-        tailscaleSignedIn: Bool,
-        bridgePreflightPassed: Bool,
-        platformToolsReady: Bool,
-        watchInstalled: Bool,
+        signedIn: Bool,
+        cloudConnected: Bool,
         watchPaired: Bool,
         workspacesSelected: Bool,
-        remoteAccessEnabled: Bool
+        startAtLoginEnabled: Bool
     ) {
         steps = [
             SetupJourneyStep(
                 id: .integrityAndCodex,
                 title: "Relay and Codex",
-                detail: "Verify the bundled bridge and find the Codex CLI.",
+                detail: "Verify Relay and connect to the Codex CLI on this Mac.",
                 complete: codexAndIntegrityReady
             ),
             SetupJourneyStep(
-                id: .tailscaleInstall,
-                title: "Install Tailscale",
-                detail: "Use the official Apple-silicon Mac application.",
-                complete: tailscaleInstalled
+                id: .emailSignIn,
+                title: "Sign in by email",
+                detail: "Relay opens a single-use link in your browser. No password is shared with Relay.",
+                complete: signedIn
             ),
             SetupJourneyStep(
-                id: .tailscaleLogin,
-                title: "Sign in to Tailscale",
-                detail: "Relay opens Tailscale's official browser login.",
-                complete: tailscaleSignedIn
-            ),
-            SetupJourneyStep(
-                id: .bridgePreflight,
-                title: "Security preflight",
-                detail: "Confirm both Relay ports remain loopback-only.",
-                complete: bridgePreflightPassed
-            ),
-            SetupJourneyStep(
-                id: .platformTools,
-                title: "Android Platform Tools",
-                detail: "Install Google's verified ADB tools without an emulator.",
-                complete: platformToolsReady
-            ),
-            SetupJourneyStep(
-                id: .watchInstall,
-                title: "Install the watch app",
-                detail: "Discover the Wear OS watch and install the signed APK.",
-                complete: watchInstalled
+                id: .relayCloud,
+                title: "Connect Relay Cloud",
+                detail: "This Mac opens an encrypted outbound connection. No ports or VPN are required.",
+                complete: cloudConnected
             ),
             SetupJourneyStep(
                 id: .watchPairing,
-                title: "Pair and approve",
-                detail: "Compare both fingerprints before approving the watch.",
+                title: "Pair a watch",
+                detail: "Install Relay from Google Play, enter the code, and compare fingerprints.",
                 complete: watchPaired
             ),
             SetupJourneyStep(
                 id: .workspaces,
                 title: "Allowed workspaces",
-                detail: "Choose the only Mac folders visible to the watch.",
+                detail: "Choose the only Mac folders your watches may use.",
                 complete: workspacesSelected
             ),
             SetupJourneyStep(
-                id: .remoteAccess,
-                title: "Remote access",
-                detail: "Enable authenticated HTTPS access after every check passes.",
-                complete: remoteAccessEnabled
+                id: .startAtLogin,
+                title: "Start Relay at login",
+                detail: "Keep the Mac bridge available after you sign in to macOS.",
+                complete: startAtLoginEnabled
             ),
         ]
     }
@@ -105,14 +81,11 @@ public struct SetupJourney: Equatable, Sendable {
 
     public static let complete = SetupJourney(
         codexAndIntegrityReady: true,
-        tailscaleInstalled: true,
-        tailscaleSignedIn: true,
-        bridgePreflightPassed: true,
-        platformToolsReady: true,
-        watchInstalled: true,
+        signedIn: true,
+        cloudConnected: true,
         watchPaired: true,
         workspacesSelected: true,
-        remoteAccessEnabled: true
+        startAtLoginEnabled: true
     )
 }
 
@@ -129,43 +102,38 @@ public enum SetupRequirementStatus: Equatable, Sendable {
 
 public struct SetupState: Equatable, Sendable {
     public var codex: SetupRequirementStatus
-    public var tailscale: SetupRequirementStatus
+    public var account: SetupRequirementStatus
     public var bridge: SetupRequirementStatus
-    public var watchInstalled: Bool
     public var watchPaired: Bool
-    public var remoteAccess: SetupRequirementStatus
+    public var cloud: SetupRequirementStatus
 
     public init(
         codex: SetupRequirementStatus,
-        tailscale: SetupRequirementStatus,
+        account: SetupRequirementStatus,
         bridge: SetupRequirementStatus,
-        watchInstalled: Bool,
         watchPaired: Bool,
-        remoteAccess: SetupRequirementStatus
+        cloud: SetupRequirementStatus
     ) {
         self.codex = codex
-        self.tailscale = tailscale
+        self.account = account
         self.bridge = bridge
-        self.watchInstalled = watchInstalled
         self.watchPaired = watchPaired
-        self.remoteAccess = remoteAccess
+        self.cloud = cloud
     }
 
     public var isReady: Bool {
         codex.isReady
-            && tailscale.isReady
+            && account.isReady
             && bridge.isReady
-            && watchInstalled
             && watchPaired
-            && remoteAccess.isReady
+            && cloud.isReady
     }
 
     public static let checking = SetupState(
         codex: .checking,
-        tailscale: .checking,
+        account: .checking,
         bridge: .checking,
-        watchInstalled: false,
         watchPaired: false,
-        remoteAccess: .checking
+        cloud: .checking
     )
 }

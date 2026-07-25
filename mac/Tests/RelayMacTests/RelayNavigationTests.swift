@@ -7,7 +7,7 @@ func dashboardExposesEveryReleaseControlSection() {
         DashboardSection.allCases.map(\.title) == [
             "Setup",
             "Watches",
-            "Remote Access",
+            "Relay Cloud",
             "Workspaces",
             "Voice",
             "Updates",
