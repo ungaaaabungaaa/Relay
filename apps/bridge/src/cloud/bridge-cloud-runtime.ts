@@ -19,7 +19,7 @@ type CloudDeviceRegistration = {
   deviceId: string;
   name: string;
   signingPublicKey: string;
-  rootKey: string;
+  rootKey: string | CryptoKey;
   metadata: DeviceMetadata;
 };
 
@@ -29,27 +29,29 @@ export class BridgeCloudRuntime {
   readonly #adapters = new Map<string, CloudTunnelAdapter>();
   readonly #registrations = new Map<string, CloudDeviceRegistration>();
   readonly #pendingEvents: RelayTunnelEnvelope[] = [];
+  readonly #unsubscribe: () => void;
   #outgoingWork: Promise<void> = Promise.resolve();
+  #closed = false;
 
   constructor(options: BridgeCloudRuntimeOptions) {
     this.#options = options;
-    options.eventHub.subscribe((event) => {
+    this.#unsubscribe = options.eventHub.subscribe((event) => {
       void this.#appendOutgoing(() => this.#enqueueEvent(event)).catch(() => {});
     });
   }
 
   async registerDevice(input: CloudDeviceRegistration): Promise<void> {
-    const rootKeyBytes = Buffer.from(input.rootKey, "base64url");
-    if (rootKeyBytes.byteLength !== 32) {
+    if (this.#closed) throw new Error("Relay cloud runtime is closed");
+    const rootKey = typeof input.rootKey === "string"
+      ? await this.#importRootKey(input.rootKey)
+      : input.rootKey;
+    if (
+      rootKey.algorithm.name !== "AES-GCM" ||
+      !rootKey.usages.includes("encrypt") ||
+      !rootKey.usages.includes("decrypt")
+    ) {
       throw new Error("Invalid Relay cloud root key");
     }
-    const rootKey = await crypto.subtle.importKey(
-      "raw",
-      rootKeyBytes,
-      "AES-GCM",
-      false,
-      ["encrypt", "decrypt"],
-    );
     this.#rootKeys.set(input.deviceId, rootKey);
     this.#registrations.set(input.deviceId, structuredClone(input));
     this.#options.store.addDevice(
@@ -89,6 +91,7 @@ export class BridgeCloudRuntime {
   async receive(
     envelope: RelayTunnelEnvelope,
   ): Promise<void> {
+    if (this.#closed) throw new Error("Relay cloud runtime is closed");
     const adapter = this.#adapters.get(envelope.hostId);
     if (!adapter) throw new Error("Unknown Relay cloud host");
     await this.#appendOutgoing(async () => {
@@ -109,6 +112,49 @@ export class BridgeCloudRuntime {
     }
     const count = Math.max(0, Math.min(limit, 100));
     return this.#pendingEvents.splice(0, count);
+  }
+
+  async removeDevice(deviceId: string): Promise<void> {
+    if (this.#closed) return;
+    await this.#appendOutgoing(async () => {
+      const registration = this.#registrations.get(deviceId);
+      if (!registration) return;
+      const adapter = this.#adapters.get(registration.hostId);
+      await adapter?.removeDevice(deviceId);
+      this.#options.store.revokeDevice(deviceId);
+      this.#rootKeys.delete(deviceId);
+      this.#registrations.delete(deviceId);
+      for (let index = this.#pendingEvents.length - 1; index >= 0; index -= 1) {
+        const envelope = this.#pendingEvents[index]!;
+        if (
+          envelope.senderId === deviceId ||
+          envelope.recipientId === deviceId
+        ) {
+          this.#pendingEvents.splice(index, 1);
+        }
+      }
+      const hostStillRegistered = [...this.#registrations.values()].some(
+        (candidate) => candidate.hostId === registration.hostId,
+      );
+      if (!hostStillRegistered && adapter) {
+        await adapter.close();
+        this.#adapters.delete(registration.hostId);
+      }
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#unsubscribe();
+    await this.#outgoingWork;
+    await Promise.all(
+      [...this.#adapters.values()].map((adapter) => adapter.close()),
+    );
+    this.#pendingEvents.splice(0);
+    this.#rootKeys.clear();
+    this.#registrations.clear();
+    this.#adapters.clear();
   }
 
   async #enqueueEvent(event: RelayEvent): Promise<void> {
@@ -134,5 +180,19 @@ export class BridgeCloudRuntime {
 
   #trimPendingEvents(): void {
     while (this.#pendingEvents.length > 500) this.#pendingEvents.shift();
+  }
+
+  async #importRootKey(encoded: string): Promise<CryptoKey> {
+    const rootKeyBytes = Buffer.from(encoded, "base64url");
+    if (rootKeyBytes.byteLength !== 32) {
+      throw new Error("Invalid Relay cloud root key");
+    }
+    return crypto.subtle.importKey(
+      "raw",
+      rootKeyBytes,
+      "AES-GCM",
+      false,
+      ["encrypt", "decrypt"],
+    );
   }
 }

@@ -85,6 +85,37 @@ export class CloudTunnelAdapter {
     return this.#voiceTransfers.size;
   }
 
+  async removeDevice(deviceId: string): Promise<void> {
+    await this.#sequenceGate;
+    for (const [transferKey, transfer] of this.#voiceTransfers) {
+      if (!transferKey.startsWith(`${deviceId}:`)) continue;
+      clearTimeout(transfer.timer);
+      this.#voiceTransfers.delete(transferKey);
+    }
+
+    const replay = await this.#options.loadReplayState();
+    delete replay[deviceId];
+    await this.#options.saveReplayState(replay);
+
+    const outgoing = this.#options.loadOutgoingSequences
+      ? await this.#options.loadOutgoingSequences()
+      : Object.fromEntries(this.#outgoingSequence);
+    delete outgoing[deviceId];
+    if (this.#options.saveOutgoingSequences) {
+      await this.#options.saveOutgoingSequences(outgoing);
+    }
+    this.#outgoingSequence.delete(deviceId);
+  }
+
+  async close(): Promise<void> {
+    await this.#sequenceGate;
+    for (const transfer of this.#voiceTransfers.values()) {
+      clearTimeout(transfer.timer);
+    }
+    this.#voiceTransfers.clear();
+    this.#outgoingSequence.clear();
+  }
+
   async receive(
     envelope: RelayTunnelEnvelope,
   ): Promise<RelayTunnelEnvelope | null> {

@@ -218,6 +218,62 @@ describe("bridge cloud tunnel adapter", () => {
     assert.equal(adapter.queuedActionCount, 0);
   });
 
+  it("clears partial voice and persisted device sequences on removal and close", async () => {
+    const { watchRoot } = await fixture();
+    let replay = { "watch-1": 1, "watch-2": 2 };
+    let outgoing = { "watch-1": 3, "watch-2": 4 };
+    const adapter = new CloudTunnelAdapter({
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => replay,
+      saveReplayState: async (state) => {
+        replay = state as typeof replay;
+      },
+      loadOutgoingSequences: async () => outgoing,
+      saveOutgoingSequences: async (state) => {
+        outgoing = state as typeof outgoing;
+      },
+      handler: async () => Response.json({ ok: true }),
+      now: () => 2_000,
+    });
+    const firstChunk = await encryptRelayEnvelope(
+      {
+        version: 1,
+        messageId: "voice-partial",
+        accountId: "account-1",
+        hostId: "host-1",
+        senderId: "watch-1",
+        recipientId: "host-1",
+        sentAt: 1_900,
+        sequence: 2,
+      },
+      {
+        kind: "voice",
+        body: {
+          transferId: "partial-transfer",
+          index: 0,
+          totalChunks: 2,
+          recordedAtMs: 0,
+          durationMs: 1_000,
+          method: "POST",
+          path: "/v1/transcribe?durationMs=1000",
+          headers: { "content-type": "audio/mp4" },
+          data: Buffer.from([1]).toString("base64"),
+        },
+      },
+      watchRoot,
+    );
+
+    assert.equal(await adapter.receive(firstChunk), null);
+    assert.equal(adapter.pendingVoiceTransferCount, 1);
+    await adapter.removeDevice("watch-1");
+    assert.equal(adapter.pendingVoiceTransferCount, 0);
+    assert.deepEqual(replay, { "watch-2": 2 });
+    assert.deepEqual(outgoing, { "watch-2": 4 });
+    await adapter.close();
+    assert.equal(adapter.pendingVoiceTransferCount, 0);
+  });
+
   it("persists replay state and rejects duplicate delivery after restart", async () => {
     const { watchRoot } = await fixture();
     let persisted: Record<string, number> = {};
