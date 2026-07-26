@@ -16,7 +16,6 @@ let package = Package(
             path: "RelayWatch",
             exclude: [
                 "Assets.xcassets",
-                "RelayPairingDiscovery.swift",
                 "RelayWatchApp.swift",
                 "RelayWatchModel.swift",
                 "RelayWatchRootView.swift",

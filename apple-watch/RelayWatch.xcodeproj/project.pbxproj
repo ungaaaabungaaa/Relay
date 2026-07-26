@@ -11,7 +11,6 @@
 		A00000000000000000000002 /* RelayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* RelayProtocol.swift */; };
 		A00000000000000000000003 /* WatchIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* WatchIdentity.swift */; };
 		A00000000000000000000004 /* RelayAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* RelayAPIClient.swift */; };
-		A00000000000000000000005 /* RelayPairingDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* RelayPairingDiscovery.swift */; };
 		A00000000000000000000006 /* RelayWatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* RelayWatchModel.swift */; };
 		A00000000000000000000007 /* RelayWatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* RelayWatchRootView.swift */; };
 		A00000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Assets.xcassets */; };
@@ -22,7 +21,6 @@
 		B00000000000000000000002 /* RelayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayProtocol.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* WatchIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchIdentity.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* RelayAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayAPIClient.swift; sourceTree = "<group>"; };
-		B00000000000000000000005 /* RelayPairingDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayPairingDiscovery.swift; sourceTree = "<group>"; };
 		B00000000000000000000006 /* RelayWatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchModel.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 /* RelayWatchRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchRootView.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -55,7 +53,6 @@
 				B00000000000000000000002 /* RelayProtocol.swift */,
 				B00000000000000000000003 /* WatchIdentity.swift */,
 				B00000000000000000000004 /* RelayAPIClient.swift */,
-				B00000000000000000000005 /* RelayPairingDiscovery.swift */,
 				B00000000000000000000006 /* RelayWatchModel.swift */,
 				B00000000000000000000007 /* RelayWatchRootView.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
@@ -148,7 +145,6 @@
 				A00000000000000000000002 /* RelayProtocol.swift in Sources */,
 				A00000000000000000000003 /* WatchIdentity.swift in Sources */,
 				A00000000000000000000004 /* RelayAPIClient.swift in Sources */,
-				A00000000000000000000005 /* RelayPairingDiscovery.swift in Sources */,
 				A00000000000000000000006 /* RelayWatchModel.swift in Sources */,
 				A00000000000000000000007 /* RelayWatchRootView.swift in Sources */,
 			);
@@ -188,13 +184,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Relay;
-				INFOPLIST_KEY_NSBonjourServices = "_relay-pair._tcp";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Relay discovers your Mac only during a five-minute pairing session.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only while you hold the voice button and sends encrypted audio to your Mac for review.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.ungaaaabungaaa.relay.watch;
+				PRODUCT_BUNDLE_IDENTIFIER = com.relayforcodex.watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -217,13 +212,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Relay;
-				INFOPLIST_KEY_NSBonjourServices = "_relay-pair._tcp";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Relay discovers your Mac only during a five-minute pairing session.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only while you hold the voice button and sends encrypted audio to your Mac for review.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.ungaaaabungaaa.relay.watch;
+				PRODUCT_BUNDLE_IDENTIFIER = com.relayforcodex.watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

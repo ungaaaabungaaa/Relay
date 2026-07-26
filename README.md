@@ -17,7 +17,9 @@ decrypt prompts, commands, workspace paths, approvals, task output, or voice.
 > **Current checkpoint:** `main` contains the cloud Worker and D1 foundation,
 > passwordless invite login, native Mac tunnel, E2EE watch pairing, encrypted
 > Wear OS requests, revocation, Emergency Stop, account deletion, and automated
-> release gates. A public beta still requires production accounts, signing
+> release gates. The Phase-2 Apple Watch target now has Cloud pairing and an
+> encrypted request tunnel, but its destination screens and physical TestFlight
+> flow remain unfinished. A public beta still requires production accounts, signing
 > material, deployment, store review, physical devices, testers, and an external
 > security review.
 

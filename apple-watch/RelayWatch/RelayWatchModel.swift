@@ -14,29 +14,20 @@ final class RelayWatchModel: ObservableObject {
     @Published var cacheIsStale = true
 
     private let identity = RelayWatchIdentity()
-    private lazy var api = RelayAPIClient(identity: identity)
-    private let discovery = RelayPairingDiscovery()
-    private let preferences = UserDefaults.standard
-    private var pairingRecord: RelayPairingRecord?
+    private let agreementIdentity = RelayWatchAgreementIdentity()
+    private let deviceStore = RelayWatchCloudStore()
+    private lazy var api = RelayAPIClient(
+        identity: identity,
+        agreementIdentity: agreementIdentity,
+        deviceStore: deviceStore
+    )
     private var pairingTask: Task<Void, Never>?
 
     init() {
-        discovery.onRecord = { [weak self] record in
-            Task { @MainActor in
-                await self?.accept(record)
-            }
-        }
-        discovery.onFailure = { [weak self] in
-            Task { @MainActor in
-                self?.error = "Keep the Mac and watch on the same Wi-Fi."
-            }
-        }
-        if deviceID != nil, origin != nil {
+        if deviceStore.load() != nil {
             connection = .offline
             screen = .inbox
             Task { await refresh() }
-        } else {
-            discovery.start()
         }
     }
 
@@ -50,7 +41,6 @@ final class RelayWatchModel: ObservableObject {
 
     func beginPairing() {
         screen = .pairing
-        discovery.start()
     }
 
     func confirmMac() {
@@ -58,11 +48,14 @@ final class RelayWatchModel: ObservableObject {
     }
 
     func pair() {
-        guard let pairingRecord, pairingCode.count == 6 else {
+        let code = pairingCode.uppercased()
+        guard code.range(of: #"^[A-Z0-9]{6}$"#, options: .regularExpression) != nil else {
             error = "Enter the six-character code shown on the Mac."
             return
         }
         pairingTask?.cancel()
+        discoveredMac = nil
+        error = nil
         connection = .pairing
         pairingTask = Task {
             do {
@@ -74,75 +67,60 @@ final class RelayWatchModel: ObservableObject {
                         forInfoDictionaryKey: "CFBundleShortVersionString"
                     ) as? String ?? "0"
                 )
-                let pending = try await api.submit(
-                    pairingRecord,
-                    code: pairingCode,
+                let prepared = try await api.submit(
+                    code: code,
                     metadata: metadata
                 )
+                discoveredMac = RelayMacIdentity(
+                    macName: "Relay Mac",
+                    macFingerprint: prepared.pending.macFingerprint
+                )
                 while !Task.isCancelled,
-                      Int64(Date().timeIntervalSince1970 * 1_000) <= pending.expiresAt {
-                    let status = try await api.poll(
-                        pairingRecord,
-                        token: pending.pollToken
-                    )
-                    switch status.state {
-                    case "pending":
+                      Int64(Date().timeIntervalSince1970 * 1_000)
+                        <= prepared.pending.expiresAt {
+                    switch try await api.poll(prepared) {
+                    case .pending:
                         try await Task.sleep(for: .seconds(2))
-                    case "denied":
+                    case .denied:
                         throw RelayWatchModelError.denied
-                    case "approved":
-                        guard
-                            status.apiVersion == 1,
-                            let deviceID = status.deviceId,
-                            let origin = status.origin
-                        else {
-                            throw RelayWatchModelError.incompatible
-                        }
-                        preferences.set(deviceID, forKey: "device-id")
-                        preferences.set(origin.absoluteString, forKey: "origin")
-                        discovery.stop()
+                    case .approved:
                         connection = .offline
                         screen = .inbox
                         await refresh()
                         return
-                    default:
-                        throw RelayWatchModelError.incompatible
                     }
                 }
                 throw RelayWatchModelError.expired
             } catch is CancellationError {
                 connection = .unpaired
-            } catch RelayWatchModelError.incompatible {
+            } catch RelayAPIError.incompatible {
                 connection = .incompatible
                 error = "Update Relay on the Mac and watch."
             } catch {
                 connection = .unpaired
-                self.error = "Pairing was denied or expired."
+                self.error = "Pairing was denied, expired, or rate limited."
             }
         }
     }
 
     func refresh() async {
-        guard let origin, let deviceID else {
+        guard deviceStore.load() != nil else {
             connection = .unpaired
             cacheIsStale = true
             return
         }
         do {
-            async let inboxData = api.request(
-                origin: origin,
-                deviceID: deviceID,
-                path: "/v1/inbox"
-            )
-            async let tasksData = api.request(
-                origin: origin,
-                deviceID: deviceID,
-                path: "/v1/tasks"
-            )
-            let (inboxResponse, tasksResponse) = try await (inboxData, tasksData)
-            let inbox = try JSONSerialization.jsonObject(with: inboxResponse)
+            let inboxResponse = try await api.request(path: "/v1/inbox")
+            let tasksResponse = try await api.request(path: "/v1/tasks")
+            guard
+                (200..<300).contains(inboxResponse.status),
+                (200..<300).contains(tasksResponse.status)
+            else {
+                throw RelayWatchModelError.rejected
+            }
+            let inbox = try JSONSerialization.jsonObject(with: inboxResponse.body)
                 as? [String: Any]
-            let tasks = try JSONSerialization.jsonObject(with: tasksResponse)
+            let tasks = try JSONSerialization.jsonObject(with: tasksResponse.body)
                 as? [String: Any]
             cachedInboxCount =
                 ((inbox?["approvals"] as? [Any])?.count ?? 0)
@@ -165,12 +143,11 @@ final class RelayWatchModel: ObservableObject {
 
     func revokeLocally() {
         pairingTask?.cancel()
-        preferences.removeObject(forKey: "device-id")
-        preferences.removeObject(forKey: "origin")
-        preferences.removeObject(forKey: "cached-response")
+        Task { await api.close() }
+        deviceStore.delete()
+        agreementIdentity.delete()
         identity.delete()
         discoveredMac = nil
-        pairingRecord = nil
         pairingCode = ""
         cachedInboxCount = 0
         cachedTaskCount = 0
@@ -182,38 +159,10 @@ final class RelayWatchModel: ObservableObject {
     func pairAgain() {
         connection = .unpaired
         screen = .onboarding
-        discovery.start()
-    }
-
-    private var deviceID: String? {
-        preferences.string(forKey: "device-id")
-    }
-
-    private var origin: URL? {
-        preferences.string(forKey: "origin").flatMap(URL.init(string:))
-    }
-
-    private func accept(_ record: RelayPairingRecord) async {
-        guard pairingRecord == nil else {
-            return
-        }
-        do {
-            let mac = try await api.discover(record)
-            guard mac.apiVersion == 1 else {
-                throw RelayWatchModelError.incompatible
-            }
-            pairingRecord = record
-            discoveredMac = mac
-            discovery.stop()
-            screen = .pairing
-        } catch {
-            self.error = "The pairing session is no longer available."
-        }
+        error = nil
     }
 }
 
 enum RelayWatchModelError: Error {
-    case denied
-    case expired
-    case incompatible
+    case denied, expired, incompatible, rejected
 }

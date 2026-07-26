@@ -36,7 +36,7 @@ struct RelayWatchRootView: View {
                     .font(.title)
                     .foregroundStyle(.mint)
                     .accessibilityHidden(true)
-                Text(model.discoveredMac?.macName ?? "Find Relay Mac")
+                Text(model.discoveredMac?.macName ?? "Pair Relay Mac")
                     .font(.headline)
                 if let mac = model.discoveredMac {
                     Text(mac.macFingerprint)
@@ -45,20 +45,23 @@ struct RelayWatchRootView: View {
                     Text("Compare the Mac fingerprint, then enter its code.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    TextField("6-character code", text: $model.pairingCode)
-                        .textInputAutocapitalization(.characters)
-                    Button("Request approval", action: model.pair)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.pairingCode.count != 6)
-                    Text("Watch \(model.watchFingerprint)")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
                 } else {
-                    Text("Start secure pairing on the Mac and keep both devices on the same Wi-Fi.")
+                    Text("Start secure pairing on the Mac, then enter its code. Wi-Fi or LTE works.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    ProgressView()
                 }
+                TextField("6-character code", text: $model.pairingCode)
+                    .textInputAutocapitalization(.characters)
+                    .disabled(model.connection == .pairing)
+                Button("Request approval", action: model.pair)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        model.pairingCode.count != 6
+                            || model.connection == .pairing
+                    )
+                Text("Watch \(model.watchFingerprint)")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
                 if model.connection == .pairing {
                     Text("Waiting for approval on Mac…")
                         .font(.caption2)

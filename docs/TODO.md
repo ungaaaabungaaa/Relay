@@ -31,7 +31,10 @@
       ordered response/event sequence and periodic snapshot reconciliation
 - [x] 128 KiB encrypted voice chunks with ordered Mac-only assembly, 2 MiB,
       30-second, and incomplete-transfer cleanup limits
-- [ ] Finish Apple Watch cloud transport and physical TestFlight flow
+- [x] Apple Watch Cloud code pairing, Keychain device material, E2EE request
+      tunnel, permanent bundle ID, and watchOS 10 architecture checks
+- [ ] Wire Apple Watch destination screens, live events, actions, reviewed
+      voice, reconnect callbacks, and physical TestFlight flow
 - [x] Draft Play listing, reviewer instructions, privacy/terms/support copy,
       account-deletion instructions, and matching Worker pages
 - [x] Protected Worker-secret deployment and D1 Time Travel recovery runbook

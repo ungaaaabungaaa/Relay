@@ -23,7 +23,7 @@ func relaySubjectPublicKeyInfo(_ rawPoint: Data) throws -> Data {
 }
 
 final class RelayWatchIdentity: @unchecked Sendable {
-    private let tag = Data("dev.ungaaaabungaaa.relay.watch.identity".utf8)
+    private let tag = Data("com.relayforcodex.watch.signing".utf8)
 
     func publicKeyPEM() throws -> String {
         let privateKey = try loadOrCreate()
@@ -112,6 +112,135 @@ final class RelayWatchIdentity: @unchecked Sendable {
             throw RelayWatchIdentityError.keyCreationFailed
         }
         return key
+    }
+}
+
+final class RelayWatchAgreementIdentity: @unchecked Sendable {
+    private let keychain = RelayWatchKeychain()
+    private let account = "agreement-private-key"
+
+    func publicKeyBase64URL() throws -> String {
+        try loadOrCreate().publicKey.x963Representation.relayBase64URL
+    }
+
+    func deriveRootKey(
+        peerPublicKey: String,
+        pairingSessionNonce: String
+    ) throws -> SymmetricKey {
+        guard
+            let peerData = Data(relayBase64URL: peerPublicKey),
+            let nonce = Data(relayBase64URL: pairingSessionNonce)
+        else {
+            throw RelayCloudCryptoError.invalidEnvelope
+        }
+        return try relayDeriveRootKey(
+            privateKey: loadOrCreate(),
+            peerPublicKey: P256.KeyAgreement.PublicKey(
+                x963Representation: peerData
+            ),
+            pairingSessionNonce: nonce
+        )
+    }
+
+    func delete() {
+        keychain.delete(account: account)
+    }
+
+    private func loadOrCreate() throws -> P256.KeyAgreement.PrivateKey {
+        if let stored = keychain.read(account: account) {
+            return try P256.KeyAgreement.PrivateKey(rawRepresentation: stored)
+        }
+        let created = P256.KeyAgreement.PrivateKey()
+        try keychain.write(created.rawRepresentation, account: account)
+        return created
+    }
+}
+
+final class RelayWatchCloudStore: @unchecked Sendable {
+    private let keychain = RelayWatchKeychain()
+    private let account = "cloud-device-config"
+    private let preferences = UserDefaults.standard
+
+    func load() -> RelayCloudDeviceConfig? {
+        guard let data = keychain.read(account: account) else { return nil }
+        return try? JSONDecoder().decode(RelayCloudDeviceConfig.self, from: data)
+    }
+
+    func save(_ config: RelayCloudDeviceConfig) throws {
+        try keychain.write(JSONEncoder().encode(config), account: account)
+        preferences.set(Int64(0), forKey: "cloud-outgoing-sequence")
+        preferences.set(Int64(0), forKey: "cloud-host-sequence")
+    }
+
+    var outgoingSequence: Int64 {
+        get { Int64(preferences.integer(forKey: "cloud-outgoing-sequence")) }
+        set { preferences.set(newValue, forKey: "cloud-outgoing-sequence") }
+    }
+
+    var hostSequence: Int64 {
+        get { Int64(preferences.integer(forKey: "cloud-host-sequence")) }
+        set { preferences.set(newValue, forKey: "cloud-host-sequence") }
+    }
+
+    func delete() {
+        keychain.delete(account: account)
+        preferences.removeObject(forKey: "cloud-outgoing-sequence")
+        preferences.removeObject(forKey: "cloud-host-sequence")
+    }
+}
+
+private final class RelayWatchKeychain: @unchecked Sendable {
+    private let service = "com.relayforcodex.watch"
+
+    func read(account: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
+            return nil
+        }
+        return result as? Data
+    }
+
+    func write(_ data: Data, account: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String:
+                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updated = SecItemUpdate(
+            query as CFDictionary,
+            attributes as CFDictionary
+        )
+        if updated == errSecItemNotFound {
+            var insertion = query
+            insertion.merge(attributes) { _, new in new }
+            guard SecItemAdd(insertion as CFDictionary, nil) == errSecSuccess else {
+                throw RelayWatchIdentityError.keyCreationFailed
+            }
+        } else if updated != errSecSuccess {
+            throw RelayWatchIdentityError.keyCreationFailed
+        }
+    }
+
+    func delete(account: String) {
+        SecItemDelete(
+            [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: account,
+            ] as CFDictionary
+        )
     }
 }
 
