@@ -69,3 +69,22 @@ test("malformed socket messages close only the offending peer", () => {
   session.message(watch, "not-json");
   assert.equal(watch.closed, 4002);
 });
+
+test("oversized encrypted socket envelopes are rejected before routing", () => {
+  const watch = new DurableSocket();
+  const session = new DurableTunnelSession([]);
+  session.accept(
+    { accountId: "account-1", hostId: "host-1", peerId: "watch-1", role: "device" },
+    watch,
+  );
+
+  session.message(
+    watch,
+    JSON.stringify({
+      version: 1,
+      nonce: "opaque",
+      ciphertext: "x".repeat(256 * 1024 + 1),
+    }),
+  );
+  assert.equal(watch.closed, 4002);
+});

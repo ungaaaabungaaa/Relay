@@ -84,9 +84,10 @@ Relay canonicalizes approved paths, resolves symlinks, and rejects traversal
 outside allowed roots. It does not expose repository file contents through the
 folder browser.
 
-System input needs no OpenAI key. Optional recordings are capped at 30 seconds
-and 2 MiB by protocol policy, authenticated inside the tunnel, deleted after
-success/failure/timeout, and never sent to Codex without transcript review.
+System input needs no OpenAI key. Optional recordings are split into 128 KiB
+encrypted chunks, capped at 30 seconds and 2 MiB, assembled only on the Mac,
+deleted after success/failure/timeout, and never sent to Codex without
+transcript review.
 
 ## Account controls
 

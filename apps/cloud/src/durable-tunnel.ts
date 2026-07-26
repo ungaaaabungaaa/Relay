@@ -51,6 +51,7 @@ export class DurableTunnelSession {
         !envelope ||
         envelope.version !== 1 ||
         typeof envelope.ciphertext !== "string" ||
+        envelope.ciphertext.length > 256 * 1024 ||
         typeof envelope.nonce !== "string"
       ) {
         throw new Error("Invalid envelope");

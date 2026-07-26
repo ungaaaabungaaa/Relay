@@ -29,7 +29,8 @@
 - [x] Production invite-administration command and protected operator workflow
 - [x] Persistent encrypted cloud event stream for Live Monitoring, with one
       ordered response/event sequence and periodic snapshot reconciliation
-- [ ] 128 KiB chunked voice transfer for the full 2 MiB protocol limit
+- [x] 128 KiB encrypted voice chunks with ordered Mac-only assembly, 2 MiB,
+      30-second, and incomplete-transfer cleanup limits
 - [ ] Finish Apple Watch cloud transport and physical TestFlight flow
 - [ ] Complete store listing assets, reviewer instructions, privacy/terms copy,
       and production support pages

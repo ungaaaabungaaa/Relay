@@ -116,6 +116,108 @@ describe("bridge cloud tunnel adapter", () => {
     assert.deepEqual(received, new Uint8Array([0, 1, 2, 255]));
   });
 
+  it("assembles ordered encrypted voice chunks only on the Mac", async () => {
+    const { watchRoot } = await fixture();
+    let received = new Uint8Array();
+    const adapter = new CloudTunnelAdapter({
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => ({}),
+      saveReplayState: async () => {},
+      handler: async (request) => {
+        received = new Uint8Array(await request.arrayBuffer());
+        return Response.json({ transcript: "chunked hello" });
+      },
+      now: () => 2_000,
+    });
+    const chunk = async (index: number, data: Uint8Array) =>
+      encryptRelayEnvelope(
+        {
+          version: 1,
+          messageId: `voice-${index}`,
+          accountId: "account-1",
+          hostId: "host-1",
+          senderId: "watch-1",
+          recipientId: "host-1",
+          sentAt: 1_900,
+          sequence: index + 1,
+        },
+        {
+          kind: "voice",
+          body: {
+            transferId: "transfer-1",
+            index,
+            totalChunks: 2,
+            recordedAtMs: index * 1_000,
+            durationMs: 1_000,
+            method: "POST",
+            path: "/v1/transcribe?durationMs=1000",
+            headers: {
+              "content-type": "audio/mp4",
+              "x-relay-device": "watch-1",
+              "x-relay-signature": "signed-full-audio",
+            },
+            data: Buffer.from(data).toString("base64"),
+          },
+        },
+        watchRoot,
+      );
+
+    assert.equal(await adapter.receive(await chunk(0, new Uint8Array([1, 2]))), null);
+    const response = await adapter.receive(
+      await chunk(1, new Uint8Array([3, 4, 5])),
+    );
+    assert.ok(response);
+    assert.deepEqual(received, new Uint8Array([1, 2, 3, 4, 5]));
+    assert.equal(
+      (await decryptRelayEnvelope(response, watchRoot)).kind,
+      "response",
+    );
+  });
+
+  it("rejects out-of-order voice chunks and keeps no partial action", async () => {
+    const { watchRoot } = await fixture();
+    const adapter = new CloudTunnelAdapter({
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => ({}),
+      saveReplayState: async () => {},
+      handler: async () => Response.json({ ok: true }),
+      now: () => 2_000,
+    });
+    const invalid = await encryptRelayEnvelope(
+      {
+        version: 1,
+        messageId: "voice-1",
+        accountId: "account-1",
+        hostId: "host-1",
+        senderId: "watch-1",
+        recipientId: "host-1",
+        sentAt: 1_900,
+        sequence: 1,
+      },
+      {
+        kind: "voice",
+        body: {
+          transferId: "transfer-1",
+          index: 1,
+          totalChunks: 2,
+          recordedAtMs: 1_000,
+          durationMs: 1_000,
+          method: "POST",
+          path: "/v1/transcribe?durationMs=1000",
+          headers: { "content-type": "audio/mp4" },
+          data: Buffer.from([1]).toString("base64"),
+        },
+      },
+      watchRoot,
+    );
+
+    await assert.rejects(adapter.receive(invalid), /voice chunk order/i);
+    assert.equal(adapter.pendingVoiceTransferCount, 0);
+    assert.equal(adapter.queuedActionCount, 0);
+  });
+
   it("persists replay state and rejects duplicate delivery after restart", async () => {
     const { watchRoot } = await fixture();
     let persisted: Record<string, number> = {};

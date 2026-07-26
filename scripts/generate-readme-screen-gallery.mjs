@@ -199,7 +199,7 @@ export const SCREEN_GROUPS = [
         layout: "record",
         eyebrow: "VOICE / REVIEWED",
         title: ["Hold to record"],
-        body: ["00:08 / 01:00"],
+        body: ["00:08 / 00:30"],
         secondary: "Use keyboard",
         tone: "red",
       },

@@ -5,6 +5,7 @@ import dev.ungaaaabungaaa.relay.security.RelayRoutingFields
 import dev.ungaaaabungaaa.relay.security.RelaySequenceWindow
 import dev.ungaaaabungaaa.relay.security.RelayTunnelEnvelope
 import java.security.SecureRandom
+import java.util.Base64
 import org.json.JSONObject
 
 data class RelayTunnelHTTPResponse(
@@ -68,6 +69,58 @@ class RelayCloudTunnelCodec(
             RelayRoutingFields(
                 version = 1,
                 messageId = requestId,
+                accountId = accountId,
+                hostId = hostId,
+                senderId = deviceId,
+                recipientId = hostId,
+                sentAt = now(),
+                sequence = outgoingSequence,
+            ),
+            inner,
+            rootKey,
+            nonce,
+        )
+    }
+
+    fun encryptVoiceChunk(
+        messageId: String,
+        transferId: String,
+        index: Int,
+        totalChunks: Int,
+        recordedAtMs: Long,
+        durationMs: Long,
+        path: String,
+        headers: Map<String, String>,
+        data: ByteArray,
+        nonce: ByteArray = ByteArray(12).also(SecureRandom()::nextBytes),
+    ): RelayTunnelEnvelope {
+        require(transferId.length in 8..128)
+        require(totalChunks in 1..16 && index in 0 until totalChunks)
+        require(durationMs in 1..30_000 && recordedAtMs in 0..durationMs)
+        require(path.startsWith("/v1/transcribe?durationMs="))
+        require(data.isNotEmpty() && data.size <= 128 * 1024)
+        outgoingSequence += 1
+        val inner = JSONObject()
+            .put("kind", "voice")
+            .put(
+                "body",
+                JSONObject()
+                    .put("transferId", transferId)
+                    .put("index", index)
+                    .put("totalChunks", totalChunks)
+                    .put("recordedAtMs", recordedAtMs)
+                    .put("durationMs", durationMs)
+                    .put("method", "POST")
+                    .put("path", path)
+                    .put("headers", JSONObject(headers))
+                    .put("data", Base64.getEncoder().encodeToString(data)),
+            )
+            .toString()
+            .toByteArray()
+        return RelayCloudCrypto.encrypt(
+            RelayRoutingFields(
+                version = 1,
+                messageId = messageId,
                 accountId = accountId,
                 hostId = hostId,
                 senderId = deviceId,

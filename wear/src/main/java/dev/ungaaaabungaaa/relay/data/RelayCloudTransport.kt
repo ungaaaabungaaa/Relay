@@ -120,30 +120,82 @@ class RelayCloudTransport(
                         activeCodec.currentOutgoingSequence
                 }
             }
-            suspendCancellableCoroutine { continuation ->
-                val activeSocket = synchronized(stateLock) {
-                    pendingRequestId = requestId
-                    pendingResponse = continuation
-                    socket
-                }
-                if (activeSocket == null || !activeSocket.send(envelope.toJson().toString())) {
-                    synchronized(stateLock) {
-                        if (pendingRequestId == requestId) {
-                            pendingRequestId = null
-                            pendingResponse = null
-                        }
+            sendAndAwait(requestId, listOf(envelope))
+        }
+    }
+
+    suspend fun voiceRequest(
+        path: String,
+        headers: Map<String, String>,
+        audio: ByteArray,
+        durationMs: Long,
+    ): RelayTunnelHTTPResponse = requestMutex.withLock {
+        require(audio.isNotEmpty() && audio.size <= 2 * 1024 * 1024)
+        require(durationMs in 1..30_000)
+        withTimeout(30_000) {
+            val connection = ensureConnection()
+            connection.await()
+            val transferId = UUID.randomUUID().toString()
+            val totalChunks = (audio.size + VOICE_CHUNK_BYTES - 1) /
+                VOICE_CHUNK_BYTES
+            val envelopes = synchronized(stateLock) {
+                val activeCodec = codecForCurrentDevice()
+                List(totalChunks) { index ->
+                    val start = index * VOICE_CHUNK_BYTES
+                    val end = min(audio.size, start + VOICE_CHUNK_BYTES)
+                    val recordedAtMs = if (totalChunks == 1) {
+                        durationMs
+                    } else {
+                        durationMs * index / (totalChunks - 1)
                     }
-                    continuation.resumeWithException(
-                        IllegalStateException("Relay Cloud is unavailable"),
+                    activeCodec.encryptVoiceChunk(
+                        messageId = UUID.randomUUID().toString(),
+                        transferId = transferId,
+                        index = index,
+                        totalChunks = totalChunks,
+                        recordedAtMs = recordedAtMs,
+                        durationMs = durationMs,
+                        path = path,
+                        headers = headers,
+                        data = audio.copyOfRange(start, end),
                     )
+                }.also {
+                    preferences.cloudOutgoingSequence =
+                        activeCodec.currentOutgoingSequence
                 }
-                continuation.invokeOnCancellation {
-                    synchronized(stateLock) {
-                        if (pendingRequestId == requestId) {
-                            pendingRequestId = null
-                            pendingResponse = null
-                        }
-                    }
+            }
+            sendAndAwait(checkNotNull(envelopes.lastOrNull()).messageId, envelopes)
+        }
+    }
+
+    private suspend fun sendAndAwait(
+        requestId: String,
+        envelopes: List<RelayTunnelEnvelope>,
+    ): RelayTunnelHTTPResponse = suspendCancellableCoroutine { continuation ->
+        val activeSocket = synchronized(stateLock) {
+            pendingRequestId = requestId
+            pendingResponse = continuation
+            socket
+        }
+        val sent = activeSocket != null && envelopes.all { envelope ->
+            activeSocket.send(envelope.toJson().toString())
+        }
+        if (!sent) {
+            synchronized(stateLock) {
+                if (pendingRequestId == requestId) {
+                    pendingRequestId = null
+                    pendingResponse = null
+                }
+            }
+            continuation.resumeWithException(
+                IllegalStateException("Relay Cloud is unavailable"),
+            )
+        }
+        continuation.invokeOnCancellation {
+            synchronized(stateLock) {
+                if (pendingRequestId == requestId) {
+                    pendingRequestId = null
+                    pendingResponse = null
                 }
             }
         }
@@ -325,6 +377,10 @@ class RelayCloudTransport(
             codecDeviceId = config.deviceId
         }
         return checkNotNull(codec)
+    }
+
+    companion object {
+        private const val VOICE_CHUNK_BYTES = 128 * 1024
     }
 }
 

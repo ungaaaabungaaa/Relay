@@ -92,7 +92,8 @@ export class BridgeCloudRuntime {
     const adapter = this.#adapters.get(envelope.hostId);
     if (!adapter) throw new Error("Unknown Relay cloud host");
     await this.#appendOutgoing(async () => {
-      this.#pendingEvents.push(await adapter.receive(envelope));
+      const response = await adapter.receive(envelope);
+      if (response) this.#pendingEvents.push(response);
       this.#trimPendingEvents();
     });
   }

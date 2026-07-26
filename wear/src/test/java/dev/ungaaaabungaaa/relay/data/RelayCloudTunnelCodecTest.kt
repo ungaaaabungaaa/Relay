@@ -124,4 +124,35 @@ class RelayCloudTunnelCodecTest {
             codec.decryptIncoming(event)
         }
     }
+
+    @Test
+    fun voiceChunkIsEncryptedAsOpaqueChunkMetadataAndData() {
+        val rootKey = ByteArray(32) { 5 }
+        val codec = RelayCloudTunnelCodec(
+            accountId = "account-1",
+            hostId = "host-1",
+            deviceId = "watch-1",
+            rootKey = rootKey,
+            now = { 1_000 },
+        )
+        val envelope = codec.encryptVoiceChunk(
+            messageId = "voice-1",
+            transferId = "transfer-1",
+            index = 0,
+            totalChunks = 2,
+            recordedAtMs = 0,
+            durationMs = 1_000,
+            path = "/v1/transcribe?durationMs=1000",
+            headers = mapOf("x-relay-signature" to "full-body-signature"),
+            data = byteArrayOf(1, 2, 3),
+            nonce = ByteArray(12) { 7 },
+        )
+        val inner = JSONObject(
+            RelayCloudCrypto.decrypt(envelope, rootKey).decodeToString(),
+        )
+
+        assertEquals("voice", inner.getString("kind"))
+        assertEquals(0, inner.getJSONObject("body").getInt("index"))
+        assertEquals("AQID", inner.getJSONObject("body").getString("data"))
+    }
 }

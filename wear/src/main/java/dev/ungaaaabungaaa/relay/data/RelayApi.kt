@@ -9,7 +9,6 @@ import dev.ungaaaabungaaa.relay.domain.parseApprovalRisk
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
 import dev.ungaaaabungaaa.relay.security.canonicalRequest
 import java.io.File
-import java.util.Base64
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -227,8 +226,45 @@ class RelayApi(
 
     suspend fun transcribe(file: File, durationMs: Long): String {
         val body = withContext(Dispatchers.IO) { file.readBytes() }
+        val path = "/v1/transcribe?durationMs=$durationMs"
+        if (cloudTransport?.isPaired == true) {
+            val deviceId = preferences.deviceId ?: error("Watch is not paired")
+            val timestamp = System.currentTimeMillis()
+            val nonce = UUID.randomUUID().toString()
+            val idempotencyKey = UUID.randomUUID().toString()
+            val headers = mapOf(
+                "x-relay-device" to deviceId,
+                "x-relay-timestamp" to timestamp.toString(),
+                "x-relay-nonce" to nonce,
+                "x-relay-signature" to identity.sign(
+                    canonicalRequest(
+                        deviceId,
+                        "POST",
+                        path,
+                        body,
+                        timestamp,
+                        nonce,
+                    ),
+                ),
+                "content-type" to AUDIO.toString(),
+                "idempotency-key" to idempotencyKey,
+            )
+            val response = cloudTransport.voiceRequest(
+                path = path,
+                headers = headers,
+                audio = body,
+                durationMs = durationMs,
+            )
+            if (response.status !in 200..299) {
+                val message = runCatching {
+                    JSONObject(response.body).optString("error")
+                }.getOrNull()
+                error(message?.takeIf(String::isNotBlank) ?: "Relay request failed")
+            }
+            return JSONObject(response.body).getString("transcript")
+        }
         val response = request(
-            path = "/v1/transcribe?durationMs=$durationMs",
+            path = path,
             method = "POST",
             body = body,
             idempotencyKey = UUID.randomUUID().toString(),
@@ -271,17 +307,12 @@ class RelayApi(
             )
             idempotencyKey?.let { signedHeaders["idempotency-key"] = it }
             if (cloudTransport?.isPaired == true) {
-                val cloudBody = if (contentType == AUDIO) {
-                    signedHeaders["x-relay-body-encoding"] = "base64"
-                    Base64.getEncoder().encodeToString(body)
-                } else {
-                    body.decodeToString()
-                }
+                check(contentType != AUDIO) { "Voice must use chunked transfer" }
                 val response = cloudTransport.request(
                     method = method,
                     path = path,
                     headers = signedHeaders,
-                    body = cloudBody,
+                    body = body.decodeToString(),
                 )
                 if (response.status !in 200..299) {
                     val message = runCatching {

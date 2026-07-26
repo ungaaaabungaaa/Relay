@@ -69,6 +69,8 @@ Rebuild the SVG boards with `pnpm generate:readme-screens`.
   API 30;
 - encrypted signed requests for tasks, inbox, approvals, questions,
   instructions, workspace selection, new tasks, and reviewed voice;
+- 128 KiB encrypted voice chunks, assembled only on the Mac, with a 2 MiB and
+  30-second hard limit;
 - offline, stale, revoked, reconnecting, and update-required states;
 - pushed end-to-end encrypted events, battery-aware snapshot reconciliation,
   and time-limited Live Monitoring.

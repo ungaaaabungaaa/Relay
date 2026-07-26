@@ -25,6 +25,15 @@ type CloudTunnelAdapterOptions = {
   now?: () => number;
 };
 
+type PendingVoiceTransfer = {
+  metadata: string;
+  chunks: Buffer[];
+  totalBytes: number;
+  lastRecordedAtMs: number;
+  timer: ReturnType<typeof setTimeout>;
+  request: Omit<TunnelRequestBody, "body">;
+};
+
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
 function parseTunnelRequest(inner: RelayInnerMessage): TunnelRequestBody {
@@ -62,6 +71,7 @@ export class CloudTunnelAdapter {
   readonly #options: CloudTunnelAdapterOptions;
   readonly #outgoingSequence = new Map<string, number>();
   #sequenceGate: Promise<void> = Promise.resolve();
+  readonly #voiceTransfers = new Map<string, PendingVoiceTransfer>();
 
   constructor(options: CloudTunnelAdapterOptions) {
     this.#options = options;
@@ -71,7 +81,13 @@ export class CloudTunnelAdapter {
     return 0;
   }
 
-  async receive(envelope: RelayTunnelEnvelope): Promise<RelayTunnelEnvelope> {
+  get pendingVoiceTransferCount(): number {
+    return this.#voiceTransfers.size;
+  }
+
+  async receive(
+    envelope: RelayTunnelEnvelope,
+  ): Promise<RelayTunnelEnvelope | null> {
     if (
       envelope.hostId !== this.#options.hostId ||
       envelope.recipientId !== this.#options.hostId
@@ -88,9 +104,11 @@ export class CloudTunnelAdapter {
     await this.#options.saveReplayState(replay.snapshot());
 
     const key = await this.#options.keyForDevice(envelope.senderId);
-    const requestMessage = parseTunnelRequest(
-      await decryptRelayEnvelope(envelope, key),
-    );
+    const inner = await decryptRelayEnvelope(envelope, key);
+    const requestMessage = inner.kind === "voice"
+      ? this.#consumeVoiceChunk(envelope.senderId, inner.body)
+      : parseTunnelRequest(inner);
+    if (!requestMessage) return null;
     const decodedBody =
       requestMessage.headers["x-relay-body-encoding"] === "base64"
         ? Buffer.from(requestMessage.body, "base64")
@@ -133,6 +151,125 @@ export class CloudTunnelAdapter {
       },
       key,
     );
+  }
+
+  #consumeVoiceChunk(
+    senderId: string,
+    rawBody: unknown,
+  ): TunnelRequestBody | null {
+    if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+      throw new Error("Invalid voice chunk");
+    }
+    const body = rawBody as Record<string, unknown>;
+    const transferId = body.transferId;
+    const index = body.index;
+    const totalChunks = body.totalChunks;
+    const recordedAtMs = body.recordedAtMs;
+    const durationMs = body.durationMs;
+    const method = body.method;
+    const path = body.path;
+    const headers = body.headers;
+    const data = body.data;
+    if (
+      typeof transferId !== "string" ||
+      transferId.length < 8 ||
+      transferId.length > 128 ||
+      !Number.isSafeInteger(index) ||
+      !Number.isSafeInteger(totalChunks) ||
+      (totalChunks as number) < 1 ||
+      (totalChunks as number) > 16 ||
+      (index as number) < 0 ||
+      (index as number) >= (totalChunks as number) ||
+      !Number.isSafeInteger(recordedAtMs) ||
+      (recordedAtMs as number) < 0 ||
+      !Number.isSafeInteger(durationMs) ||
+      (durationMs as number) < 1 ||
+      (durationMs as number) > 30_000 ||
+      (recordedAtMs as number) > (durationMs as number) ||
+      method !== "POST" ||
+      typeof path !== "string" ||
+      !path.startsWith("/v1/transcribe?durationMs=") ||
+      !headers ||
+      typeof headers !== "object" ||
+      Array.isArray(headers) ||
+      Object.values(headers).some((value) => typeof value !== "string") ||
+      typeof data !== "string" ||
+      data.length === 0 ||
+      data.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(data)
+    ) {
+      throw new Error("Invalid voice chunk");
+    }
+
+    const transferKey = `${senderId}:${transferId}`;
+    try {
+      const bytes = Buffer.from(data, "base64");
+      if (
+        bytes.byteLength < 1 ||
+        bytes.byteLength > 128 * 1024 ||
+        bytes.toString("base64") !== data
+      ) {
+        throw new Error("Voice chunk exceeds the 128 KiB limit");
+      }
+      const normalizedHeaders = headers as Record<string, string>;
+      const metadata = JSON.stringify({
+        totalChunks,
+        durationMs,
+        method,
+        path,
+        headers: normalizedHeaders,
+      });
+      let transfer = this.#voiceTransfers.get(transferKey);
+      if (!transfer) {
+        if (index !== 0) throw new Error("Voice chunk order is invalid");
+        const timer = setTimeout(() => {
+          this.#voiceTransfers.delete(transferKey);
+        }, 30_000);
+        timer.unref?.();
+        transfer = {
+          metadata,
+          chunks: [],
+          totalBytes: 0,
+          lastRecordedAtMs: 0,
+          timer,
+          request: {
+            method: "POST",
+            path,
+            headers: {
+              ...normalizedHeaders,
+              "x-relay-body-encoding": "base64",
+            },
+          },
+        };
+        this.#voiceTransfers.set(transferKey, transfer);
+      }
+      if (
+        transfer.metadata !== metadata ||
+        index !== transfer.chunks.length ||
+        (recordedAtMs as number) < transfer.lastRecordedAtMs
+      ) {
+        throw new Error("Voice chunk order is invalid");
+      }
+      transfer.chunks.push(bytes);
+      transfer.totalBytes += bytes.byteLength;
+      transfer.lastRecordedAtMs = recordedAtMs as number;
+      if (transfer.totalBytes > 2 * 1024 * 1024) {
+        throw new Error("Voice transfer exceeds the 2 MiB limit");
+      }
+      if (index !== (totalChunks as number) - 1) return null;
+
+      clearTimeout(transfer.timer);
+      this.#voiceTransfers.delete(transferKey);
+      return {
+        ...transfer.request,
+        body: Buffer.concat(transfer.chunks).toString("base64"),
+      };
+    } catch (error) {
+      const transfer = this.#voiceTransfers.get(transferKey);
+      if (transfer) clearTimeout(transfer.timer);
+      this.#voiceTransfers.delete(transferKey);
+      throw error;
+    }
   }
 
   async pushEvent(input: {
