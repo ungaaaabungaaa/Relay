@@ -30,7 +30,6 @@ async function artifact(directory, version, name, architecture, signed) {
 export async function createReleasePayload({
   artifactsDirectory,
   tag,
-  watchVersionCode,
   codexMinimumVersion,
   codexMaximumVersion,
 }) {
@@ -40,7 +39,6 @@ export async function createReleasePayload({
   const version = tag.slice(1);
   const artifactDefinitions = [
     ["Relay.dmg", "arm64", true],
-    ["relay-wear.apk", "universal", true],
     [`Relay-${version}.tar.gz`, "source", false],
     ["LICENSE", "text", false],
     ["NOTICE", "text", false],
@@ -58,7 +56,7 @@ export async function createReleasePayload({
       )),
   );
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tag,
     version,
     license: "Apache-2.0",
@@ -66,12 +64,6 @@ export async function createReleasePayload({
       version,
       artifact: "Relay.dmg",
       architecture: "arm64",
-    },
-    watch: {
-      versionName: version,
-      versionCode: Number(watchVersionCode),
-      artifact: "relay-wear.apk",
-      minimumWearOS: 3,
     },
     codex: {
       minimumVersion: codexMinimumVersion,
@@ -86,13 +78,9 @@ async function main() {
   const payload = await createReleasePayload({
     artifactsDirectory: option(args, "--artifacts"),
     tag: option(args, "--tag"),
-    watchVersionCode: option(args, "--watch-version-code"),
     codexMinimumVersion: option(args, "--codex-min"),
     codexMaximumVersion: option(args, "--codex-max"),
   });
-  if (!Number.isSafeInteger(payload.watch.versionCode) || payload.watch.versionCode < 1) {
-    throw new Error("watch version code must be a positive integer");
-  }
   const output = resolve(option(args, "--output"));
   await writeFile(output, `${JSON.stringify(payload, null, 2)}\n`, {
     mode: 0o600,

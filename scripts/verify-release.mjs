@@ -8,7 +8,6 @@ import {
 import { access, readFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
@@ -25,7 +24,6 @@ export async function verifyRelease({
   artifactsDirectory,
   expectedTag,
   publicKey,
-  verifyApkSignature = false,
 }) {
   const loadedManifest = manifest
     ?? JSON.parse(await readFile(manifestPath, "utf8"));
@@ -48,7 +46,6 @@ export async function verifyRelease({
   assertReleaseShape(payload, expectedTag);
   const requiredArtifacts = new Map([
     ["Relay.dmg", { architecture: "arm64", signed: true }],
-    ["relay-wear.apk", { architecture: "universal", signed: true }],
     [`Relay-${payload.version}.tar.gz`, { architecture: "source", signed: false }],
     ["LICENSE", { architecture: "text", signed: false }],
     ["NOTICE", { architecture: "text", signed: false }],
@@ -92,6 +89,9 @@ export async function verifyRelease({
       throw new Error(`${name} must not claim a code signature`);
     }
   }
+  if (entries.size !== requiredArtifacts.size) {
+    throw new Error("release must contain exactly six artifacts");
+  }
 
   const artifactRoot = resolve(artifactsDirectory);
   for (const [name, artifact] of entries) {
@@ -105,16 +105,15 @@ export async function verifyRelease({
     }
   }
 
-  if (verifyApkSignature) {
-    verifyAndroidSignature(join(artifactRoot, payload.watch.artifact));
-  }
   return payload;
 }
 
 function assertReleaseShape(payload, expectedTag) {
+  if (payload.schemaVersion !== 2) {
+    throw new Error("unsupported release schema version");
+  }
   if (
-    payload.schemaVersion !== 1
-    || typeof payload.version !== "string"
+    typeof payload.version !== "string"
     || !VERSION_PATTERN.test(payload.version)
     || payload.tag !== `v${payload.version}`
     || payload.tag !== expectedTag
@@ -133,16 +132,6 @@ function assertReleaseShape(payload, expectedTag) {
   }
   if (payload.mac.architecture !== "arm64") {
     throw new Error("Mac release must be Apple silicon arm64");
-  }
-  assertObject(payload.watch, "watch release metadata");
-  if (
-    payload.watch.versionName !== payload.version
-    || payload.watch.artifact !== "relay-wear.apk"
-    || !Number.isSafeInteger(payload.watch.versionCode)
-    || payload.watch.versionCode < 1
-    || payload.watch.minimumWearOS !== 3
-  ) {
-    throw new Error("watch version, version code, artifact, or Wear OS floor is invalid");
   }
   assertObject(payload.codex, "Codex compatibility metadata");
   if (
@@ -188,17 +177,6 @@ function decodeBase64(value, label) {
   return decoded;
 }
 
-function verifyAndroidSignature(apkPath) {
-  const result = spawnSync(
-    process.env.APKSIGNER_PATH ?? "apksigner",
-    ["verify", "--verbose", "--print-certs", apkPath],
-    { encoding: "utf8" },
-  );
-  if (result.status !== 0) {
-    throw new Error("relay-wear.apk Android signature verification failed");
-  }
-}
-
 function sortRecursively(value) {
   if (Array.isArray(value)) {
     return value.map(sortRecursively);
@@ -239,7 +217,6 @@ async function main() {
     artifactsDirectory,
     expectedTag,
     publicKey: publicKeyBase64,
-    verifyApkSignature: args.includes("--verify-apk-signature"),
   });
   process.stdout.write(
     `Verified Relay ${payload.version} (${payload.artifacts.length} artifacts).\n`,

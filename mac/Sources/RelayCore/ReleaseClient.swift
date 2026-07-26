@@ -44,25 +44,6 @@ public struct ReleaseMac: Codable, Equatable, Sendable {
     }
 }
 
-public struct ReleaseWatch: Codable, Equatable, Sendable {
-    public var versionName: String
-    public var versionCode: Int
-    public var artifact: String
-    public var minimumWearOS: Int
-
-    public init(
-        versionName: String,
-        versionCode: Int,
-        artifact: String,
-        minimumWearOS: Int
-    ) {
-        self.versionName = versionName
-        self.versionCode = versionCode
-        self.artifact = artifact
-        self.minimumWearOS = minimumWearOS
-    }
-}
-
 public struct CodexCompatibility: Codable, Equatable, Sendable {
     public var minimumVersion: String
     public var maximumVersion: String
@@ -79,7 +60,6 @@ public struct ReleaseManifestPayload: Codable, Equatable, Sendable {
     public var version: String
     public var license: String
     public var mac: ReleaseMac
-    public var watch: ReleaseWatch
     public var codex: CodexCompatibility
     public var artifacts: [ReleaseArtifact]
 
@@ -89,7 +69,6 @@ public struct ReleaseManifestPayload: Codable, Equatable, Sendable {
         version: String,
         license: String,
         mac: ReleaseMac,
-        watch: ReleaseWatch,
         codex: CodexCompatibility,
         artifacts: [ReleaseArtifact]
     ) {
@@ -98,7 +77,6 @@ public struct ReleaseManifestPayload: Codable, Equatable, Sendable {
         self.version = version
         self.license = license
         self.mac = mac
-        self.watch = watch
         self.codex = codex
         self.artifacts = artifacts
     }
@@ -142,16 +120,12 @@ public struct ReleaseClient: Sendable {
             throw ReleaseClientError.invalidSignature
         }
         guard
-            manifest.payload.schemaVersion == 1,
+            manifest.payload.schemaVersion == 2,
             manifest.payload.tag == "v\(manifest.payload.version)",
             manifest.payload.license == "Apache-2.0",
             manifest.payload.mac.version == manifest.payload.version,
             manifest.payload.mac.artifact == "Relay.dmg",
             manifest.payload.mac.architecture == "arm64",
-            manifest.payload.watch.versionName == manifest.payload.version,
-            manifest.payload.watch.artifact == "relay-wear.apk",
-            manifest.payload.watch.versionCode > 0,
-            manifest.payload.watch.minimumWearOS == 3,
             Self.isCodexVersion(manifest.payload.codex.minimumVersion),
             Self.isCodexVersion(manifest.payload.codex.maximumVersion),
             let available = SemanticVersion(manifest.payload.version),
@@ -166,11 +140,6 @@ public struct ReleaseClient: Sendable {
             manifest.payload.artifacts.contains(where: {
                 $0.name == "Relay.dmg"
                     && $0.architecture == "arm64"
-                    && $0.signed
-            }),
-            manifest.payload.artifacts.contains(where: {
-                $0.name == "relay-wear.apk"
-                    && $0.architecture == "universal"
                     && $0.signed
             })
         else {

@@ -68,9 +68,8 @@ cp "${repository_root}/dist/relay-bridge-arm64" "${resources_path}/relay-bridge-
 cp "${repository_root}/LICENSE" "${resources_path}/LICENSE"
 cp "${repository_root}/NOTICE" "${resources_path}/NOTICE"
 cp "${repository_root}/THIRD_PARTY_NOTICES.md" "${resources_path}/THIRD_PARTY_NOTICES.md"
-printf '{"version":"%s","watchVersionCode":%s,"apiVersion":1}\n' \
+printf '{"version":"%s","apiVersion":1}\n' \
   "${relay_version}" \
-  "${RELAY_WATCH_VERSION_CODE:?Set RELAY_WATCH_VERSION_CODE}" \
   > "${resources_path}/relay-release.json"
 chmod 0755 "${macos_path}/Relay" "${resources_path}/relay-bridge-arm64"
 

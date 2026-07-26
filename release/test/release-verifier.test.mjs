@@ -29,7 +29,6 @@ test("accepts a signed, internally consistent Apple silicon release", async () =
     const generated = await createReleasePayload({
       artifactsDirectory: directory,
       tag: TAG,
-      watchVersionCode: 10203,
       codexMinimumVersion: "0.144.0",
       codexMaximumVersion: "0.144.x",
     });
@@ -42,10 +41,16 @@ test("accepts a signed, internally consistent Apple silicon release", async () =
 
     assert.equal(result.version, VERSION);
     assert.equal(result.mac.architecture, "arm64");
-    assert.equal(result.watch.versionName, VERSION);
-    assert.equal(
-      generated.artifacts.some(({ name }) => name === "relay-bridge-arm64"),
-      false,
+    assert.deepEqual(
+      generated.artifacts.map(({ name }) => name),
+      [
+        "Relay.dmg",
+        `Relay-${VERSION}.tar.gz`,
+        "LICENSE",
+        "NOTICE",
+        "THIRD_PARTY_NOTICES.md",
+        "COMPATIBILITY.md",
+      ],
     );
     assert.deepEqual(result.codex, {
       minimumVersion: "0.144.0",
@@ -105,7 +110,7 @@ test("rejects an Intel Mac artifact", async () => {
   );
 });
 
-test("rejects an APK that is not marked as signed", async () => {
+test("rejects an unsigned Mac artifact", async () => {
   await withFixture(
     async ({ directory, manifest, publicKey }) => {
       await assert.rejects(
@@ -115,13 +120,56 @@ test("rejects an APK that is not marked as signed", async () => {
           expectedTag: TAG,
           publicKey,
         }),
-        /relay-wear\.apk must be signed/,
+        /Relay\.dmg must be signed/,
       );
     },
     (payload) => {
-      payload.artifacts.find(
-        ({ name }) => name === "relay-wear.apk",
-      ).signed = false;
+      payload.artifacts.find(({ name }) => name === "Relay.dmg").signed =
+        false;
+    },
+  );
+});
+
+test("rejects schema version 1", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /unsupported release schema version/,
+      );
+    },
+    (payload) => {
+      payload.schemaVersion = 1;
+    },
+  );
+});
+
+test("rejects a seventh release artifact", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /exactly six artifacts/,
+      );
+    },
+    (payload) => {
+      payload.artifacts.push({
+        name: "unexpected.txt",
+        version: VERSION,
+        architecture: "text",
+        sha256: "0".repeat(64),
+        signed: false,
+      });
     },
   );
 });
@@ -149,7 +197,7 @@ test("rejects a release missing the Apache license", async () => {
 
 test("rejects a payload changed without a new signature", async () => {
   await withFixture(async ({ directory, manifest, publicKey }) => {
-    manifest.payload.watch.versionName = "9.9.9";
+    manifest.payload.mac.version = "9.9.9";
 
     await assert.rejects(
       verifyRelease({
@@ -168,7 +216,6 @@ async function withFixture(assertion, mutate = () => {}) {
   try {
     const files = new Map([
       ["Relay.dmg", "arm64 mac image"],
-      ["relay-wear.apk", "signed watch package"],
       [`Relay-${VERSION}.tar.gz`, "source archive"],
       ["LICENSE", "Apache License Version 2.0"],
       ["NOTICE", "Relay notices"],
@@ -187,12 +234,11 @@ async function withFixture(assertion, mutate = () => {}) {
         version: VERSION,
         architecture: architectureFor(name),
         sha256: sha256(await readFile(join(directory, name))),
-        signed: name === "Relay.dmg"
-          || name === "relay-wear.apk",
+        signed: name === "Relay.dmg",
       });
     }
     const payload = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       tag: TAG,
       version: VERSION,
       license: "Apache-2.0",
@@ -200,12 +246,6 @@ async function withFixture(assertion, mutate = () => {}) {
         version: VERSION,
         artifact: "Relay.dmg",
         architecture: "arm64",
-      },
-      watch: {
-        versionName: VERSION,
-        versionCode: 10203,
-        artifact: "relay-wear.apk",
-        minimumWearOS: 3,
       },
       codex: {
         minimumVersion: "0.144.0",
@@ -234,9 +274,6 @@ async function withFixture(assertion, mutate = () => {}) {
 function architectureFor(name) {
   if (name === "Relay.dmg") {
     return "arm64";
-  }
-  if (name === "relay-wear.apk") {
-    return "universal";
   }
   if (name.endsWith(".tar.gz")) {
     return "source";

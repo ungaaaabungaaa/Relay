@@ -15,21 +15,19 @@
         "version",
         "license",
         "mac",
-        "watch",
         "codex",
         "artifacts"
       ],
       "properties": {
-        "schemaVersion": { "const": 1 },
+        "schemaVersion": { "const": 2 },
         "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
         "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
         "license": { "const": "Apache-2.0" },
         "mac": { "$ref": "#/$defs/mac" },
-        "watch": { "$ref": "#/$defs/watch" },
         "codex": { "$ref": "#/$defs/codex" },
         "artifacts": {
           "type": "array",
-          "minItems": 8,
+          "minItems": 6,
           "items": { "$ref": "#/$defs/artifact" }
         }
       }
@@ -48,22 +46,6 @@
         "version": { "type": "string" },
         "artifact": { "const": "Relay.dmg" },
         "architecture": { "const": "arm64" }
-      }
-    },
-    "watch": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "versionName",
-        "versionCode",
-        "artifact",
-        "minimumWearOS"
-      ],
-      "properties": {
-        "versionName": { "type": "string" },
-        "versionCode": { "type": "integer", "minimum": 1 },
-        "artifact": { "const": "relay-wear.apk" },
-        "minimumWearOS": { "const": 3 }
       }
     },
     "codex": {
@@ -89,7 +71,7 @@
         "name": { "type": "string", "pattern": "^[^/\\\\]+$" },
         "version": { "type": "string" },
         "architecture": {
-          "enum": ["arm64", "universal", "source", "text"]
+          "enum": ["arm64", "source", "text"]
         },
         "sha256": {
           "type": "string",

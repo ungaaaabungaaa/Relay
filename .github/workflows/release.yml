@@ -21,7 +21,6 @@ jobs:
     environment: release
     env:
       RELAY_VERSION: ${{ github.ref_name }}
-      RELAY_WATCH_VERSION_CODE: ${{ vars.RELAY_WATCH_VERSION_CODE }}
       RELAY_RELEASE_PUBLIC_KEY_BASE64: ${{ vars.RELAY_RELEASE_PUBLIC_KEY_BASE64 }}
       RELAY_SPARKLE_PUBLIC_KEY: ${{ vars.RELAY_SPARKLE_PUBLIC_KEY }}
       RELAY_SPARKLE_STABLE_FEED_URL: ${{ vars.RELAY_SPARKLE_STABLE_FEED_URL }}
@@ -34,10 +33,6 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       RELAY_RELEASE_PRIVATE_KEY_BASE64: ${{ secrets.RELAY_RELEASE_PRIVATE_KEY_BASE64 }}
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
@@ -50,7 +45,6 @@ jobs:
           version=${RELAY_VERSION#v}
           test "${RELAY_VERSION}" = "v${version}"
           [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
-          test -n "${RELAY_WATCH_VERSION_CODE}"
           test -n "${RELAY_RELEASE_PUBLIC_KEY_BASE64}"
           test -n "${RELAY_SPARKLE_PUBLIC_KEY}"
           [[ "${RELAY_SPARKLE_STABLE_FEED_URL}" == https://* ]]
@@ -63,10 +57,6 @@ jobs:
           test -n "${APPLE_ID}"
           test -n "${APPLE_APP_SPECIFIC_PASSWORD}"
           test -n "${APPLE_TEAM_ID}"
-          test -n "${ANDROID_KEYSTORE_BASE64}"
-          test -n "${ANDROID_KEYSTORE_PASSWORD}"
-          test -n "${ANDROID_KEY_ALIAS}"
-          test -n "${ANDROID_KEY_PASSWORD}"
           test -n "${RELAY_RELEASE_PRIVATE_KEY_BASE64}"
           test -n "${SPARKLE_PRIVATE_KEY}"
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${RELAY_VERSION}")"
@@ -75,17 +65,8 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-      - name: Set up Java 21
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: gradle
-      - name: Set up Android command-line tools
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-      - name: Install release toolchains without an emulator
+      - name: Install pinned pnpm dependencies
         run: |
-          sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36.1"
           corepack enable
           corepack install
           pnpm install --frozen-lockfile
@@ -95,8 +76,7 @@ jobs:
           mkdir -p "${signing_root}"
           chmod 700 "${signing_root}"
           printf '%s' "${APPLE_CERTIFICATE_BASE64}" | base64 --decode > "${signing_root}/developer-id.p12"
-          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${signing_root}/relay-android.jks"
-          chmod 600 "${signing_root}/developer-id.p12" "${signing_root}/relay-android.jks"
+          chmod 600 "${signing_root}/developer-id.p12"
           keychain_password=$(openssl rand -base64 32)
           security create-keychain -p "${keychain_password}" "${signing_root}/relay.keychain-db"
           security set-keychain-settings -lut 21600 "${signing_root}/relay.keychain-db"
@@ -118,7 +98,6 @@ jobs:
             --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
             --team-id "${APPLE_TEAM_ID}" \
             --keychain "${signing_root}/relay.keychain-db"
-          echo "ANDROID_KEYSTORE_PATH=${signing_root}/relay-android.jks" >> "${GITHUB_ENV}"
           echo "RELAY_SIGN_IDENTITY=${APPLE_SIGNING_IDENTITY}" >> "${GITHUB_ENV}"
           echo "RELAY_OUTPUT_DIR=${GITHUB_WORKSPACE}/release/out" >> "${GITHUB_ENV}"
           echo "RELAY_NOTARY_KEYCHAIN=${signing_root}/relay.keychain-db" >> "${GITHUB_ENV}"
@@ -126,19 +105,17 @@ jobs:
         run: |
           pnpm test
           pnpm typecheck
-          ./gradlew :wear:testDebugUnitTest :wear:lintDebug
           swift test --package-path mac
           swift test --package-path apple-watch
           scripts/check-watchos-source.sh
-          xcodebuild -list -project apple-watch/RelayWatch.xcodeproj
-      - name: Build and verify signed watch APK
-        run: |
-          ./gradlew :wear:assembleRelease
-          mkdir -p release/out
-          cp wear/build/outputs/apk/release/wear-release.apk release/out/relay-wear.apk
-          "${ANDROID_HOME}/build-tools/36.0.0/apksigner" \
-            verify --verbose --print-certs release/out/relay-wear.apk
-          node scripts/scan-apk-secrets.mjs --apk release/out/relay-wear.apk
+          xcodebuild \
+            -project apple-watch/RelayWatch.xcodeproj \
+            -scheme RelayWatch \
+            -configuration Release \
+            -destination 'generic/platform=watchOS' \
+            -derivedDataPath "${RUNNER_TEMP}/relay-watch-derived-data" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
       - name: Build and sign the bridge and Mac app
         run: |
           pnpm build:bridge-sea
@@ -170,24 +147,20 @@ jobs:
           node scripts/create-release-manifest.mjs \
             --artifacts release/out \
             --tag "v${RELAY_VERSION}" \
-            --watch-version-code "${RELAY_WATCH_VERSION_CODE}" \
             --codex-min "${CODEX_MIN_VERSION}" \
             --codex-max "${CODEX_MAX_VERSION}" \
             --output release/out/release-payload.json
           node scripts/sign-release.mjs \
             --payload release/out/release-payload.json \
             --output release/out/release-manifest.json
-          APKSIGNER_PATH="${ANDROID_HOME}/build-tools/36.0.0/apksigner" \
-            node scripts/verify-release.mjs \
+          node scripts/verify-release.mjs \
             --manifest release/out/release-manifest.json \
             --artifacts release/out \
             --tag "v${RELAY_VERSION}" \
-            --public-key-base64 "${RELAY_RELEASE_PUBLIC_KEY_BASE64}" \
-            --verify-apk-signature
+            --public-key-base64 "${RELAY_RELEASE_PUBLIC_KEY_BASE64}"
           cd release/out
           shasum -a 256 \
             Relay.dmg \
-            relay-wear.apk \
             "Relay-${RELAY_VERSION}.tar.gz" \
             LICENSE \
             NOTICE \
@@ -230,7 +203,6 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release/out/Relay.dmg
-            release/out/relay-wear.apk
             release/out/Relay-*.tar.gz
             release/out/SHA256SUMS
             release/out/release-manifest.json
@@ -246,9 +218,7 @@ jobs:
         if: always()
         run: |
           security delete-keychain "${RUNNER_TEMP}/relay-signing/relay.keychain-db" || true
-          rm -f \
-            "${RUNNER_TEMP}/relay-signing/developer-id.p12" \
-            "${RUNNER_TEMP}/relay-signing/relay-android.jks"
+          rm -f "${RUNNER_TEMP}/relay-signing/developer-id.p12"
 
   deploy-pages:
     name: Publish signed Sparkle feeds

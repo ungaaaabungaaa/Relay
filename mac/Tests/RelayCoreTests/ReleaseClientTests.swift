@@ -4,19 +4,16 @@ import Testing
 @testable import RelayCore
 
 @Test
-func bundledReleaseMetadataProvidesTheExpectedApkVersion() throws {
-    let data = Data(
-        #"{"version":"0.2.0-beta.1","watchVersionCode":20001,"apiVersion":1}"#.utf8
-    )
+func bundledReleaseMetadataProvidesTheExpectedVersion() throws {
+    let data = Data(#"{"version":"0.2.0-beta.1","apiVersion":1}"#.utf8)
 
     let metadata = try BundledReleaseMetadata.decode(data)
 
     #expect(metadata.version == "0.2.0-beta.1")
-    #expect(metadata.watchVersionCode == 20_001)
     #expect(metadata.apiVersion == 1)
     #expect(throws: BundledReleaseMetadataError.invalid) {
         try BundledReleaseMetadata.decode(
-            Data(#"{"version":"","watchVersionCode":0,"apiVersion":2}"#.utf8)
+            Data(#"{"version":"","apiVersion":2}"#.utf8)
         )
     }
 }
@@ -26,7 +23,7 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
     let signingKey = Curve25519.Signing.PrivateKey()
     let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
     let payload = ReleaseManifestPayload(
-        schemaVersion: 1,
+        schemaVersion: 2,
         tag: "v1.1.0",
         version: "1.1.0",
         license: "Apache-2.0",
@@ -34,12 +31,6 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
             version: "1.1.0",
             artifact: "Relay.dmg",
             architecture: "arm64"
-        ),
-        watch: ReleaseWatch(
-            versionName: "1.1.0",
-            versionCode: 10100,
-            artifact: "relay-wear.apk",
-            minimumWearOS: 3
         ),
         codex: CodexCompatibility(
             minimumVersion: "0.144.0",
@@ -51,13 +42,6 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
                 version: "1.1.0",
                 architecture: "arm64",
                 sha256: String(repeating: "a", count: 64),
-                signed: true
-            ),
-            ReleaseArtifact(
-                name: "relay-wear.apk",
-                version: "1.1.0",
-                architecture: "universal",
-                sha256: String(repeating: "b", count: 64),
                 signed: true
             ),
         ]
@@ -72,6 +56,21 @@ func releaseClientVerifiesSignedManifestAndRejectsDowngrades() throws {
     let data = try JSONEncoder().encode(manifest)
 
     #expect(try client.verifyManifest(data, currentVersion: "1.0.0") == payload)
+    var legacyPayload = payload
+    legacyPayload.schemaVersion = 1
+    let legacySignature = try signingKey.signature(
+        for: ReleaseClient.signingData(for: legacyPayload)
+    )
+    let legacyManifest = SignedReleaseManifest(
+        payload: legacyPayload,
+        signature: legacySignature.base64EncodedString()
+    )
+    #expect(throws: ReleaseClientError.invalidManifest) {
+        try client.verifyManifest(
+            JSONEncoder().encode(legacyManifest),
+            currentVersion: "1.0.0"
+        )
+    }
     #expect(throws: ReleaseClientError.notNewer) {
         try client.verifyManifest(data, currentVersion: "1.1.0")
     }
@@ -86,7 +85,7 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
     let signingKey = Curve25519.Signing.PrivateKey()
     let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
     let originalPayload = ReleaseManifestPayload(
-        schemaVersion: 1,
+        schemaVersion: 2,
         tag: "v2.0.0",
         version: "2.0.0",
         license: "Apache-2.0",
@@ -94,12 +93,6 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
             version: "2.0.0",
             artifact: "Relay.dmg",
             architecture: "arm64"
-        ),
-        watch: ReleaseWatch(
-            versionName: "2.0.0",
-            versionCode: 20000,
-            artifact: "relay-wear.apk",
-            minimumWearOS: 3
         ),
         codex: CodexCompatibility(
             minimumVersion: "0.144.0",
@@ -112,12 +105,11 @@ func releaseClientRejectsTamperingAndPreservesTheInstalledArtifact() throws {
     )
     let changed = SignedReleaseManifest(
         payload: ReleaseManifestPayload(
-            schemaVersion: 1,
+            schemaVersion: 2,
             tag: "v2.0.1",
             version: "2.0.1",
             license: originalPayload.license,
             mac: originalPayload.mac,
-            watch: originalPayload.watch,
             codex: originalPayload.codex,
             artifacts: []
         ),
