@@ -23,6 +23,14 @@ import { createReleasePayload } from "../../scripts/create-release-manifest.mjs"
 
 const VERSION = "1.2.3";
 const TAG = `v${VERSION}`;
+const REQUIRED_ARTIFACT_NAMES = [
+  "Relay.dmg",
+  `Relay-${VERSION}.tar.gz`,
+  "LICENSE",
+  "NOTICE",
+  "THIRD_PARTY_NOTICES.md",
+  "COMPATIBILITY.md",
+];
 
 test("accepts a signed, internally consistent Apple silicon release", async () => {
   await withFixture(async ({ directory, manifest, publicKey }) => {
@@ -43,14 +51,7 @@ test("accepts a signed, internally consistent Apple silicon release", async () =
     assert.equal(result.mac.architecture, "arm64");
     assert.deepEqual(
       generated.artifacts.map(({ name }) => name),
-      [
-        "Relay.dmg",
-        `Relay-${VERSION}.tar.gz`,
-        "LICENSE",
-        "NOTICE",
-        "THIRD_PARTY_NOTICES.md",
-        "COMPATIBILITY.md",
-      ],
+      REQUIRED_ARTIFACT_NAMES,
     );
     assert.deepEqual(result.codex, {
       minimumVersion: "0.144.0",
@@ -149,6 +150,27 @@ test("rejects schema version 1", async () => {
   );
 });
 
+test("rejects a signed payload containing the retired watch key", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /unsupported release payload property watch/,
+      );
+    },
+    (payload) => {
+      payload.watch = {
+        artifact: "retired-watch-package",
+      };
+    },
+  );
+});
+
 test("rejects a seventh release artifact", async () => {
   await withFixture(
     async ({ directory, manifest, publicKey }) => {
@@ -170,6 +192,48 @@ test("rejects a seventh release artifact", async () => {
         sha256: "0".repeat(64),
         signed: false,
       });
+    },
+  );
+});
+
+test("rejects duplicate release artifact names", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /artifact names must be unique/,
+      );
+    },
+    (payload) => {
+      payload.artifacts[payload.artifacts.length - 1] = {
+        ...payload.artifacts.find(({ name }) => name === "LICENSE"),
+      };
+    },
+  );
+});
+
+test("rejects a wrong artifact name in a six-entry release", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /required artifact COMPATIBILITY\.md is missing/,
+      );
+    },
+    (payload) => {
+      payload.artifacts.find(
+        ({ name }) => name === "COMPATIBILITY.md",
+      ).name = "README.md";
     },
   );
 });

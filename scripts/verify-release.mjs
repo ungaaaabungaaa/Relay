@@ -13,6 +13,15 @@ const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const CODEX_RANGE_PATTERN = /^\d+\.\d+\.(?:\d+|x)$/;
+const RELEASE_PAYLOAD_PROPERTIES = new Set([
+  "schemaVersion",
+  "tag",
+  "version",
+  "license",
+  "mac",
+  "codex",
+  "artifacts",
+]);
 
 export function canonicalizeManifestPayload(payload) {
   return JSON.stringify(sortRecursively(payload));
@@ -109,6 +118,21 @@ export async function verifyRelease({
 }
 
 function assertReleaseShape(payload, expectedTag) {
+  const payloadProperties = Object.keys(payload);
+  const unsupportedProperty = payloadProperties.find(
+    (property) => !RELEASE_PAYLOAD_PROPERTIES.has(property),
+  );
+  if (unsupportedProperty) {
+    throw new Error(
+      `unsupported release payload property ${unsupportedProperty}`,
+    );
+  }
+  const missingProperty = [...RELEASE_PAYLOAD_PROPERTIES].find(
+    (property) => !Object.hasOwn(payload, property),
+  );
+  if (missingProperty) {
+    throw new Error(`release payload property ${missingProperty} is missing`);
+  }
   if (payload.schemaVersion !== 2) {
     throw new Error("unsupported release schema version");
   }

@@ -103,6 +103,32 @@ public struct ReleaseClient: Sendable {
         _ data: Data,
         currentVersion: String
     ) throws -> ReleaseManifestPayload {
+        let payloadKeys: Set<String>
+        do {
+            guard
+                let document = try JSONSerialization.jsonObject(with: data)
+                    as? [String: Any],
+                let rawPayload = document["payload"] as? [String: Any]
+            else {
+                throw ReleaseClientError.invalidManifest
+            }
+            payloadKeys = Set(rawPayload.keys)
+        } catch {
+            throw ReleaseClientError.invalidManifest
+        }
+        let requiredPayloadKeys: Set<String> = [
+            "schemaVersion",
+            "tag",
+            "version",
+            "license",
+            "mac",
+            "codex",
+            "artifacts",
+        ]
+        guard payloadKeys == requiredPayloadKeys else {
+            throw ReleaseClientError.invalidManifest
+        }
+
         let manifest: SignedReleaseManifest
         do {
             manifest = try JSONDecoder().decode(SignedReleaseManifest.self, from: data)
@@ -119,6 +145,15 @@ public struct ReleaseClient: Sendable {
         else {
             throw ReleaseClientError.invalidSignature
         }
+        let requiredArtifacts: [String: (architecture: String, signed: Bool)] = [
+            "Relay.dmg": ("arm64", true),
+            "Relay-\(manifest.payload.version).tar.gz": ("source", false),
+            "LICENSE": ("text", false),
+            "NOTICE": ("text", false),
+            "THIRD_PARTY_NOTICES.md": ("text", false),
+            "COMPATIBILITY.md": ("text", false),
+        ]
+        let artifactNames = manifest.payload.artifacts.map(\.name)
         guard
             manifest.payload.schemaVersion == 2,
             manifest.payload.tag == "v\(manifest.payload.version)",
@@ -130,17 +165,20 @@ public struct ReleaseClient: Sendable {
             Self.isCodexVersion(manifest.payload.codex.maximumVersion),
             let available = SemanticVersion(manifest.payload.version),
             let current = SemanticVersion(currentVersion),
+            manifest.payload.artifacts.count == requiredArtifacts.count,
+            Set(artifactNames).count == artifactNames.count,
+            Set(artifactNames) == Set(requiredArtifacts.keys),
             manifest.payload.artifacts.allSatisfy({
-                $0.version == manifest.payload.version
+                guard let required = requiredArtifacts[$0.name] else {
+                    return false
+                }
+                return $0.version == manifest.payload.version
+                    && $0.architecture == required.architecture
+                    && $0.signed == required.signed
                     && $0.sha256.range(
                         of: #"^[a-f0-9]{64}$"#,
                         options: .regularExpression
                     ) != nil
-            }),
-            manifest.payload.artifacts.contains(where: {
-                $0.name == "Relay.dmg"
-                    && $0.architecture == "arm64"
-                    && $0.signed
             })
         else {
             if manifest.payload.mac.architecture != "arm64"
