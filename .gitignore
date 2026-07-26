@@ -17,3 +17,4 @@ release/out/
 coverage/
 *.log
 .superpowers/
+.worktrees/
