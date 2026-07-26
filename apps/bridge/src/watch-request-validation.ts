@@ -6,18 +6,24 @@ export function validateApprovalDecision(
   approval: RelayApproval,
   body: unknown,
 ): { decision: "approve" | "deny" } {
+  const decision = approvalDecision(body);
   const input = asObject(body, "invalid approval decision");
-  if (input.decision !== "approve" && input.decision !== "deny") {
-    throw new Error("invalid approval decision");
-  }
   if (
-    input.decision === "approve" &&
+    decision === "approve" &&
     approval.risk === "dangerous" &&
     input.dangerousConfirmation !== true
   ) {
     throw new Error("dangerous confirmation required");
   }
-  return { decision: input.decision };
+  return { decision };
+}
+
+export function approvalDecision(body: unknown): "approve" | "deny" {
+  const input = asObject(body, "invalid approval decision");
+  if (input.decision !== "approve" && input.decision !== "deny") {
+    throw new Error("invalid approval decision");
+  }
+  return input.decision;
 }
 
 export function validateQuestionAnswers(

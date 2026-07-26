@@ -475,27 +475,29 @@ describe("bridge API", () => {
       publicKey.export({ type: "spki", format: "pem" }).toString(),
     );
     let approvalCalls = 0;
+    let approvals = [
+      {
+        id: "approval-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+        kind: "command" as const,
+        risk: "normal" as const,
+        riskReasons: [],
+        command: "pnpm test",
+        cwd: "/tmp/relay",
+        reason: null,
+        startedAtMs: 1,
+      },
+    ];
     const handler = createRequestHandler({
       store,
       adapter: {
         ...fakeAdapter,
-        approvals: () => [
-          {
-            id: "approval-1",
-            threadId: "thread-1",
-            turnId: "turn-1",
-            itemId: "item-1",
-            kind: "command" as const,
-            risk: "normal" as const,
-            riskReasons: [],
-            command: "pnpm test",
-            cwd: "/tmp/relay",
-            reason: null,
-            startedAtMs: 1,
-          },
-        ],
+        approvals: () => approvals,
         answerApproval: () => {
           approvalCalls += 1;
+          approvals = [];
         },
       },
       workspacePolicy: new WorkspacePolicy([]),
@@ -538,5 +540,70 @@ describe("bridge API", () => {
     assert.equal(second.status, 200);
     assert.deepEqual(await second.json(), { ok: true });
     assert.equal(approvalCalls, 1);
+  });
+
+  it("returns the first question result after the pending question is consumed", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const store = new InMemorySecurityStore();
+    store.addDevice(
+      "watch",
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    let answerCalls = 0;
+    let questions = [
+      {
+        id: "question-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+        questions: [
+          {
+            id: "release-channel",
+            header: "Release channel",
+            question: "Choose one",
+            options: [{ label: "Beta", description: "Test build" }],
+          },
+        ],
+      },
+    ];
+    const handler = createRequestHandler({
+      store,
+      adapter: {
+        ...fakeAdapter,
+        questions: () => questions,
+        answerQuestion: () => {
+          answerCalls += 1;
+          questions = [];
+        },
+      },
+      workspacePolicy: new WorkspacePolicy([]),
+    });
+    const body = Buffer.from(
+      JSON.stringify({ answers: { "release-channel": ["Beta"] } }),
+    );
+
+    const first = await handler(
+      signedMutation(
+        privateKey,
+        "/v1/questions/question-1",
+        body,
+        "question-retry-0001",
+        "question-retry-first-nonce",
+      ),
+    );
+    const second = await handler(
+      signedMutation(
+        privateKey,
+        "/v1/questions/question-1",
+        body,
+        "question-retry-0001",
+        "question-retry-second-nonce",
+      ),
+    );
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.deepEqual(await second.json(), { ok: true });
+    assert.equal(answerCalls, 1);
   });
 });

@@ -19,6 +19,7 @@ import {
 import type { Transcriber } from "./transcription/transcriber.ts";
 import { transcribeAudio } from "./transcription/transcriber.ts";
 import {
+  approvalDecision,
   validateApprovalDecision,
   validateInstructionInput,
   validateNewTaskInput,
@@ -227,22 +228,29 @@ export function createRequestHandler(options: HandlerOptions) {
         const body = await parseJson(request);
         const approval = url.pathname.match(/^\/v1\/approvals\/([^/]+)$/);
         if (approval?.[1] && options.adapter.answerApproval) {
+          const requestedDecision = approvalDecision(body);
           const pending = options.adapter
             .approvals()
             .find((item) => item.id === approval[1]);
-          if (!pending) throw new Error("expired approval");
-          const decision = validateApprovalDecision(pending, body);
-          const approve = decision.decision === "approve";
+          if (pending) validateApprovalDecision(pending, body);
           return json(
             await actions.run(
               {
                 deviceId,
                 idempotencyKey,
-                action: `approval.${approve ? "approve" : "deny"}.${pending?.risk ?? "dangerous"}`,
+                action: `approval.${requestedDecision}`,
                 target: approval[1],
               },
               () => {
-                options.adapter.answerApproval?.(approval[1], approve);
+                const live = pending ?? options.adapter
+                  .approvals()
+                  .find((item) => item.id === approval[1]);
+                if (!live) throw new Error("expired approval");
+                const decision = validateApprovalDecision(live, body);
+                options.adapter.answerApproval?.(
+                  approval[1],
+                  decision.decision === "approve",
+                );
                 return { ok: true };
               },
             ),
@@ -253,8 +261,7 @@ export function createRequestHandler(options: HandlerOptions) {
           const pending = options.adapter
             .questions()
             .find((item) => item.id === question[1]);
-          if (!pending) throw new Error("expired question");
-          const answers = validateQuestionAnswers(pending, body);
+          if (pending) validateQuestionAnswers(pending, body);
           return json(
             await actions.run(
               {
@@ -264,6 +271,11 @@ export function createRequestHandler(options: HandlerOptions) {
                 target: question[1],
               },
               () => {
+                const live = pending ?? options.adapter
+                  .questions()
+                  .find((item) => item.id === question[1]);
+                if (!live) throw new Error("expired question");
+                const answers = validateQuestionAnswers(live, body);
                 options.adapter.answerQuestion?.(
                   question[1],
                   answers,
