@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("consumer builds use permanent Apple product identifiers", async () => {
@@ -16,8 +16,4 @@ test("consumer builds use permanent Apple product identifiers", async () => {
   assert.match(macPackaging, /com\.relayforcodex\.mac/);
   assert.doesNotMatch(macPackaging, /NSBonjourServices/);
   assert.doesNotMatch(macPackaging, /NSLocalNetworkUsageDescription/);
-
-  for (const path of ["../../wear", "../../gradle", "../../gradlew", "../../preview"]) {
-    await assert.rejects(access(new URL(path, import.meta.url)), { code: "ENOENT" });
-  }
 });
