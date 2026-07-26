@@ -7,7 +7,7 @@ func cloudHostTunnelAuthenticatesInHeadersAndDecodesControlAndEnvelope() async t
     let recorder = TunnelConnectorRecorder(messages: [
         Data(
             #"""
-            {"type":"pairing_request","requestId":"request-1","fingerprint":"WATCH FP","signingPublicKey":"signing","agreementPublicKey":"agreement","expiresAt":120000,"metadata":{"platform":"wear-os","manufacturer":"Samsung","model":"Watch6","osVersion":"5","appVersion":"1","screenShape":"round"}}
+            {"type":"pairing_request","requestId":"request-1","fingerprint":"WATCH FP","signingPublicKey":"signing","agreementPublicKey":"agreement","expiresAt":120000,"metadata":{"platform":"watch-os","manufacturer":"Apple","model":"Apple Watch","osVersion":"10","appVersion":"0.2.0","screenShape":"rounded-rect"}}
             """#.utf8
         ),
         Data(
@@ -33,7 +33,7 @@ func cloudHostTunnelAuthenticatesInHeadersAndDecodesControlAndEnvelope() async t
         return
     }
     #expect(pairing.id == "request-1")
-    #expect(pairing.metadata.model == "Watch6")
+    #expect(pairing.metadata.model == "Apple Watch")
     guard case .envelope(let envelope) = events[2] else {
         Issue.record("Expected encrypted envelope")
         return

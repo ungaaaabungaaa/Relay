@@ -97,18 +97,18 @@ it("exposes pairing metadata only through a token and activates only after admin
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           code: created.code,
-          name: "Pixel Watch",
+          name: "Apple Watch",
           publicKey: publicKey.export({
             type: "spki",
             format: "pem",
           }).toString(),
           metadata: {
-            platform: "wear-os",
-            manufacturer: "Google",
-            model: "Pixel Watch",
-            osVersion: "4",
+            platform: "watch-os",
+            manufacturer: "Apple",
+            model: "Apple Watch",
+            osVersion: "10",
             appVersion: "0.2.0",
-            screenShape: "round",
+            screenShape: "rounded-rect",
           },
         }),
       },
@@ -129,7 +129,7 @@ it("exposes pairing metadata only through a token and activates only after admin
   );
   const pendingDevices = (await pendingAdmin.json()).pairings;
   assert.equal(pendingDevices[0].id, pending.pairingId);
-  assert.equal(pendingDevices[0].metadata.model, "Pixel Watch");
+  assert.equal(pendingDevices[0].metadata.model, "Apple Watch");
   assert.equal("publicKey" in pendingDevices[0], false);
 
   const approval = await admin(
@@ -147,5 +147,5 @@ it("exposes pairing metadata only through a token and activates only after admin
   const approved = await approvedStatus.json();
   assert.equal(approved.state, "approved");
   assert.equal(approved.origin, "https://relay.example.ts.net");
-  assert.equal(store.getDevice(approved.deviceId)?.metadata?.platform, "wear-os");
+  assert.equal(store.getDevice(approved.deviceId)?.metadata?.platform, "watch-os");
 });

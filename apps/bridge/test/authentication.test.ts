@@ -47,7 +47,7 @@ describe("signed requests", () => {
     );
   });
 
-  it("accepts Android Keystore compatible P-256 signatures", () => {
+  it("accepts CryptoKit-compatible P-256 signatures", () => {
     const { publicKey, privateKey } = generateKeyPairSync("ec", {
       namedCurve: "prime256v1",
     });

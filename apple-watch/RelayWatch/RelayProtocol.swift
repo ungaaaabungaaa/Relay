@@ -102,7 +102,7 @@ struct RelayDeviceMetadata: Encodable, Sendable {
     let model: String
     let osVersion: String
     let appVersion: String
-    let screenShape = "round"
+    let screenShape = "rounded-rect"
 }
 
 struct RelayTunnelRouting: Codable, Equatable, Sendable {

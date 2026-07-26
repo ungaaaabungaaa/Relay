@@ -82,12 +82,12 @@ func approvedCloudPairingEncryptsWatchCredentialForWatchOnly() throws {
             .base64EncodedString(),
         expiresAt: 120_000,
         metadata: RelayCloudDeviceMetadata(
-            platform: "wear-os",
-            manufacturer: "Samsung",
-            model: "Watch6",
-            osVersion: "5",
-            appVersion: "1",
-            screenShape: "round"
+            platform: "watch-os",
+            manufacturer: "Apple",
+            model: "Apple Watch",
+            osVersion: "10",
+            appVersion: "0.2.0",
+            screenShape: "rounded-rect"
         )
     )
     let prepared = try RelayCloudPairingMaterial.prepare(

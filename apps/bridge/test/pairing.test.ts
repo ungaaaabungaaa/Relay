@@ -9,14 +9,14 @@ describe("watch pairing", () => {
     const pairing = new PairingService(store, () => 1_000);
     const code = pairing.createCode();
     assert.match(code, /^[A-Z2-9]{6}$/);
-    const device = pairing.exchange(code, "Watch6", "PUBLIC", 2_000);
-    assert.equal(device.name, "Watch6");
-    assert.throws(() => pairing.exchange(code, "Watch6", "PUBLIC", 2_001), /invalid pairing code/);
+    const device = pairing.exchange(code, "Apple Watch", "PUBLIC", 2_000);
+    assert.equal(device.name, "Apple Watch");
+    assert.throws(() => pairing.exchange(code, "Apple Watch", "PUBLIC", 2_001), /invalid pairing code/);
   });
 
   it("rejects an expired code", () => {
     const pairing = new PairingService(new InMemorySecurityStore(), () => 1_000);
     const code = pairing.createCode();
-    assert.throws(() => pairing.exchange(code, "Watch6", "PUBLIC", 302_000), /expired pairing code/);
+    assert.throws(() => pairing.exchange(code, "Apple Watch", "PUBLIC", 302_000), /expired pairing code/);
   });
 });

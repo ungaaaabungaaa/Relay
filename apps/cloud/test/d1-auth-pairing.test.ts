@@ -65,7 +65,14 @@ describe("D1 authentication and pairing state", () => {
         .digest("base64url"),
       signingPublicKey: "signing",
       agreementPublicKey: "agreement",
-      metadata: {},
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
     });
 
     assert.deepEqual(
@@ -188,7 +195,14 @@ describe("D1 authentication and pairing state", () => {
       requestFingerprintHash: "fingerprint-hash",
       signingPublicKey: "signing-public-key",
       agreementPublicKey: "agreement-public-key",
-      metadata: { manufacturer: "Samsung", model: "Watch6" },
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
       expiresAt: 3_000,
     });
 
@@ -241,7 +255,14 @@ describe("D1 authentication and pairing state", () => {
       requestFingerprintHash: "fingerprint-hash",
       signingPublicKey: "signing-public-key",
       agreementPublicKey: "agreement-public-key",
-      metadata: {},
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
       expiresAt: 3_000,
     });
     await repo.denyPairing({
@@ -279,7 +300,14 @@ describe("D1 authentication and pairing state", () => {
         requestFingerprintHash: "fingerprint",
         signingPublicKey: "signing",
         agreementPublicKey: "agreement",
-        metadata: {},
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
         expiresAt: 6_000,
       }),
       /pairing failed/i,

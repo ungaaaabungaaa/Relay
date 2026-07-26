@@ -117,7 +117,14 @@ describe("D1-backed Worker flow", () => {
             fingerprint: "watch-fingerprint",
             signingPublicKey: "signing",
             agreementPublicKey: "agreement",
-            metadata: {},
+            metadata: {
+              platform: "watch-os",
+              manufacturer: "Apple",
+              model: "Apple Watch",
+              osVersion: "10",
+              appVersion: "0.2.0",
+              screenShape: "rounded-rect",
+            },
           }),
         },
       );
@@ -260,7 +267,14 @@ describe("D1-backed Worker flow", () => {
           fingerprint: "WATCH FP",
           signingPublicKey: "watch-signing-key",
           agreementPublicKey: "watch-agreement-key",
-          metadata: { platform: "wear", model: "Watch6" },
+          metadata: {
+            platform: "watch-os",
+            manufacturer: "Apple",
+            model: "Apple Watch",
+            osVersion: "10",
+            appVersion: "0.2.0",
+            screenShape: "rounded-rect",
+          },
         }),
       },
     );
@@ -274,7 +288,14 @@ describe("D1-backed Worker flow", () => {
         signingPublicKey: "watch-signing-key",
         agreementPublicKey: "watch-agreement-key",
         expiresAt: 121_000,
-        metadata: { platform: "wear", model: "Watch6" },
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
       },
     ]);
 

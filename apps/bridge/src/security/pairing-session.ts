@@ -280,8 +280,8 @@ export class PairingSessionService {
 
   private validMetadata(metadata: DeviceMetadata) {
     return (
-      (metadata.platform === "wear-os" || metadata.platform === "watch-os") &&
-      (metadata.screenShape === "round" || metadata.screenShape === "square") &&
+      metadata.platform === "watch-os" &&
+      metadata.screenShape === "rounded-rect" &&
       [
         metadata.manufacturer,
         metadata.model,

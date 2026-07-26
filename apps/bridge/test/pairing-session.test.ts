@@ -5,12 +5,12 @@ import { PairingSessionService } from "../src/security/pairing-session.ts";
 import { InMemorySecurityStore } from "../src/security/store.ts";
 
 const metadata = {
-  platform: "wear-os",
-  manufacturer: "Google",
-  model: "Pixel Watch",
-  osVersion: "4",
+  platform: "watch-os",
+  manufacturer: "Apple",
+  model: "Apple Watch",
+  osVersion: "10",
   appVersion: "0.2.0",
-  screenShape: "round",
+  screenShape: "rounded-rect",
 } as const;
 
 describe("secure pairing sessions", () => {
@@ -39,7 +39,7 @@ describe("secure pairing sessions", () => {
       "192.0.2.10",
       {
         code: session.code,
-        name: "Pixel Watch",
+        name: "Apple Watch",
         publicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
         metadata,
       },
@@ -53,12 +53,12 @@ describe("secure pairing sessions", () => {
       metadata: item.metadata,
     })), [{
       id: pending.pairingId,
-      name: "Pixel Watch",
+      name: "Apple Watch",
       metadata,
     }]);
 
     const approved = service.approve(pending.pairingId);
-    assert.equal(approved.name, "Pixel Watch");
+    assert.equal(approved.name, "Apple Watch");
     assert.deepEqual(approved.metadata, metadata);
     assert.equal(store.listDevices().length, 1);
     assert.deepEqual(service.poll(session.discoveryToken, pending.pollToken), {
@@ -120,7 +120,7 @@ describe("secure pairing sessions", () => {
         () =>
           service.submit(session.discoveryToken, "192.0.2.10", {
             code: "WRONG2",
-            name: "Pixel Watch",
+            name: "Apple Watch",
             publicKey: publicKeyPem,
             metadata,
           }),
@@ -132,7 +132,7 @@ describe("secure pairing sessions", () => {
       () =>
         service.submit(session.discoveryToken, "192.0.2.10", {
           code: session.code,
-          name: "Pixel Watch",
+          name: "Apple Watch",
           publicKey: publicKeyPem,
           metadata,
         }),
@@ -167,7 +167,7 @@ describe("secure pairing sessions", () => {
               `192.0.2.${source + 1}`,
               {
                 code: "WRONG2",
-                name: "Pixel Watch",
+                name: "Apple Watch",
                 publicKey: publicKeyPem,
                 metadata,
               },
@@ -181,7 +181,7 @@ describe("secure pairing sessions", () => {
       () =>
         service.submit(session.discoveryToken, "192.0.2.100", {
           code: session.code,
-          name: "Pixel Watch",
+          name: "Apple Watch",
           publicKey: publicKeyPem,
           metadata,
         }),

@@ -26,16 +26,16 @@ func approvedCloudDevicesRestoreFromKeychainWithoutLoggingRootKeys() throws {
         accountId: "account-1",
         hostId: "host-1",
         deviceId: "watch-1",
-        name: "Watch6",
+        name: "Apple Watch",
         signingPublicKey: "signing",
         rootKey: "root-key-material",
         metadata: AdminDeviceMetadata(
-            platform: "wear-os",
-            manufacturer: "Samsung",
-            model: "Watch6",
-            osVersion: "5",
-            appVersion: "1",
-            screenShape: "round"
+            platform: "watch-os",
+            manufacturer: "Apple",
+            model: "Apple Watch",
+            osVersion: "10",
+            appVersion: "0.2.0",
+            screenShape: "rounded-rect"
         )
     )
 

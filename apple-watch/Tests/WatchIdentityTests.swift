@@ -121,6 +121,43 @@ func cloudPairingPayloadOpensOnlyForTheExpectedRequestAndHost() throws {
 }
 
 @Test
+func watchMetadataUsesWatchOSAndRoundedRectangle() throws {
+    let data = try JSONEncoder().encode(
+        RelayDeviceMetadata(
+            model: "Apple Watch",
+            osVersion: "10",
+            appVersion: "0.2.0"
+        )
+    )
+    let object = try #require(
+        JSONSerialization.jsonObject(with: data) as? [String: String]
+    )
+
+    #expect(object["platform"] == "watch-os")
+    #expect(object["manufacturer"] == "Apple")
+    #expect(object["model"] == "Apple Watch")
+    #expect(object["screenShape"] == "rounded-rect")
+}
+
+@Test
+func pairingCompletionOpensTheSharedEncryptedFixture() throws {
+    let payload = RelayCloudPairingPayloadEnvelope(
+        version: 1,
+        nonce: "BwcHBwcHBwcHBwcH",
+        ciphertext: "Ipns_AseincDozOvrOAShV5XcyT0IcNnsqx5_4ACyn1hheZdO2yVENqvqHewusDboJLNJrXksCO4QF2L4ULZIrO0xtPQeZir4ejLnlNgyks06MUKP96sllHjC0kg-fTFUR69DnmQGHBd2uOniuIBj7C4Tu6AvsVnfqTYcO6xXJx855wfqzOAhKkTq1GUsQywQ5spui_x5IOsMHC3maU24urmS2n5eMw"
+    )
+    let credential = try relayOpenPairingPayload(
+        payload,
+        requestID: "request-1",
+        hostID: "host-1",
+        rootKey: SymmetricKey(data: Data(repeating: 9, count: 32))
+    )
+
+    #expect(credential.deviceId == "watch-1")
+    #expect(credential.credential == "watch-secret")
+}
+
+@Test
 func cloudReplayWindowRejectsSequencesAcrossRestarts() throws {
     var restored = RelayCloudReplayWindow(
         highestSequences: ["host-1": 7]

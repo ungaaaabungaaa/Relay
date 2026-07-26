@@ -10,12 +10,12 @@ export type StoredDevice = {
 };
 
 export type DeviceMetadata = {
-  platform: "wear-os" | "watch-os";
+  platform: "watch-os";
   manufacturer: string;
   model: string;
   osVersion: string;
   appVersion: string;
-  screenShape: "round" | "square";
+  screenShape: "rounded-rect";
 };
 
 export type StoredPendingPairing = {

@@ -219,12 +219,12 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
           typeof body.rootKey !== "string" ||
           rootKey.byteLength !== 32 ||
           !metadata ||
-          !["wear-os", "watch-os"].includes(String(metadata.platform)) ||
+          metadata.platform !== "watch-os" ||
           typeof metadata.manufacturer !== "string" ||
           typeof metadata.model !== "string" ||
           typeof metadata.osVersion !== "string" ||
           typeof metadata.appVersion !== "string" ||
-          !["round", "square"].includes(String(metadata.screenShape))
+          metadata.screenShape !== "rounded-rect"
         ) {
           return json({ error: "invalid request" }, 400);
         }

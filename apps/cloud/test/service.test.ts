@@ -152,7 +152,14 @@ describe("cloud pairing", () => {
     const request = await cloud.requestPairing(pairing.token, {
       publicKey: "watch-public-key",
       fingerprint: "WATCH FP",
-      metadata: { platform: "wear", model: "Pixel Watch" },
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
     });
     await cloud.denyPairing(account.id, host.id, pairing.token, request.id);
     assert.equal(store.devices.size, 0);
@@ -163,7 +170,14 @@ describe("cloud pairing", () => {
       cloud.requestPairing(expired.token, {
         publicKey: "watch-public-key",
         fingerprint: "WATCH FP",
-        metadata: { platform: "wear" },
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
       }),
       /pairing failed/i,
     );

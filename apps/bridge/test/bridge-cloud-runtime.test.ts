@@ -33,18 +33,18 @@ describe("bridge cloud runtime", () => {
       accountId: "account-1",
       hostId: "host-1",
       deviceId: "watch-1",
-      name: "Watch6",
+      name: "Apple Watch",
       signingPublicKey: signing.publicKey
         .export({ type: "spki", format: "pem" })
         .toString(),
       rootKey: Buffer.from(rootBytes).toString("base64url"),
       metadata: {
-        platform: "wear-os",
-        manufacturer: "Samsung",
-        model: "Watch6",
-        osVersion: "5",
-        appVersion: "1",
-        screenShape: "round",
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
       },
     });
 
@@ -91,7 +91,7 @@ describe("bridge cloud runtime", () => {
     );
 
     await runtime.receive(envelope);
-    assert.equal(store.getDevice("watch-1")?.metadata?.model, "Watch6");
+    assert.equal(store.getDevice("watch-1")?.metadata?.model, "Apple Watch");
     const [response] = await runtime.drainEvents();
     assert.ok(response);
     const inner = await decryptRelayEnvelope(response, rootKey);

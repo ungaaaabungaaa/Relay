@@ -29,7 +29,7 @@ function createOptions() {
   store.addDevice(
     "watch-1",
     publicKey.export({ type: "spki", format: "pem" }).toString(),
-    "Galaxy Watch6",
+    "Apple Watch",
     123,
   );
   const workspacePolicy = new WorkspacePolicy([]);
@@ -114,7 +114,7 @@ describe("admin server", () => {
     });
 
     const devices = await (await handler(authorized("/v1/devices"))).json();
-    assert.equal(devices.devices[0].name, "Galaxy Watch6");
+    assert.equal(devices.devices[0].name, "Apple Watch");
     assert.equal("publicKey" in devices.devices[0], false);
     assert.equal(JSON.stringify(devices).includes("BEGIN PUBLIC KEY"), false);
 
@@ -212,16 +212,16 @@ describe("admin server", () => {
           accountId: "account-1",
           hostId: "host-1",
           deviceId: "watch-1",
-          name: "Galaxy Watch6",
+          name: "Apple Watch",
           signingPublicKey: "watch-signing-key",
           rootKey: Buffer.alloc(32, 7).toString("base64url"),
           metadata: {
-            platform: "wear-os",
-            manufacturer: "Samsung",
-            model: "Watch6",
-            osVersion: "5",
-            appVersion: "1",
-            screenShape: "round",
+            platform: "watch-os",
+            manufacturer: "Apple",
+            model: "Apple Watch",
+            osVersion: "10",
+            appVersion: "0.2.0",
+            screenShape: "rounded-rect",
           },
         }),
       }),

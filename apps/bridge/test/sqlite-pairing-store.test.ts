@@ -39,15 +39,15 @@ it("persists only hashed pairing secrets and device metadata across bridge resta
     "192.0.2.10",
     {
       code: session.code,
-      name: "Pixel Watch",
+      name: "Apple Watch",
       publicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
       metadata: {
-        platform: "wear-os",
-        manufacturer: "Google",
-        model: "Pixel Watch",
-        osVersion: "4",
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
         appVersion: "0.2.0",
-        screenShape: "round",
+        screenShape: "rounded-rect",
       },
     },
   );
@@ -55,12 +55,12 @@ it("persists only hashed pairing secrets and device metadata across bridge resta
   const approved = restarted.approve(pending.pairingId);
   const reopenedStore = new SqliteStore(databasePath);
   assert.deepEqual(reopenedStore.getDevice(approved.id)?.metadata, {
-    platform: "wear-os",
-    manufacturer: "Google",
-    model: "Pixel Watch",
-    osVersion: "4",
+    platform: "watch-os",
+    manufacturer: "Apple",
+    model: "Apple Watch",
+    osVersion: "10",
     appVersion: "0.2.0",
-    screenShape: "round",
+    screenShape: "rounded-rect",
   });
 
   const databaseBytes = await readFile(databasePath);

@@ -109,15 +109,15 @@ func adminClientListsAndApprovesPendingWatchMetadata() async throws {
                 {
                   "pairings":[{
                     "id":"pending-1",
-                    "name":"Pixel Watch",
+                    "name":"Apple Watch",
                     "fingerprint":"ABCD:1234",
                     "metadata":{
-                      "platform":"wear-os",
-                      "manufacturer":"Google",
-                      "model":"Pixel Watch",
-                      "osVersion":"4",
+                      "platform":"watch-os",
+                      "manufacturer":"Apple",
+                      "model":"Apple Watch",
+                      "osVersion":"10",
                       "appVersion":"0.2.0",
-                      "screenShape":"round"
+                      "screenShape":"rounded-rect"
                     },
                     "expiresAt":310000
                   }]
@@ -130,7 +130,7 @@ func adminClientListsAndApprovesPendingWatchMetadata() async throws {
                 {
                   "device":{
                     "id":"device-1",
-                    "name":"Pixel Watch",
+                    "name":"Apple Watch",
                     "fingerprint":"ABCD:1234",
                     "createdAt":10000,
                     "revokedAt":null
@@ -147,8 +147,8 @@ func adminClientListsAndApprovesPendingWatchMetadata() async throws {
     )
 
     let pending = try await client.pendingPairings()
-    #expect(pending.first?.metadata.platform == "wear-os")
-    #expect(pending.first?.metadata.model == "Pixel Watch")
+    #expect(pending.first?.metadata.platform == "watch-os")
+    #expect(pending.first?.metadata.model == "Apple Watch")
     let device = try await client.approvePairing(id: "pending-1")
     #expect(device.id == "device-1")
     #expect(await transport.requests.map(\.url?.path) == [
@@ -178,16 +178,16 @@ func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
             accountId: "account-1",
             hostId: "host-1",
             deviceId: "watch-1",
-            name: "Watch6",
+            name: "Apple Watch",
             signingPublicKey: "signing",
             rootKey: "root-key",
             metadata: AdminDeviceMetadata(
-                platform: "wear-os",
-                manufacturer: "Samsung",
-                model: "Watch6",
-                osVersion: "5",
-                appVersion: "1",
-                screenShape: "round"
+                platform: "watch-os",
+                manufacturer: "Apple",
+                model: "Apple Watch",
+                osVersion: "10",
+                appVersion: "0.2.0",
+                screenShape: "rounded-rect"
             )
         )
     )
