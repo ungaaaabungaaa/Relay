@@ -258,10 +258,16 @@ function snapshotJSONValue(value, ancestors) {
     throw new Error("value is not plain JSON data");
   }
 
+  const isArray = Array.isArray(value);
+  const expectedPrototype = isArray ? Array.prototype : Object.prototype;
+  if (Object.getPrototypeOf(value) !== expectedPrototype) {
+    throw new Error("value has a non-JSON prototype");
+  }
+
   ancestors.add(value);
   try {
     const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (Array.isArray(value)) {
+    if (isArray) {
       return snapshotJSONArray(descriptors, ancestors);
     }
     const snapshot = {};

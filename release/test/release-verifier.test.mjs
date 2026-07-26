@@ -282,16 +282,13 @@ test("rejects an unsigned envelope property added after signing", async () => {
   });
 });
 
-test("rejects an inherited required envelope property", async () => {
+test("rejects a missing required envelope property", async () => {
   await withFixture(async ({ directory, manifest, publicKey }) => {
-    const inheritedSignatureManifest = Object.assign(
-      Object.create({ signature: manifest.signature }),
-      { payload: manifest.payload },
-    );
+    const missingSignatureManifest = { payload: manifest.payload };
 
     await assert.rejects(
       verifyRelease({
-        manifest: inheritedSignatureManifest,
+        manifest: missingSignatureManifest,
         artifactsDirectory: directory,
         expectedTag: TAG,
         publicKey,
@@ -326,6 +323,104 @@ test("rejects accessor-backed manifests before signature verification", async ()
       /release manifest must contain only plain JSON data/,
     );
     assert.equal(payloadReads, 0);
+  });
+});
+
+const NON_PLAIN_ENVELOPE_FACTORIES = [
+  [
+    "null-prototype",
+    (manifest) => Object.assign(Object.create(null), manifest),
+  ],
+  [
+    "custom-prototype",
+    (manifest) => Object.assign(Object.create({ kind: "custom" }), manifest),
+  ],
+  [
+    "class-instance",
+    (manifest) => {
+      class ReleaseEnvelope {
+        constructor() {
+          Object.assign(this, manifest);
+        }
+      }
+      return new ReleaseEnvelope();
+    },
+  ],
+];
+
+for (const [prototypeKind, createEnvelope] of NON_PLAIN_ENVELOPE_FACTORIES) {
+  test(`rejects a ${prototypeKind} manifest envelope`, async () => {
+    await withFixture(async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest: createEnvelope(manifest),
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /release manifest must contain only plain JSON data/,
+      );
+    });
+  });
+}
+
+const NESTED_RECORD_MUTATIONS = [
+  [
+    "Mac metadata",
+    (manifest) => {
+      Object.setPrototypeOf(manifest.payload.mac, { kind: "custom" });
+    },
+  ],
+  [
+    "Codex metadata",
+    (manifest) => {
+      Object.setPrototypeOf(manifest.payload.codex, { kind: "custom" });
+    },
+  ],
+  [
+    "artifact",
+    (manifest) => {
+      Object.setPrototypeOf(manifest.payload.artifacts[0], {
+        kind: "custom",
+      });
+    },
+  ],
+];
+
+for (const [recordKind, mutatePrototype] of NESTED_RECORD_MUTATIONS) {
+  test(`rejects custom-prototype ${recordKind}`, async () => {
+    await withFixture(async ({ directory, manifest, publicKey }) => {
+      mutatePrototype(manifest);
+
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /release manifest must contain only plain JSON data/,
+      );
+    });
+  });
+}
+
+test("rejects a custom-prototype artifact array", async () => {
+  await withFixture(async ({ directory, manifest, publicKey }) => {
+    Object.setPrototypeOf(
+      manifest.payload.artifacts,
+      Object.create(Array.prototype),
+    );
+
+    await assert.rejects(
+      verifyRelease({
+        manifest,
+        artifactsDirectory: directory,
+        expectedTag: TAG,
+        publicKey,
+      }),
+      /release manifest must contain only plain JSON data/,
+    );
   });
 });
 
