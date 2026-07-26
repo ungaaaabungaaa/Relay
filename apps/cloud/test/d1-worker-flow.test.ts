@@ -26,6 +26,12 @@ async function setup() {
       "utf8",
     ),
   );
+  database.exec(
+    await readFile(
+      new URL("../migrations/0003_rate_limits.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const d1 = {
     prepare(sql: string) {
       const statement = database.prepare(sql);
@@ -62,6 +68,7 @@ async function setup() {
     jwtSecret,
     piiKey,
     emailHmacKey,
+    rateLimitHmacKey: new Uint8Array(32).fill(4),
     publicOrigin: "https://relayforcodex.com",
     now: () => 1_000,
     sendMagicLink: async (_email, url) => {
@@ -97,6 +104,33 @@ async function json(
 }
 
 describe("D1-backed Worker flow", () => {
+  it("counts pairing probes by hashed source without storing an IP", async () => {
+    const { database, worker } = await setup();
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const result = await json(
+        worker,
+        "/cloud/v1/pairing-sessions/WRONG1/requests",
+        {
+          method: "POST",
+          headers: { "cf-connecting-ip": "203.0.113.42" },
+          body: JSON.stringify({
+            fingerprint: "watch-fingerprint",
+            signingPublicKey: "signing",
+            agreementPublicKey: "agreement",
+            metadata: {},
+          }),
+        },
+      );
+      assert.equal(result.response.status, 401);
+    }
+    const limits = database
+      .prepare("SELECT scope_hash, attempt_count FROM rate_limits")
+      .all() as Array<{ scope_hash: string; attempt_count: number }>;
+    assert.equal(limits.length, 2);
+    assert.ok(limits.every((limit) => limit.attempt_count === 6));
+    assert.ok(limits.every((limit) => !limit.scope_hash.includes("203.0.113.42")));
+  });
+
   it("creates encrypted invites only with the operator credential", async () => {
     const { database, worker } = await setup();
     const denied = await json(worker, "/cloud/v1/admin/invites", {
@@ -129,6 +163,30 @@ describe("D1-backed Worker flow", () => {
       await emailLookupHash("beta@example.com", emailHmacKey),
     );
     assert.doesNotMatch(ciphertext, /beta@example\.com/);
+
+    const audits = database.prepare(
+      `SELECT action, actor_kind, outcome, request_size, response_size
+       FROM audit_metadata ORDER BY created_at, id`,
+    ).all() as Array<Record<string, unknown>>;
+    assert.deepEqual(audits.map((entry) => ({
+      action: entry.action,
+      actorKind: entry.actor_kind,
+      outcome: entry.outcome,
+    })).sort((left, right) =>
+      String(left.outcome).localeCompare(String(right.outcome))), [
+      {
+        action: "admin.invites.create",
+        actorKind: "admin",
+        outcome: "denied",
+      },
+      {
+        action: "admin.invites.create",
+        actorKind: "admin",
+        outcome: "ok",
+      },
+    ]);
+    assert.ok(audits.every((entry) => Number(entry.request_size) > 0));
+    assert.ok(audits.every((entry) => !JSON.stringify(entry).includes("beta@example.com")));
   });
 
   it("runs invite login, host registration, pairing, and refresh reuse defense", async () => {

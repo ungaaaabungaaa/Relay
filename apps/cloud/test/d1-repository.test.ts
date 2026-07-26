@@ -14,8 +14,14 @@ function repository(now = 1_000) {
     return readFile(
       new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
       "utf8",
-    ).then((pairingMigration) => {
+    ).then(async (pairingMigration) => {
       database.exec(pairingMigration);
+      database.exec(
+        await readFile(
+          new URL("../migrations/0003_rate_limits.sql", import.meta.url),
+          "utf8",
+        ),
+      );
       const d1 = {
         prepare(sql: string) {
           const statement = database.prepare(sql);
@@ -44,6 +50,76 @@ function repository(now = 1_000) {
 }
 
 describe("D1 cloud repository", () => {
+  it("stores only bounded redacted audit metadata for seven days", async () => {
+    const { database, repo } = await repository();
+    await repo.recordAudit({
+      id: "audit-1",
+      action: "pairingSessions.request",
+      actorKind: "watch",
+      outcome: "denied",
+      requestSize: 123,
+      responseSize: 45,
+    });
+
+    assert.deepEqual(
+      { ...database.prepare(
+        `SELECT action, actor_kind, outcome, request_size, response_size,
+                created_at, expires_at
+         FROM audit_metadata WHERE id = ?`,
+      ).get("audit-1") },
+      {
+        action: "pairingSessions.request",
+        actor_kind: "watch",
+        outcome: "denied",
+        request_size: 123,
+        response_size: 45,
+        created_at: 1_000,
+        expires_at: 604_801_000,
+      },
+    );
+    assert.throws(
+      () => database.prepare("SELECT request_body FROM audit_metadata"),
+      /no such column/i,
+    );
+  });
+
+  it("atomically limits hashed scopes inside one time window", async () => {
+    const { repo } = await repository();
+    await repo.consumeRateLimit("hashed-ip", 2, 300_000);
+    await repo.consumeRateLimit("hashed-ip", 2, 300_000);
+    await assert.rejects(
+      repo.consumeRateLimit("hashed-ip", 2, 300_000),
+      /authentication failed/i,
+    );
+    await repo.consumeRateLimit("other-hashed-ip", 2, 300_000);
+  });
+
+  it("permits only five requests against one live pairing session", async () => {
+    const { repo } = await repository();
+    await repo.createTestAccount("account-1");
+    await repo.createHost({
+      id: "host-1",
+      accountId: "account-1",
+      name: "Mac",
+      credentialHash: "host-credential",
+    });
+    await repo.createPairingSession({
+      tokenHash: "pair-token",
+      codeHash: "pair-code",
+      accountId: "account-1",
+      hostId: "host-1",
+      sessionNonce: "nonce",
+      macFingerprint: "fingerprint",
+      expiresAt: 10_000,
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await repo.consumePairingAttempt("pair-token");
+    }
+    await assert.rejects(
+      repo.consumePairingAttempt("pair-token"),
+      /pairing failed/i,
+    );
+  });
   it("atomically consumes an invite once and creates one account", async () => {
     const { repo } = await repository();
     await repo.createInvite({

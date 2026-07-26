@@ -14,6 +14,7 @@ type GatewayOptions = {
   jwtSecret: Uint8Array;
   piiKey: Uint8Array;
   emailHmacKey: Uint8Array;
+  rateLimitHmacKey: Uint8Array;
   publicOrigin: string;
   now?: () => number;
   sendMagicLink(email: string, url: string): Promise<void>;
@@ -111,6 +112,56 @@ export class D1CommandGateway {
     args: unknown,
     request: Request,
   ): Promise<unknown> {
+    const requestSize = encoder.encode(JSON.stringify(args ?? null)).byteLength;
+    try {
+      const result = await this.#executeCommand(name, args, request);
+      await this.#recordAudit(name, "ok", requestSize, result);
+      return result;
+    } catch (error) {
+      await this.#recordAudit(
+        name,
+        error instanceof PendingCommandError ? "pending" : "denied",
+        requestSize,
+      );
+      throw error;
+    }
+  }
+
+  async #recordAudit(
+    action: string,
+    outcome: "ok" | "pending" | "denied",
+    requestSize: number,
+    response?: unknown,
+  ): Promise<void> {
+    const actorKind = action.startsWith("admin.")
+      ? "admin"
+      : action.startsWith("pairingSessions.request")
+        || action.startsWith("pairingRequests.status")
+        ? "watch"
+        : action.startsWith("auth.")
+          ? "anonymous"
+          : "mac";
+    try {
+      await this.#repository.recordAudit({
+        id: randomUUID(),
+        action,
+        actorKind,
+        outcome,
+        requestSize,
+        responseSize: response === undefined
+          ? 0
+          : encoder.encode(JSON.stringify(response)).byteLength,
+      });
+    } catch {
+      // Audit availability must never replay or block an already-run mutation.
+    }
+  }
+
+  async #executeCommand(
+    name: string,
+    args: unknown,
+    request: Request,
+  ): Promise<unknown> {
     const parsed = object(args);
     const body = object(parsed.body);
     const params = Array.isArray(parsed.params)
@@ -141,7 +192,7 @@ export class D1CommandGateway {
           body,
         );
       case "pairingSessions.request":
-        return this.#requestPairing(params[0], body);
+        return this.#requestPairing(params[0], body, request);
       case "pairingRequests.status":
         return this.#pairingRequestStatus(params[0], request);
       case "pairingSessions.approve":
@@ -407,8 +458,26 @@ export class D1CommandGateway {
   async #requestPairing(
     rawTokenOrCode: string | undefined,
     body: Record<string, unknown>,
+    request: Request,
   ): Promise<unknown> {
+    const forwarded = request.headers.get("x-forwarded-for")
+      ?.split(",", 1)[0]
+      ?.trim();
+    const source = request.headers.get("cf-connecting-ip")?.trim()
+      || forwarded
+      || "unknown";
+    await this.#repository.consumeRateLimit(
+      `pair-global:${await hmac(this.#options.rateLimitHmacKey, "global")}`,
+      30,
+      5 * 60_000,
+    );
+    await this.#repository.consumeRateLimit(
+      `pair-source:${await hmac(this.#options.rateLimitHmacKey, source)}`,
+      5,
+      5 * 60_000,
+    );
     const tokenHash = await this.#pairingTokenHash(rawTokenOrCode);
+    await this.#repository.consumePairingAttempt(tokenHash, 5);
     const context = await this.#repository.getPairingContext(tokenHash);
     const requestId = randomUUID();
     const pollToken = credential();

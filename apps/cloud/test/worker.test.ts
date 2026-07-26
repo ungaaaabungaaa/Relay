@@ -31,6 +31,26 @@ describe("Relay Cloud Worker routes", () => {
     }
   });
 
+  it("publishes substantive privacy, retention, support, and beta terms", async () => {
+    const { worker } = env();
+    const privacy = await worker.fetch(new Request("https://relay.test/privacy"));
+    const privacyText = await privacy.text();
+    assert.match(privacyText, /end-to-end encrypted/i);
+    assert.match(privacyText, /seven days/i);
+    assert.match(privacyText, /no product analytics/i);
+    assert.match(privacyText, /delete/i);
+
+    const terms = await worker.fetch(new Request("https://relay.test/terms"));
+    assert.match(await terms.text(), /invite-only beta/i);
+
+    const support = await worker.fetch(new Request("https://relay.test/support"));
+    assert.match(await support.text(), /support@relayforcodex\.com/i);
+    assert.match(
+      support.headers.get("content-security-policy") ?? "",
+      /default-src 'none'/,
+    );
+  });
+
   it("maps the beta API without exposing a public signup route", async () => {
     const { worker, calls } = env();
     const request = new Request("https://relay.test/cloud/v1/auth/device-sessions", {

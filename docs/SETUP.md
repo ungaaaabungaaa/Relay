@@ -87,8 +87,10 @@ environments, and verified email sending. See [RELEASE.md](RELEASE.md) and
 [TODO.md](TODO.md). Never commit credentials or paste magic links into logs.
 
 The Worker secrets are `JWT_SECRET`, `PII_ENCRYPTION_KEY`, `EMAIL_HMAC_KEY`,
-`RESEND_API_KEY`, and `CLOUD_ADMIN_CREDENTIAL`. The first three are independent
-32-byte base64url values. The cloud-admin credential is also stored in the
+`RATE_LIMIT_HMAC_KEY`, `RESEND_API_KEY`, and `CLOUD_ADMIN_CREDENTIAL`. The first
+four are independent 32-byte base64url values. The rate-limit key hashes network
+sources before D1 sees them and must not be reused for email lookup. The
+cloud-admin credential is also stored in the
 protected GitHub `production` environment, alongside a secret
 `BETA_INVITE_EMAILS` list containing at most 25 comma- or newline-separated
 addresses. Set the non-secret `RELAY_API_ORIGIN` environment variable, require

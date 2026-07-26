@@ -38,6 +38,7 @@ type CloudEnvironment = {
   JWT_SECRET: string;
   PII_ENCRYPTION_KEY: string;
   EMAIL_HMAC_KEY: string;
+  RATE_LIMIT_HMAC_KEY: string;
   RESEND_API_KEY: string;
   RESEND_FROM: string;
   PUBLIC_ORIGIN: string;
@@ -101,6 +102,7 @@ function runtime(environment: CloudEnvironment) {
     jwtSecret: secret(environment.JWT_SECRET),
     piiKey: secret(environment.PII_ENCRYPTION_KEY),
     emailHmacKey: secret(environment.EMAIL_HMAC_KEY),
+    rateLimitHmacKey: secret(environment.RATE_LIMIT_HMAC_KEY),
     publicOrigin: environment.PUBLIC_ORIGIN,
     sendMagicLink: createResendMagicLinkSender({
       apiKey: environment.RESEND_API_KEY,

@@ -32,8 +32,9 @@
 - [x] 128 KiB encrypted voice chunks with ordered Mac-only assembly, 2 MiB,
       30-second, and incomplete-transfer cleanup limits
 - [ ] Finish Apple Watch cloud transport and physical TestFlight flow
-- [ ] Complete store listing assets, reviewer instructions, privacy/terms copy,
-      and production support pages
+- [x] Draft Play listing, reviewer instructions, privacy/terms/support copy,
+      account-deletion instructions, and matching Worker pages
+- [x] Protected Worker-secret deployment and D1 Time Travel recovery runbook
 
 ## Owner and external launch gates
 
@@ -42,6 +43,10 @@
       accounts
 - [ ] Configure D1 IDs, DNS, verified sending domain, protected GitHub
       environments, and production Worker secrets
+- [ ] Obtain owner/legal approval for the beta terms, privacy policy, retention
+      language, support address, store declarations, and production URLs
+- [ ] Capture final Play screenshots and supply reviewer beta credentials only
+      through the protected Play Console
 - [ ] Store Apple, Android, Sparkle, release-manifest, JWT, PII-encryption,
       email-HMAC, and cloud-admin signing material outside Git
 - [ ] External review of authentication, pairing, and cryptography

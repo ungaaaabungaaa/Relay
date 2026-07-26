@@ -38,8 +38,10 @@ default, not an optional mode.
   account.
 - Has no Mac/watch private key or E2EE root key and cannot decrypt Codex
   content.
-- Applies account, host, device, IP, and pairing limits and returns generic
-  authentication errors.
+- Enforces beta account capacity plus global, HMAC-hashed network-source, and
+  per-session pairing limits. Raw source addresses are never stored in D1.
+- Returns generic authentication and pairing errors. Cloudflare edge policies
+  provide the additional production-wide endpoint limits before public beta.
 - Retains bounded operational metadata for seven days, then purges it.
 - Does not queue actions while the Mac is offline.
 

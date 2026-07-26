@@ -13,6 +13,7 @@ const EXPIRING_TABLES = [
   "refresh_tokens",
   "pairing_sessions",
   "audit_metadata",
+  "rate_limits",
 ] as const;
 
 export async function purgeExpiredCloudData(

@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 const migrationUrl = new URL("../migrations/0001_initial.sql", import.meta.url);
+const rateLimitMigrationUrl = new URL(
+  "../migrations/0003_rate_limits.sql",
+  import.meta.url,
+);
 
 describe("Relay Cloud D1 schema", () => {
   it("contains every beta account, auth, host, device, pairing, and audit table", async () => {
@@ -33,9 +37,15 @@ describe("Relay Cloud D1 schema", () => {
   });
 
   it("indexes expiry and seven-day purge paths", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = `${await readFile(migrationUrl, "utf8")}\n${await readFile(
+      rateLimitMigrationUrl,
+      "utf8",
+    )}`;
     assert.match(sql, /audit_metadata_expiry/i);
     assert.match(sql, /pairing_sessions_expiry/i);
     assert.match(sql, /refresh_tokens_expiry/i);
+    assert.match(sql, /CREATE TABLE rate_limits/i);
+    assert.match(sql, /rate_limits_expiry/i);
+    assert.doesNotMatch(sql, /\bip_address\b/i);
   });
 });

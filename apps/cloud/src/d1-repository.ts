@@ -41,6 +41,88 @@ export class D1CloudRepository {
     this.#now = options.now ?? Date.now;
   }
 
+  async recordAudit(input: {
+    id: string;
+    accountId?: string;
+    action: string;
+    actorKind: "admin" | "mac" | "watch" | "anonymous";
+    outcome: "ok" | "pending" | "denied";
+    requestSize?: number;
+    responseSize?: number;
+  }): Promise<void> {
+    const now = this.#now();
+    await this.database
+      .prepare(
+        `INSERT INTO audit_metadata
+          (id, account_id, action, actor_kind, outcome, request_size,
+           response_size, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        input.id,
+        input.accountId ?? null,
+        input.action.slice(0, 80),
+        input.actorKind,
+        input.outcome,
+        Math.max(0, Math.min(input.requestSize ?? 0, 1_048_576)),
+        Math.max(0, Math.min(input.responseSize ?? 0, 1_048_576)),
+        now,
+        now + 7 * 24 * 60 * 60_000,
+      )
+      .run();
+  }
+
+  async consumeRateLimit(
+    scopeHash: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<void> {
+    if (
+      !scopeHash ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      !Number.isSafeInteger(windowMs) ||
+      windowMs < 1_000
+    ) {
+      throw new Error(AUTH_ERROR);
+    }
+    const now = this.#now();
+    const windowStartedAt = Math.floor(now / windowMs) * windowMs;
+    const record = await this.database
+      .prepare(
+        `INSERT INTO rate_limits
+          (scope_hash, window_started_at, attempt_count, expires_at)
+         VALUES (?, ?, 1, ?)
+         ON CONFLICT(scope_hash, window_started_at)
+         DO UPDATE SET attempt_count = attempt_count + 1
+         RETURNING attempt_count`,
+      )
+      .bind(scopeHash, windowStartedAt, windowStartedAt + windowMs)
+      .first<{ attempt_count: number }>();
+    if (!record || record.attempt_count > limit) {
+      throw new Error(AUTH_ERROR);
+    }
+  }
+
+  async consumePairingAttempt(
+    tokenHash: string,
+    limit = 5,
+  ): Promise<void> {
+    const record = await this.database
+      .prepare(
+        `UPDATE pairing_sessions
+         SET attempt_count = attempt_count + 1
+         WHERE token_hash = ?
+           AND attempt_count < ?
+           AND consumed_at IS NULL
+           AND expires_at > ?
+         RETURNING attempt_count`,
+      )
+      .bind(tokenHash, limit, this.#now())
+      .first<{ attempt_count: number }>();
+    if (!record) throw new Error(PAIRING_ERROR);
+  }
+
   async createInvite(input: {
     id: string;
     emailCiphertext: Uint8Array;

@@ -69,9 +69,26 @@ function json(value: unknown, status = 200): Response {
   });
 }
 
-function publicPage(title: string, body: string): Response {
+function escapeHTML(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+function publicPage(
+  title: string,
+  body: string,
+  details: string[] = [],
+): Response {
+  const detailHTML = details
+    .map((detail) => `<p>${escapeHTML(detail)}</p>`)
+    .join("");
   return new Response(
-    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title} · Relay</title><body><main><h1>${title}</h1><p>${body}</p></main></body></html>`,
+    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHTML(title)} · Relay</title><style>:root{color-scheme:dark}body{margin:0;background:#080a0b;color:#f5f7f8;font:16px/1.6 system-ui,sans-serif}main{max-width:680px;margin:auto;padding:64px 24px}h1{font-size:clamp(2rem,8vw,4rem);line-height:1;margin:0 0 24px;color:#62e790}p{color:#c8ced3}nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:40px}a{color:#6eb7ff}</style><body><main><h1>${escapeHTML(title)}</h1><p>${escapeHTML(body)}</p>${detailHTML}<nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a><a href="/account/delete">Delete account</a></nav></main></body></html>`,
     {
       headers: {
         "content-type": "text/html; charset=utf-8",
@@ -125,20 +142,46 @@ export function createWorker(gateway: CommandGateway): {
         }
         if (url.pathname === "/privacy") {
           return publicPage(
-            "Privacy",
-            "Relay routes encrypted messages and retains limited operational metadata for seven days.",
+            "Relay Privacy",
+            "Relay is local-first and uses end-to-end encrypted tunnels between each approved watch and its Mac. Relay Cloud routes ciphertext and cannot decrypt Codex prompts, commands, repository paths, approvals, task output, or voice recordings.",
+            [
+              "We process an invited email address, account and device identifiers, app/device compatibility metadata, hashed credentials, and limited security/size outcomes. Email is encrypted at rest and indexed with a separate keyed hash.",
+              "Operational metadata expires after seven days. Expired login, pairing, refresh, rate-limit, and audit records are purged automatically. Relay has no product analytics, advertising SDK, or plaintext content logging.",
+              "Cloudflare provides routing and storage, and Resend delivers one-time sign-in email. Optional transcription is configured by the user on the Mac and is not decrypted by Relay Cloud.",
+              "Delete the account from Relay on the Mac to revoke its hosts and watches and remove account and device metadata. Codex credentials and repositories remain on the Mac.",
+            ],
           );
         }
         if (url.pathname === "/terms") {
-          return publicPage("Terms", "Relay is provided as an invite-only public beta.");
+          return publicPage(
+            "Relay Beta Terms",
+            "Relay is provided as a free, invite-only beta for evaluation. It is not a hosted Codex service: the user supplies and controls the Mac, Codex installation, OpenAI access, network, repositories, and every approval.",
+            [
+              "Use Relay only with accounts, Macs, watches, repositories, and workspaces you are authorized to control. Do not bypass pairing, rate limits, revocation, store rules, or security review controls.",
+              "Beta software may disconnect, lose cached summaries, or contain defects. Keep source control and independent backups, review commands and consequences, and use Emergency Stop if a device is lost or behavior is unexpected.",
+              "Access may be withdrawn to protect users or the service. Published source is licensed under Apache License 2.0; service availability and beta invitations are separate and carry no uptime promise.",
+            ],
+          );
         }
         if (url.pathname === "/support") {
-          return publicPage("Support", "Contact the support address shown in the Relay application.");
+          return publicPage(
+            "Relay Support",
+            "Email support@relayforcodex.com for beta setup, pairing, revocation, deletion, or accessibility help. Do not include credentials, magic links, pairing codes, prompts, repository paths, commands, task output, or audio.",
+            [
+              "For connection problems, keep the Mac awake, confirm Relay Cloud is connected, and use Refresh on the watch. Offline summaries are intentionally read-only.",
+              "For a lost watch, revoke it from Relay on the Mac. For suspected compromise, use Emergency Stop and then contact support.",
+              "Report security issues privately through GitHub private vulnerability reporting when available rather than a public issue.",
+            ],
+          );
         }
         if (url.pathname === "/account/delete") {
           return publicPage(
             "Delete your account",
-            "Open Relay on your Mac and choose Delete Account to revoke all connected devices.",
+            "Open Relay on your Mac, choose Relay Cloud, then Delete Relay Account. The action revokes every host and watch and removes cloud account and device metadata.",
+            [
+              "If the Mac is unavailable, contact support@relayforcodex.com from the invited email address. Never send a refresh token, device credential, pairing code, or diagnostic containing private content.",
+              "Deleting Relay does not delete local Codex tasks or repositories on the Mac.",
+            ],
           );
         }
         if (url.pathname === "/cloud/v1/auth/verify") {

@@ -56,7 +56,8 @@ for Wear OS is installed and updated through Google Play during the closed
 beta; the GitHub APK is not bundled into the DMG.
 
 The separate protected `production` environment controls Relay Cloud. Store
-`CLOUD_ADMIN_CREDENTIAL` and `BETA_INVITE_EMAILS` there, define
+the Cloudflare credentials, all six Worker secrets listed in
+[CLOUD-OPERATIONS.md](CLOUD-OPERATIONS.md), and `BETA_INVITE_EMAILS` there, define
 `RELAY_API_ORIGIN=https://api.relayforcodex.com`, require a reviewer, and use
 the manual **Relay Cloud beta invites** workflow. The same admin credential
 must be configured as a Worker secret; never add the beta address list to a

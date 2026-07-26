@@ -11,6 +11,12 @@ test("hourly purge removes expired auth, pairing, and seven-day audit metadata",
   );
   database.exec(
     await readFile(
+      new URL("../migrations/0003_rate_limits.sql", import.meta.url),
+      "utf8",
+    ),
+  );
+  database.exec(
+    await readFile(
       new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
       "utf8",
     ),
@@ -24,6 +30,9 @@ test("hourly purge removes expired auth, pairing, and seven-day audit metadata",
       (id, action, actor_kind, outcome, created_at, expires_at)
       VALUES ('old-audit', 'connect', 'host', 'ok', 1, 99),
              ('live-audit', 'connect', 'host', 'ok', 1, 101);
+    INSERT INTO rate_limits
+      (scope_hash, window_started_at, attempt_count, expires_at)
+      VALUES ('old-limit', 1, 1, 99), ('live-limit', 1, 1, 101);
   `);
 
   const d1 = {
@@ -54,5 +63,12 @@ test("hourly purge removes expired auth, pairing, and seven-day audit metadata",
       .all()
       .map((row) => row.id),
     ["live-audit"],
+  );
+  assert.deepEqual(
+    database
+      .prepare("SELECT scope_hash FROM rate_limits ORDER BY scope_hash")
+      .all()
+      .map((row) => row.scope_hash),
+    ["live-limit"],
   );
 });
