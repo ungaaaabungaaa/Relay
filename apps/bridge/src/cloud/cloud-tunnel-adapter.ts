@@ -18,6 +18,8 @@ type CloudTunnelAdapterOptions = {
   keyForDevice(deviceId: string): Promise<CryptoKey>;
   loadReplayState(): Promise<Record<string, number>>;
   saveReplayState(state: Record<string, number>): Promise<void>;
+  loadOutgoingSequences?(): Promise<Record<string, number>>;
+  saveOutgoingSequences?(state: Record<string, number>): Promise<void>;
   handler(request: Request): Promise<Response>;
   now?: () => number;
 };
@@ -87,6 +89,10 @@ export class CloudTunnelAdapter {
     const requestMessage = parseTunnelRequest(
       await decryptRelayEnvelope(envelope, key),
     );
+    const decodedBody =
+      requestMessage.headers["x-relay-body-encoding"] === "base64"
+        ? Buffer.from(requestMessage.body, "base64")
+        : requestMessage.body;
     const request = new Request(
       `http://relay.internal${requestMessage.path}`,
       {
@@ -94,14 +100,21 @@ export class CloudTunnelAdapter {
         headers: requestMessage.headers,
         ...(!["GET", "HEAD"].includes(requestMessage.method) &&
         requestMessage.body.length > 0
-          ? { body: requestMessage.body }
+          ? { body: decodedBody }
           : {}),
       },
     );
     const response = await this.#options.handler(request);
-    const outgoingSequence =
-      (this.#outgoingSequence.get(envelope.senderId) ?? 0) + 1;
-    this.#outgoingSequence.set(envelope.senderId, outgoingSequence);
+    const persistedOutgoing = this.#options.loadOutgoingSequences
+      ? await this.#options.loadOutgoingSequences()
+      : Object.fromEntries(this.#outgoingSequence);
+    const outgoingSequence = (persistedOutgoing[envelope.senderId] ?? 0) + 1;
+    persistedOutgoing[envelope.senderId] = outgoingSequence;
+    if (this.#options.saveOutgoingSequences) {
+      await this.#options.saveOutgoingSequences(persistedOutgoing);
+    } else {
+      this.#outgoingSequence.set(envelope.senderId, outgoingSequence);
+    }
 
     return encryptRelayEnvelope(
       {

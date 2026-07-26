@@ -14,6 +14,11 @@ import dev.ungaaaabungaaa.relay.audio.consume
 import dev.ungaaaabungaaa.relay.background.LiveMonitoringService
 import dev.ungaaaabungaaa.relay.background.RelayRefreshWorker
 import dev.ungaaaabungaaa.relay.data.RelayApi
+import dev.ungaaaabungaaa.relay.data.RelayCloudDeviceStore
+import dev.ungaaaabungaaa.relay.data.RelayCloudPairingClient
+import dev.ungaaaabungaaa.relay.data.RelayCloudPairingStatus
+import dev.ungaaaabungaaa.relay.data.RelayCloudPendingPairing
+import dev.ungaaaabungaaa.relay.data.RelayCloudTransport
 import dev.ungaaaabungaaa.relay.data.PairingDeviceMetadata
 import dev.ungaaaabungaaa.relay.data.PairingDiscovery
 import dev.ungaaaabungaaa.relay.data.PairingDiscoveryRecord
@@ -36,6 +41,7 @@ import dev.ungaaaabungaaa.relay.domain.RelayTask
 import dev.ungaaaabungaaa.relay.domain.Screen
 import dev.ungaaaabungaaa.relay.domain.reduce
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
+import dev.ungaaaabungaaa.relay.security.RelayAgreementIdentity
 import dev.ungaaaabungaaa.relay.BuildConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -43,14 +49,29 @@ import kotlinx.coroutines.launch
 class RelayViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = RelayPreferences(application)
     private val identity = DeviceIdentity()
-    private val api = RelayApi(preferences, identity)
+    private val cloudDeviceStore = RelayCloudDeviceStore(application)
+    private val agreementIdentity = RelayAgreementIdentity(application)
+    private val cloudPairingClient = RelayCloudPairingClient(
+        identity,
+        agreementIdentity,
+        cloudDeviceStore,
+    )
+    private val api = RelayApi(
+        preferences,
+        identity,
+        RelayCloudTransport(preferences, cloudDeviceStore),
+    )
     private val pairingDiscovery = PairingDiscovery(application)
     private var pairingRecord: PairingDiscoveryRecord? = null
+    private var cloudPendingPairing: RelayCloudPendingPairing? = null
+    private val isPaired: Boolean
+        get() = cloudDeviceStore.load() != null ||
+            (BuildConfig.DEBUG && preferences.deviceId != null)
 
     var state by mutableStateOf(
         RelayState(
-            screen = if (preferences.deviceId == null) Screen.PairingCode else Screen.Offline,
-            connectionState = if (preferences.deviceId == null) {
+            screen = if (!isPaired) Screen.PairingCode else Screen.Offline,
+            connectionState = if (!isPaired) {
                 RelayConnectionState.Unpaired
             } else {
                 RelayConnectionState.Offline
@@ -81,6 +102,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         RelaySocket(
             preferences = preferences,
             identity = identity,
+            cloudDeviceStore = cloudDeviceStore,
             scope = viewModelScope,
             onEvent = ::receiveLiveEvent,
             onConnectionChanged = { connectionState ->
@@ -101,13 +123,13 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        if (preferences.deviceId != null) {
+        if (isPaired) {
             refresh(startLiveAfter = true)
             if (!liveMonitoringEnabled) {
                 RelayRefreshWorker.schedule(application)
             }
         } else {
-            startPairingDiscovery()
+            if (BuildConfig.DEBUG) startPairingDiscovery()
         }
     }
 
@@ -127,13 +149,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching {
                 val record = pairingRecord
-                if (record == null) {
-                    check(BuildConfig.DEBUG) {
-                        "No Relay Mac was discovered. Keep both devices on the same Wi-Fi."
-                    }
-                    preferences.bridgeUrl = bridgeUrl
-                    api.pairLegacy(pairingCode, detectedMetadata().displayName)
-                } else {
+                if (BuildConfig.DEBUG && record != null) {
                     val pending = api.submitPairing(
                         record,
                         pairingCode,
@@ -151,8 +167,23 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
                     check(result.apiVersion == 1) { "Relay update required" }
                     preferences.deviceId = result.deviceId
                     preferences.bridgeUrl = result.origin
+                    return@runCatching true
                 }
-            }.onSuccess {
+                val pending = cloudPairingClient.request(
+                    pairingCode,
+                    detectedMetadata(),
+                )
+                cloudPendingPairing = pending
+                pairingMac = PairingMac(
+                    name = "Relay Mac",
+                    fingerprint = pending.macFingerprint,
+                    apiVersion = 1,
+                    expiresAt = pending.expiresAt,
+                )
+                dispatch(RelayAction.Navigate(Screen.MacIdentity))
+                false
+            }.onSuccess { completed ->
+                if (!completed) return@onSuccess
                 pairingDiscovery.stop()
                 dispatch(RelayAction.Connected)
                 refresh(startLiveAfter = true)
@@ -164,10 +195,42 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun confirmMacIdentity() {
-        dispatch(RelayAction.Navigate(Screen.PairingCode))
+        val pending = cloudPendingPairing
+        if (pending == null) {
+            dispatch(RelayAction.Navigate(Screen.PairingCode))
+            return
+        }
+        dispatch(RelayAction.Navigate(Screen.Connecting))
+        viewModelScope.launch {
+            runCatching {
+                var approved = false
+                while (System.currentTimeMillis() <= pending.expiresAt && !approved) {
+                    when (val status = cloudPairingClient.poll(pending)) {
+                        RelayCloudPairingStatus.Pending -> delay(2_000)
+                        RelayCloudPairingStatus.Denied -> error("Pairing was denied on the Mac")
+                        is RelayCloudPairingStatus.Approved -> {
+                            preferences.deviceId = status.config.deviceId
+                            approved = true
+                        }
+                    }
+                }
+                check(approved) { "Pairing approval expired" }
+            }.onSuccess {
+                cloudPendingPairing = null
+                dispatch(RelayAction.Connected)
+                refresh(startLiveAfter = true)
+            }.onFailure {
+                state = state.copy(screen = Screen.PairingCode)
+                dispatch(RelayAction.Failure(it.message ?: "Pairing failed"))
+            }
+        }
     }
 
     fun retryPairingDiscovery() {
+        if (!BuildConfig.DEBUG) {
+            state = state.copy(screen = Screen.PairingCode)
+            return
+        }
         pairingDiscovery.stop()
         pairingMac = null
         pairingRecord = null
@@ -479,9 +542,12 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         recordingVoice = false
         socket.close()
         preferences.clear()
+        cloudDeviceStore.clear()
         identity.delete()
+        agreementIdentity.delete()
+        cloudPendingPairing = null
         dispatch(RelayAction.Unpaired)
-        startPairingDiscovery()
+        if (BuildConfig.DEBUG) startPairingDiscovery()
     }
 
     fun clearError() = dispatch(RelayAction.ClearError)

@@ -43,4 +43,25 @@ public enum RelayCloudDeviceVault {
     public static func removeAll(from store: any SecretStoring) throws {
         try store.remove(.cloudRootKeys)
     }
+
+    public static func remove(
+        deviceID: String,
+        from store: any SecretStoring
+    ) throws {
+        var registrations = Dictionary(
+            uniqueKeysWithValues: try devices(in: store).map {
+                ($0.deviceId, $0)
+            }
+        )
+        registrations.removeValue(forKey: deviceID)
+        if registrations.isEmpty {
+            try removeAll(from: store)
+            return
+        }
+        let data = try JSONEncoder().encode(registrations)
+        guard let encoded = String(data: data, encoding: .utf8) else {
+            throw RelayCloudDeviceVaultError.invalidStoredDevices
+        }
+        try store.set(encoded, for: .cloudRootKeys)
+    }
 }

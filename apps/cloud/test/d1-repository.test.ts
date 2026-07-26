@@ -11,29 +11,35 @@ function repository(now = 1_000) {
     "utf8",
   ).then((migration) => {
     database.exec(migration);
-    const d1 = {
-      prepare(sql: string) {
-        const statement = database.prepare(sql);
-        let values: unknown[] = [];
-        const prepared = {
-          bind(...bound: unknown[]) {
-            values = bound;
-            return prepared;
-          },
-          async run() {
-            return statement.run(...values);
-          },
-          async first<T>() {
-            return (statement.get(...values) as T | undefined) ?? null;
-          },
-          async all<T>() {
-            return { results: statement.all(...values) as T[] };
-          },
-        };
-        return prepared;
-      },
-    };
-    return { database, repo: new D1CloudRepository(d1, { now: () => now }) };
+    return readFile(
+      new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
+      "utf8",
+    ).then((pairingMigration) => {
+      database.exec(pairingMigration);
+      const d1 = {
+        prepare(sql: string) {
+          const statement = database.prepare(sql);
+          let values: unknown[] = [];
+          const prepared = {
+            bind(...bound: unknown[]) {
+              values = bound;
+              return prepared;
+            },
+            async run() {
+              return statement.run(...values);
+            },
+            async first<T>() {
+              return (statement.get(...values) as T | undefined) ?? null;
+            },
+            async all<T>() {
+              return { results: statement.all(...values) as T[] };
+            },
+          };
+          return prepared;
+        },
+      };
+      return { database, repo: new D1CloudRepository(d1, { now: () => now }) };
+    });
   });
 }
 

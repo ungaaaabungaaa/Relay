@@ -115,6 +115,28 @@ function runtime(environment: CloudEnvironment) {
       );
       if (!response.ok) throw new Error("Host notification failed");
     },
+    emergencyStopTunnels: async (accountId, hostId, deviceIds) => {
+      const objectId = environment.ACCOUNT_TUNNEL.idFromName(accountId);
+      const response = await environment.ACCOUNT_TUNNEL.get(objectId).fetch(
+        new Request("https://relay.internal/emergency-stop", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ hostId, deviceIds }),
+        }),
+      );
+      if (!response.ok) throw new Error("Emergency stop notification failed");
+    },
+    revokeTunnelPeer: async (accountId, deviceId) => {
+      const objectId = environment.ACCOUNT_TUNNEL.idFromName(accountId);
+      const response = await environment.ACCOUNT_TUNNEL.get(objectId).fetch(
+        new Request("https://relay.internal/revoke", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ deviceId }),
+        }),
+      );
+      if (!response.ok) throw new Error("Device revocation notification failed");
+    },
   });
   return { repository, worker: createWorker(gateway) };
 }
@@ -180,6 +202,48 @@ export class AccountTunnel {
             control.message as Record<string, unknown>,
           ),
         });
+      } catch {
+        return jsonError(400, "invalid_control", "Invalid control message");
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/emergency-stop") {
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).byteLength > 16_384) {
+          throw new Error("Invalid emergency stop");
+        }
+        const command = JSON.parse(raw) as {
+          hostId?: unknown;
+          deviceIds?: unknown;
+        };
+        if (
+          typeof command.hostId !== "string" ||
+          !Array.isArray(command.deviceIds) ||
+          command.deviceIds.some((id) => typeof id !== "string")
+        ) {
+          throw new Error("Invalid emergency stop");
+        }
+        this.#session.emergencyStop(
+          command.hostId,
+          command.deviceIds as string[],
+        );
+        return Response.json({ ok: true });
+      } catch {
+        return jsonError(400, "invalid_control", "Invalid control message");
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/revoke") {
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).byteLength > 4_096) {
+          throw new Error("Invalid revocation");
+        }
+        const command = JSON.parse(raw) as { deviceId?: unknown };
+        if (typeof command.deviceId !== "string") {
+          throw new Error("Invalid revocation");
+        }
+        this.#session.revoke(command.deviceId);
+        return Response.json({ ok: true });
       } catch {
         return jsonError(400, "invalid_control", "Invalid control message");
       }

@@ -13,6 +13,12 @@ async function repository(now = 1_000) {
       "utf8",
     ),
   );
+  database.exec(
+    await readFile(
+      new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const d1 = {
     prepare(sql: string) {
       const statement = database.prepare(sql);
@@ -178,6 +184,7 @@ describe("D1 authentication and pairing state", () => {
     await repo.createPairingRequest({
       id: "request-1",
       tokenHash: "pair-token-hash",
+      pollTokenHash: "poll-token-hash",
       requestFingerprintHash: "fingerprint-hash",
       signingPublicKey: "signing-public-key",
       agreementPublicKey: "agreement-public-key",
@@ -192,6 +199,7 @@ describe("D1 authentication and pairing state", () => {
       requestId: "request-1",
       deviceId: "device-1",
       credentialHash: "device-credential-hash",
+      approvedPayload: { version: 1, nonce: "nonce", ciphertext: "opaque" },
     });
     assert.equal(result.deviceId, "device-1");
     assert.equal(result.sessionNonce, "pairing-nonce");
@@ -203,6 +211,7 @@ describe("D1 authentication and pairing state", () => {
         requestId: "request-1",
         deviceId: "device-2",
         credentialHash: "other",
+        approvedPayload: { version: 1, nonce: "nonce", ciphertext: "opaque" },
       }),
       /pairing failed/i,
     );
@@ -228,6 +237,7 @@ describe("D1 authentication and pairing state", () => {
     await repo.createPairingRequest({
       id: "request-1",
       tokenHash: "pair-token-hash",
+      pollTokenHash: "poll-token-hash",
       requestFingerprintHash: "fingerprint-hash",
       signingPublicKey: "signing-public-key",
       agreementPublicKey: "agreement-public-key",
@@ -265,6 +275,7 @@ describe("D1 authentication and pairing state", () => {
       expired.repo.createPairingRequest({
         id: "request-2",
         tokenHash: "expired-token",
+        pollTokenHash: "expired-poll-token",
         requestFingerprintHash: "fingerprint",
         signingPublicKey: "signing",
         agreementPublicKey: "agreement",

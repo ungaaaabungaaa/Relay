@@ -18,6 +18,14 @@ class RelayPreferences(context: Context) {
         get() = values.getLong("last_event_id", 0)
         set(value) = values.edit().putLong("last_event_id", value).apply()
 
+    var cloudOutgoingSequence: Long
+        get() = values.getLong("cloud_outgoing_sequence", 0)
+        set(value) = values.edit().putLong("cloud_outgoing_sequence", value).apply()
+
+    var cloudHostSequence: Long
+        get() = values.getLong("cloud_host_sequence", 0)
+        set(value) = values.edit().putLong("cloud_host_sequence", value).apply()
+
     var liveMonitoringEnabled: Boolean
         get() = values.getBoolean("live_monitoring_enabled", false)
         set(value) = values.edit().putBoolean("live_monitoring_enabled", value).apply()

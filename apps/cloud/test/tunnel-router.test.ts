@@ -96,6 +96,25 @@ describe("hibernating tunnel routing", () => {
     assert.throws(() => router.route(envelope), /authentication failed/i);
   });
 
+  it("disconnects a rotated host without permanently blocking reconnection", () => {
+    const router = new HibernatingTunnelRouter();
+    const first = new TestSocket();
+    const replacement = new TestSocket();
+    const host = {
+      accountId: "account-1",
+      hostId: "host-1",
+      peerId: "host-1",
+      role: "host" as const,
+    };
+    router.connect(host, first);
+
+    router.terminate("host-1", 4004, "Emergency stop");
+    assert.deepEqual(first.closed, { code: 4004, reason: "Emergency stop" });
+    router.connect(host, replacement);
+
+    assert.equal(router.sendControl("host-1", { type: "pairing_request" }), "delivered");
+  });
+
   it("delivers pairing control metadata only to the connected host", () => {
     const router = new HibernatingTunnelRouter();
     const host = new TestSocket();

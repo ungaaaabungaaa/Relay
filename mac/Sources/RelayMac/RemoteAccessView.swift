@@ -45,6 +45,21 @@ struct RemoteAccessView: View {
                         }
                     }
                 }
+                if model.cloudSignedIn {
+                    RelayPanel {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Delete Relay Account", systemImage: "person.crop.circle.badge.minus")
+                                .font(.headline)
+                                .foregroundStyle(RelayPalette.danger)
+                            Text("Permanently removes the account metadata, revokes this Mac and every watch, and clears Relay Cloud keys from this Mac. Codex projects stay untouched.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                            Button("Delete account", role: .destructive) {
+                                Task { await model.deleteRelayAccount() }
+                            }
+                        }
+                    }
+                }
                 RelayPanel {
                     VStack(alignment: .leading, spacing: 10) {
                         Label("Emergency Stop", systemImage: "hand.raised.fill")

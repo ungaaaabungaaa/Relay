@@ -54,7 +54,7 @@ func cloudTokenPollingSendsVerifierAndStoresNoPassword() async throws {
 func cloudClientRegistersOneHostAndCreatesItsPairingSession() async throws {
     let recorder = SequenceRequestRecorder(responses: [
         Data(#"{"id":"host-1","credential":"host-secret"}"#.utf8),
-        Data(#"{"token":"pair-token","code":"ABC123","expiresAt":301000,"sessionNonce":"c2Vzc2lvbi1ub25jZS0xMjM0NTY","macFingerprint":"MAC FP"}"#.utf8),
+        Data(#"{"token":"pair-token","code":"ABC123","accountId":"account-1","expiresAt":301000,"sessionNonce":"c2Vzc2lvbi1ub25jZS0xMjM0NTY","macFingerprint":"MAC FP"}"#.utf8),
     ])
     let client = RelayCloudClient(transport: recorder.send)
     let host = try await client.registerHost(
@@ -84,16 +84,24 @@ func cloudClientRegistersOneHostAndCreatesItsPairingSession() async throws {
 @Test
 func cloudClientApprovesDeniesRevokesAndDeletesWithoutURLSecrets() async throws {
     let recorder = SequenceRequestRecorder(responses: [
-        Data(#"{"id":"watch-1","hostId":"host-1","credential":"watch-secret","sessionNonce":"bm9uY2U"}"#.utf8),
+        Data(#"{"id":"watch-1","hostId":"host-1","sessionNonce":"bm9uY2U"}"#.utf8),
         Data(#"{"ok":true}"#.utf8),
         Data(#"{"ok":true}"#.utf8),
+        Data(#"{"hostId":"host-1","hostCredential":"rotated-host-secret","revokedDeviceCount":1}"#.utf8),
         Data(#"{"ok":true}"#.utf8),
     ])
     let client = RelayCloudClient(transport: recorder.send)
     let approved = try await client.approvePairing(
         accessToken: "access",
         pairingToken: "pair-token",
-        requestID: "request-1"
+        requestID: "request-1",
+        deviceID: "watch-1",
+        credentialHash: "credential-hash",
+        approvedPayload: RelayCloudPairingPayloadEnvelope(
+            version: 1,
+            nonce: "payload-nonce",
+            ciphertext: "opaque-ciphertext"
+        )
     )
     try await client.denyPairing(
         accessToken: "access",
@@ -104,14 +112,27 @@ func cloudClientApprovesDeniesRevokesAndDeletesWithoutURLSecrets() async throws 
         accessToken: "access",
         deviceID: "watch-1"
     )
+    let stopped = try await client.emergencyStop(accessToken: "access")
     try await client.deleteAccount(accessToken: "access")
 
     #expect(approved.id == "watch-1")
+    #expect(stopped.hostCredential == "rotated-host-secret")
     let requests = await recorder.requests
+    let approvalBody = try #require(requests.first?.httpBody)
+    let approvalObject = try #require(
+        JSONSerialization.jsonObject(with: approvalBody) as? [String: Any]
+    )
+    #expect(approvalObject["credentialHash"] as? String == "credential-hash")
+    #expect(approvalObject["credential"] == nil)
+    #expect(
+        (approvalObject["approvedPayload"] as? [String: Any])?["ciphertext"]
+            as? String == "opaque-ciphertext"
+    )
     #expect(requests.map(\.url?.path) == [
         "/cloud/v1/pairing-sessions/pair-token/approve",
         "/cloud/v1/pairing-sessions/other-pair-token/deny",
         "/cloud/v1/devices/watch-1/revoke",
+        "/cloud/v1/emergency-stop",
         "/cloud/v1/account",
     ])
     #expect(requests.allSatisfy { $0.url?.query == nil })

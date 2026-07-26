@@ -9,6 +9,12 @@ test("hourly purge removes expired auth, pairing, and seven-day audit metadata",
   database.exec(
     await readFile(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8"),
   );
+  database.exec(
+    await readFile(
+      new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   database.exec(`
     INSERT INTO device_login_sessions
       (id, email_lookup_hash, pkce_challenge, status, created_at, expires_at)

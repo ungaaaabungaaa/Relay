@@ -13,6 +13,8 @@ import androidx.wear.ongoing.OngoingActivity
 import dev.ungaaaabungaaa.relay.MainActivity
 import dev.ungaaaabungaaa.relay.R
 import dev.ungaaaabungaaa.relay.data.RelayApi
+import dev.ungaaaabungaaa.relay.data.RelayCloudDeviceStore
+import dev.ungaaaabungaaa.relay.data.RelayCloudTransport
 import dev.ungaaaabungaaa.relay.data.RelayLiveEvent
 import dev.ungaaaabungaaa.relay.data.RelayPreferences
 import dev.ungaaaabungaaa.relay.data.RelaySocket
@@ -35,11 +37,19 @@ class LiveMonitoringService : Service() {
     }
     private val preferences by lazy { RelayPreferences(this) }
     private val identity by lazy { DeviceIdentity() }
-    private val api by lazy { RelayApi(preferences, identity) }
+    private val cloudStore by lazy { RelayCloudDeviceStore(this) }
+    private val api by lazy {
+        RelayApi(
+            preferences,
+            identity,
+            RelayCloudTransport(preferences, cloudStore),
+        )
+    }
     private val socket by lazy {
         RelaySocket(
             preferences = preferences,
             identity = identity,
+            cloudDeviceStore = cloudStore,
             scope = serviceScope,
             onEvent = ::handleEvent,
             onConnectionChanged = ::handleConnection,
@@ -81,6 +91,9 @@ class LiveMonitoringService : Service() {
         serviceScope.launch {
             while (isActive && !stopped) {
                 evaluateStopPolicy()
+                if (cloudStore.load() != null) {
+                    refreshSnapshot(preferences.lastEventId)
+                }
                 delay(60_000)
             }
         }

@@ -30,6 +30,9 @@ class RelayCloudTunnelCodec(
     val highestHostSequence: Long
         get() = hostReplay.snapshot()[hostId] ?: 0
 
+    val currentOutgoingSequence: Long
+        get() = outgoingSequence
+
     fun encryptRequest(
         requestId: String,
         method: String,

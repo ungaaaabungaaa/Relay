@@ -81,4 +81,9 @@ export class DurableTunnelSession {
   revoke(peerId: string): void {
     this.#router.revoke(peerId);
   }
+
+  emergencyStop(hostId: string, deviceIds: string[]): void {
+    for (const deviceId of deviceIds) this.#router.revoke(deviceId);
+    this.#router.terminate(hostId, 4004, "Emergency stop");
+  }
 }

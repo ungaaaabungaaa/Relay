@@ -36,6 +36,11 @@ const dynamicCommands: Array<{
     command: "pairingSessions.request",
   },
   {
+    method: "GET",
+    pattern: /^\/cloud\/v1\/pairing-requests\/([^/]+)$/,
+    command: "pairingRequests.status",
+  },
+  {
     method: "POST",
     pattern: /^\/cloud\/v1\/pairing-sessions\/([^/]+)\/approve$/,
     command: "pairingSessions.approve",

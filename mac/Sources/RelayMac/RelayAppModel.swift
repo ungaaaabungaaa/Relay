@@ -221,6 +221,21 @@ final class RelayAppModel: ObservableObject {
 
     func revoke(_ device: AdminDevice) async {
         do {
+            if
+                try RelayCloudDeviceVault.devices(in: secrets).contains(
+                    where: { $0.deviceId == device.id }
+                ),
+                let accessToken = cloudAccessToken
+            {
+                try await cloudClient.revokeDevice(
+                    accessToken: accessToken,
+                    deviceID: device.id
+                )
+                try RelayCloudDeviceVault.remove(
+                    deviceID: device.id,
+                    from: secrets
+                )
+            }
             try await adminClient.revoke(deviceID: device.id)
             await refresh()
         } catch {
@@ -257,19 +272,27 @@ final class RelayAppModel: ObservableObject {
         funnelEnabled = false
         temporaryPairingTransport = false
         await pairingTransportLease.promote()
-        if let tailscaleClient {
-            emergencyStopResult = await tailscaleClient.emergencyStop {
-                try await self.adminClient.shutdown()
-            }
-        } else {
-            let bridgeStopped = (try? await adminClient.shutdown()) != nil
-            emergencyStopResult = EmergencyStopResult(
-                funnelDisabled: true,
-                bridgeStopped: bridgeStopped
+        cloudTunnelTask?.cancel()
+        cloudTunnelTask = nil
+        await cloudTunnel.disconnect()
+        if let accessToken = cloudAccessToken,
+           let stopped = try? await cloudClient.emergencyStop(
+               accessToken: accessToken
+           ) {
+            try? secrets.set(
+                stopped.hostCredential,
+                for: .cloudHostCredential
             )
         }
+        try? RelayCloudDeviceVault.removeAll(from: secrets)
+        let bridgeStopped = (try? await adminClient.shutdown()) != nil
+        emergencyStopResult = EmergencyStopResult(
+            funnelDisabled: true,
+            bridgeStopped: bridgeStopped
+        )
         await supervisor?.emergencyStop()
         bridgeState = .emergencyStopped
+        cloudConnected = false
         diagnostic = "Emergency Stop closed Relay watch access. Codex tasks were left running."
         updateSetupState(bridgeReady: false)
     }
@@ -397,6 +420,43 @@ final class RelayAppModel: ObservableObject {
         cloudConnected = false
         funnelEnabled = false
         updateSetupState(bridgeReady: bridgeState == .running)
+    }
+
+    func deleteRelayAccount() async {
+        guard let accessToken = cloudAccessToken else {
+            lastError = "Sign in before deleting this Relay account."
+            return
+        }
+        do {
+            try await cloudClient.deleteAccount(accessToken: accessToken)
+            cloudTunnelTask?.cancel()
+            cloudTunnelTask = nil
+            await cloudTunnel.disconnect()
+            _ = try? await adminClient.shutdown()
+            await supervisor?.emergencyStop()
+            for secret in [
+                RelaySecret.cloudRefreshToken,
+                .cloudHostID,
+                .cloudHostCredential,
+                .cloudRootKeys,
+                .cloudSigningPrivateKey,
+                .cloudAgreementPrivateKey,
+            ] {
+                try? secrets.remove(secret)
+            }
+            cloudAccessToken = nil
+            cloudSignedIn = false
+            cloudConnected = false
+            cloudPairingSession = nil
+            cloudPairingRequests = [:]
+            pendingPairings = []
+            bridgeState = .emergencyStopped
+            diagnostic = "The Relay account and every paired watch were deleted."
+            lastError = nil
+            updateSetupState(bridgeReady: false)
+        } catch {
+            lastError = "Relay could not confirm account deletion. Try again while online."
+        }
     }
 
     func cancelTailscaleLogin() {
@@ -682,17 +742,25 @@ final class RelayAppModel: ObservableObject {
             return
         }
         do {
+            let prepared = try RelayCloudPairingMaterial.prepare(
+                accountID: session.accountId,
+                hostID: hostID,
+                request: request,
+                sessionNonce: session.sessionNonce,
+                hostKeys: RelayCloudHostKeys.loadOrCreate(in: secrets)
+            )
             let approved = try await cloudClient.approvePairing(
                 accessToken: accessToken,
                 pairingToken: session.token,
-                requestID: request.id
+                requestID: request.id,
+                deviceID: prepared.device.id,
+                credentialHash: prepared.credentialHash,
+                approvedPayload: prepared.payload
             )
-            let registration = try RelayCloudPairingMaterial.registration(
-                hostID: hostID,
-                request: request,
-                approved: approved,
-                hostKeys: RelayCloudHostKeys.loadOrCreate(in: secrets)
-            )
+            guard approved.id == prepared.device.id else {
+                throw RelayCloudPairingMaterialError.invalidApproval
+            }
+            let registration = prepared.registration
             try RelayCloudDeviceVault.upsert(registration, in: secrets)
             try await adminClient.registerCloudDevice(registration)
             cloudPairingRequests.removeValue(forKey: request.id)

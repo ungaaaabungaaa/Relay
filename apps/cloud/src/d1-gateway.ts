@@ -21,6 +21,12 @@ type GatewayOptions = {
     hostId: string,
     message: Record<string, unknown>,
   ): Promise<void>;
+  emergencyStopTunnels?(
+    accountId: string,
+    hostId: string,
+    deviceIds: string[],
+  ): Promise<void>;
+  revokeTunnelPeer?(accountId: string, deviceId: string): Promise<void>;
 };
 
 type AccessClaims = {
@@ -133,6 +139,8 @@ export class D1CommandGateway {
         );
       case "pairingSessions.request":
         return this.#requestPairing(params[0], body);
+      case "pairingRequests.status":
+        return this.#pairingRequestStatus(params[0], request);
       case "pairingSessions.approve":
         return this.#approvePairing(
           await this.#authorize(request),
@@ -146,8 +154,13 @@ export class D1CommandGateway {
           body,
         );
       case "devices.revoke":
+        const revokeClaims = await this.#authorize(request);
         await this.#repository.revokeDevice(
-          (await this.#authorize(request)).accountId,
+          revokeClaims.accountId,
+          params[0] ?? "",
+        );
+        await this.#options.revokeTunnelPeer?.(
+          revokeClaims.accountId,
           params[0] ?? "",
         );
         return { ok: true };
@@ -156,6 +169,8 @@ export class D1CommandGateway {
           (await this.#authorize(request)).accountId,
         );
         return { ok: true };
+      case "emergencyStop":
+        return this.#emergencyStop(await this.#authorize(request));
       default:
         throw new Error(AUTH_ERROR);
     }
@@ -320,7 +335,14 @@ export class D1CommandGateway {
       macFingerprint,
       expiresAt,
     });
-    return { token, code, expiresAt, sessionNonce, macFingerprint };
+    return {
+      token,
+      code,
+      accountId: claims.accountId,
+      expiresAt,
+      sessionNonce,
+      macFingerprint,
+    };
   }
 
   async #pairingTokenHash(rawTokenOrCode: string | undefined): Promise<string> {
@@ -343,10 +365,12 @@ export class D1CommandGateway {
     const tokenHash = await this.#pairingTokenHash(rawTokenOrCode);
     const context = await this.#repository.getPairingContext(tokenHash);
     const requestId = randomUUID();
+    const pollToken = credential();
     const expiresAt = this.#now() + 2 * 60_000;
     await this.#repository.createPairingRequest({
       id: requestId,
       tokenHash,
+      pollTokenHash: await sha256(pollToken),
       requestFingerprintHash: await sha256(
         requiredString(body, "fingerprint"),
       ),
@@ -370,6 +394,8 @@ export class D1CommandGateway {
     );
     return {
       id: requestId,
+      pollToken,
+      accountId: context.accountId,
       hostId: context.hostId,
       sessionNonce: context.sessionNonce,
       macFingerprint: context.macFingerprint,
@@ -386,21 +412,63 @@ export class D1CommandGateway {
     const tokenHash = await this.#pairingTokenHash(rawToken);
     const context = await this.#repository.getPairingContext(tokenHash);
     if (context.accountId !== claims.accountId) throw new Error(PAIRING_ERROR);
-    const deviceId = randomUUID();
-    const rawCredential = credential();
+    const deviceId = requiredString(body, "deviceId");
+    const credentialHash = requiredString(body, "credentialHash");
+    const approvedPayload = object(body.approvedPayload);
+    if (
+      approvedPayload.version !== 1 ||
+      typeof approvedPayload.nonce !== "string" ||
+      approvedPayload.nonce.length < 16 ||
+      typeof approvedPayload.ciphertext !== "string" ||
+      approvedPayload.ciphertext.length < 16 ||
+      JSON.stringify(approvedPayload).length > 16_384
+    ) {
+      throw new Error(PAIRING_ERROR);
+    }
     await this.#repository.approvePairing({
       accountId: claims.accountId,
       hostId: context.hostId,
       tokenHash,
       requestId: requiredString(body, "requestId"),
       deviceId,
-      credentialHash: await sha256(rawCredential),
+      credentialHash,
+      approvedPayload,
     });
     return {
       id: deviceId,
       hostId: context.hostId,
-      credential: rawCredential,
       sessionNonce: context.sessionNonce,
+    };
+  }
+
+  async #pairingRequestStatus(
+    requestId: string | undefined,
+    request: Request,
+  ): Promise<unknown> {
+    if (!requestId) throw new Error(PAIRING_ERROR);
+    const authorization = request.headers.get("authorization");
+    if (!authorization?.startsWith("Pairing ")) throw new Error(PAIRING_ERROR);
+    return this.#repository.getPairingRequestStatus({
+      requestId,
+      pollTokenHash: await sha256(authorization.slice(8)),
+    });
+  }
+
+  async #emergencyStop(claims: AccessClaims): Promise<unknown> {
+    const hostCredential = credential();
+    const stopped = await this.#repository.emergencyStop(
+      claims.accountId,
+      await sha256(hostCredential),
+    );
+    await this.#options.emergencyStopTunnels?.(
+      claims.accountId,
+      stopped.hostId,
+      stopped.deviceIds,
+    );
+    return {
+      hostId: stopped.hostId,
+      hostCredential,
+      revokedDeviceCount: stopped.deviceIds.length,
     };
   }
 

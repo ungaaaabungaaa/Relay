@@ -42,6 +42,9 @@ export class SqliteStore implements SecurityStore {
         id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
         session_json TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS cloud_sequence_state (
+        kind TEXT PRIMARY KEY, state_json TEXT NOT NULL
+      );
     `);
     const deviceColumns = this.db
       .prepare("PRAGMA table_info(devices)")
@@ -284,5 +287,31 @@ export class SqliteStore implements SecurityStore {
       createdAt: row.created_at,
       revokedAt: row.revoked_at,
     }));
+  }
+
+  loadCloudSequenceState(kind: "incoming" | "outgoing") {
+    const row = this.db
+      .prepare("SELECT state_json FROM cloud_sequence_state WHERE kind=?")
+      .get(kind) as { state_json: string } | undefined;
+    if (!row) return {};
+    const parsed = JSON.parse(row.state_json) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, number] =>
+          typeof entry[1] === "number" && Number.isSafeInteger(entry[1]) && entry[1] >= 0,
+      ),
+    );
+  }
+
+  saveCloudSequenceState(
+    kind: "incoming" | "outgoing",
+    state: Record<string, number>,
+  ) {
+    this.db
+      .prepare(
+        `INSERT INTO cloud_sequence_state(kind,state_json) VALUES(?,?)
+         ON CONFLICT(kind) DO UPDATE SET state_json=excluded.state_json`,
+      )
+      .run(kind, JSON.stringify(state));
   }
 }

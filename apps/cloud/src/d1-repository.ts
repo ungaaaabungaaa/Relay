@@ -588,6 +588,7 @@ export class D1CloudRepository {
   async createPairingRequest(input: {
     id: string;
     tokenHash: string;
+    pollTokenHash: string;
     requestFingerprintHash: string;
     signingPublicKey: string;
     agreementPublicKey: string;
@@ -598,10 +599,10 @@ export class D1CloudRepository {
     const result = await this.database
       .prepare(
         `INSERT INTO pairing_requests
-          (id, pairing_token_hash, request_fingerprint_hash,
+          (id, pairing_token_hash, poll_token_hash, request_fingerprint_hash,
            signing_public_key, agreement_public_key, metadata_json,
            status, created_at, expires_at)
-         SELECT ?, ?, ?, ?, ?, ?, 'pending', ?, ?
+         SELECT ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?
          WHERE EXISTS (
            SELECT 1 FROM pairing_sessions
            WHERE token_hash = ?
@@ -612,6 +613,7 @@ export class D1CloudRepository {
       .bind(
         input.id,
         input.tokenHash,
+        input.pollTokenHash,
         input.requestFingerprintHash,
         input.signingPublicKey,
         input.agreementPublicKey,
@@ -632,6 +634,7 @@ export class D1CloudRepository {
     requestId: string;
     deviceId: string;
     credentialHash: string;
+    approvedPayload: Record<string, unknown>;
   }): Promise<{ deviceId: string; sessionNonce: string }> {
     const now = this.#now();
     const pairing = await this.database
@@ -682,10 +685,16 @@ export class D1CloudRepository {
     const requestResult = await this.database
       .prepare(
         `UPDATE pairing_requests
-         SET status = 'approved', resolved_at = ?
+         SET status = 'approved', resolved_at = ?, approved_device_id = ?,
+             approved_payload_json = ?
          WHERE id = ? AND status = 'pending'`,
       )
-      .bind(now, input.requestId)
+      .bind(
+        now,
+        input.deviceId,
+        JSON.stringify(input.approvedPayload),
+        input.requestId,
+      )
       .run();
     const sessionResult = await this.database
       .prepare(
@@ -708,6 +717,35 @@ export class D1CloudRepository {
       deviceId: input.deviceId,
       sessionNonce: pairing.session_nonce,
     };
+  }
+
+  async getPairingRequestStatus(input: {
+    requestId: string;
+    pollTokenHash: string;
+  }): Promise<{
+    status: "pending" | "approved" | "denied";
+    payload?: Record<string, unknown>;
+  }> {
+    const record = await this.database
+      .prepare(
+        `SELECT status, approved_payload_json
+         FROM pairing_requests
+         WHERE id = ? AND poll_token_hash = ? AND expires_at > ?`,
+      )
+      .bind(input.requestId, input.pollTokenHash, this.#now())
+      .first<{
+        status: "pending" | "approved" | "denied" | "expired";
+        approved_payload_json: string | null;
+      }>();
+    if (!record || record.status === "expired") throw new Error(PAIRING_ERROR);
+    if (record.status === "approved") {
+      if (!record.approved_payload_json) throw new Error(PAIRING_ERROR);
+      return {
+        status: "approved",
+        payload: JSON.parse(record.approved_payload_json) as Record<string, unknown>,
+      };
+    }
+    return { status: record.status };
   }
 
   async denyPairing(input: {
@@ -763,6 +801,53 @@ export class D1CloudRepository {
       .bind(this.#now(), deviceId, accountId)
       .run();
     if (changeCount(result) !== 1) throw new Error(AUTH_ERROR);
+  }
+
+  async emergencyStop(
+    accountId: string,
+    credentialHash: string,
+  ): Promise<{ hostId: string; deviceIds: string[] }> {
+    const host = await this.database
+      .prepare(
+        `SELECT id FROM hosts
+         WHERE account_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(accountId)
+      .first<{ id: string }>();
+    if (!host) throw new Error(AUTH_ERROR);
+    const devices = await this.database
+      .prepare(
+        `SELECT id FROM devices
+         WHERE account_id = ? AND host_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(accountId, host.id)
+      .all<{ id: string }>();
+    const hostResult = await this.database
+      .prepare(
+        `UPDATE hosts SET credential_hash = ?
+         WHERE id = ? AND account_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(credentialHash, host.id, accountId)
+      .run();
+    if (changeCount(hostResult) !== 1) throw new Error(AUTH_ERROR);
+    await this.database
+      .prepare(
+        `UPDATE devices SET revoked_at = ?
+         WHERE account_id = ? AND host_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(this.#now(), accountId, host.id)
+      .run();
+    await this.database
+      .prepare(
+        `DELETE FROM pairing_sessions
+         WHERE account_id = ? AND host_id = ?`,
+      )
+      .bind(accountId, host.id)
+      .run();
+    return {
+      hostId: host.id,
+      deviceIds: devices.results.map((device) => device.id),
+    };
   }
 
   async deleteAccount(accountId: string): Promise<void> {

@@ -117,7 +117,7 @@ fun RelayApp(viewModel: RelayViewModel) {
                 Screen.Connecting -> ConnectingScreen()
                 Screen.Offline -> ConnectionProblemScreen(
                     title = "Mac offline",
-                    body = "Wake the Mac and confirm Relay and Tailscale are running.",
+                    body = "Wake the Mac and confirm Relay Cloud is connected on the Mac.",
                     actionLabel = "Reconnect",
                     onAction = { viewModel.refresh(startLiveAfter = true) },
                     onSettings = { viewModel.navigate(Screen.Settings) },

@@ -20,6 +20,12 @@ async function setup() {
       "utf8",
     ),
   );
+  database.exec(
+    await readFile(
+      new URL("../migrations/0002_pairing_completion.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const d1 = {
     prepare(sql: string) {
       const statement = database.prepare(sql);
@@ -166,6 +172,7 @@ describe("D1-backed Worker flow", () => {
       },
     );
     assert.equal(request.response.status, 200);
+    assert.equal(typeof request.body.pollToken, "string");
     assert.deepEqual(hostNotifications, [
       {
         type: "pairing_request",
@@ -178,20 +185,91 @@ describe("D1-backed Worker flow", () => {
       },
     ]);
 
+    const pairingPending = await json(
+      worker,
+      `/cloud/v1/pairing-requests/${request.body.id}`,
+      {
+        method: "GET",
+        headers: { authorization: `Pairing ${request.body.pollToken}` },
+      },
+    );
+    assert.equal(pairingPending.response.status, 200);
+    assert.deepEqual(pairingPending.body, { status: "pending" });
+
+    const approvedPayload = {
+      version: 1,
+      nonce: "pairing-payload-nonce",
+      ciphertext: "opaque-e2ee-device-credential",
+    };
+    const deviceCredentialHash = createHash("sha256")
+      .update("mac-generated-watch-credential")
+      .digest("base64url");
+
     const approval = await json(
       worker,
       `/cloud/v1/pairing-sessions/${pairing.body.token}/approve`,
       {
         method: "POST",
         headers: { authorization: `Bearer ${token.body.accessToken}` },
-        body: JSON.stringify({ requestId: request.body.id }),
+        body: JSON.stringify({
+          requestId: request.body.id,
+          deviceId: "device-1",
+          credentialHash: deviceCredentialHash,
+          approvedPayload,
+        }),
       },
     );
     assert.equal(approval.response.status, 200);
-    assert.equal(typeof approval.body.credential, "string");
+    assert.deepEqual(approval.body, {
+      id: "device-1",
+      hostId: host.body.id,
+      sessionNonce: pairing.body.sessionNonce,
+    });
+    assert.equal(JSON.stringify(approval.body).includes("credential"), false);
+
+    const completed = await json(
+      worker,
+      `/cloud/v1/pairing-requests/${request.body.id}`,
+      {
+        method: "GET",
+        headers: { authorization: `Pairing ${request.body.pollToken}` },
+      },
+    );
+    assert.equal(completed.response.status, 200);
+    assert.deepEqual(completed.body, {
+      status: "approved",
+      payload: approvedPayload,
+    });
     assert.equal(
       database.prepare("SELECT COUNT(*) AS count FROM devices").get()?.count,
       1,
+    );
+    assert.equal(
+      database
+        .prepare("SELECT credential_hash FROM devices WHERE id = ?")
+        .get("device-1")?.credential_hash,
+      deviceCredentialHash,
+    );
+
+    const emergency = await json(worker, "/cloud/v1/emergency-stop", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token.body.accessToken}` },
+      body: "{}",
+    });
+    assert.equal(emergency.response.status, 200);
+    assert.equal(emergency.body.hostId, host.body.id);
+    assert.equal(typeof emergency.body.hostCredential, "string");
+    assert.equal(
+      database.prepare("SELECT revoked_at FROM devices WHERE id = ?")
+        .get("device-1")?.revoked_at,
+      1_000,
+    );
+    assert.equal(
+      database.prepare("SELECT credential_hash FROM hosts WHERE id = ?")
+        .get(host.body.id)?.credential_hash,
+      createHash("sha256")
+        .update(emergency.body.hostCredential)
+        .digest("base64url"),
     );
 
     const refreshed = await json(worker, "/cloud/v1/auth/refresh", {

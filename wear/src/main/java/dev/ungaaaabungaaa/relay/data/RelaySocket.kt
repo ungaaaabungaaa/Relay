@@ -100,6 +100,7 @@ private fun applyEvent(
 class RelaySocket(
     private val preferences: RelayPreferences,
     private val identity: DeviceIdentity,
+    private val cloudDeviceStore: RelayCloudDeviceStore? = null,
     private val scope: CoroutineScope,
     private val client: OkHttpClient = OkHttpClient(),
     private val onEvent: (RelayLiveEvent) -> Unit,
@@ -120,6 +121,10 @@ class RelaySocket(
         socket?.cancel()
         socket = null
         onConnectionChanged(RelayConnectionState.Connecting)
+        if (cloudDeviceStore?.load() != null) {
+            onConnectionChanged(RelayConnectionState.Live)
+            return
+        }
         connect(generation, after)
     }
 

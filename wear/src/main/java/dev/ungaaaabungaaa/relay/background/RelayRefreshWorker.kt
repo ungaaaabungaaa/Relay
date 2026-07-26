@@ -9,6 +9,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dev.ungaaaabungaaa.relay.data.RelayApi
+import dev.ungaaaabungaaa.relay.data.RelayCloudDeviceStore
+import dev.ungaaaabungaaa.relay.data.RelayCloudTransport
 import dev.ungaaaabungaaa.relay.data.RelayPreferences
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
 import java.util.concurrent.TimeUnit
@@ -23,7 +25,12 @@ class RelayRefreshWorker(
             return Result.success()
         }
         return runCatching {
-            val api = RelayApi(preferences, DeviceIdentity())
+            val store = RelayCloudDeviceStore(applicationContext)
+            val api = RelayApi(
+                preferences,
+                DeviceIdentity(),
+                RelayCloudTransport(preferences, store),
+            )
             val inbox = api.inbox()
             val tasks = api.tasks()
             preferences.pendingSummaryCount = inbox.first.size + inbox.second.size

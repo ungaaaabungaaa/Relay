@@ -24,6 +24,7 @@ public struct RelayCloudHost: Codable, Equatable, Sendable {
 public struct RelayCloudPairingSession: Codable, Equatable, Sendable {
     public var token: String
     public var code: String
+    public var accountId: String
     public var expiresAt: Int64
     public var sessionNonce: String
     public var macFingerprint: String
@@ -32,13 +33,25 @@ public struct RelayCloudPairingSession: Codable, Equatable, Sendable {
 public struct RelayCloudApprovedDevice: Codable, Equatable, Sendable {
     public var id: String
     public var hostId: String
-    public var credential: String
     public var sessionNonce: String
+}
+
+public struct RelayCloudEmergencyStop: Codable, Equatable, Sendable {
+    public var hostId: String
+    public var hostCredential: String
+    public var revokedDeviceCount: Int
 }
 
 public enum RelayCloudClientError: Error, Equatable, Sendable {
     case invalidResponse
     case authenticationFailed
+}
+
+private struct RelayCloudPairingApprovalRequest: Encodable, Sendable {
+    var requestId: String
+    var deviceId: String
+    var credentialHash: String
+    var approvedPayload: RelayCloudPairingPayloadEnvelope
 }
 
 public struct RelayCloudClient: Sendable {
@@ -188,11 +201,19 @@ public struct RelayCloudClient: Sendable {
     public func approvePairing(
         accessToken: String,
         pairingToken: String,
-        requestID: String
+        requestID: String,
+        deviceID: String,
+        credentialHash: String,
+        approvedPayload: RelayCloudPairingPayloadEnvelope
     ) async throws -> RelayCloudApprovedDevice {
-        let body = try JSONSerialization.data(withJSONObject: [
-            "requestId": requestID,
-        ])
+        let body = try JSONEncoder().encode(
+            RelayCloudPairingApprovalRequest(
+                requestId: requestID,
+                deviceId: deviceID,
+                credentialHash: credentialHash,
+                approvedPayload: approvedPayload
+            )
+        )
         let (data, response) = try await transport(
             request(
                 path: "/cloud/v1/pairing-sessions/\(pairingToken)/approve",
@@ -234,6 +255,26 @@ public struct RelayCloudClient: Sendable {
             method: "POST",
             body: Data("{}".utf8),
             accessToken: accessToken
+        )
+    }
+
+    public func emergencyStop(
+        accessToken: String
+    ) async throws -> RelayCloudEmergencyStop {
+        let (data, response) = try await transport(
+            request(
+                path: "/cloud/v1/emergency-stop",
+                method: "POST",
+                body: Data("{}".utf8),
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
+        return try JSONDecoder().decode(
+            RelayCloudEmergencyStop.self,
+            from: data
         )
     }
 

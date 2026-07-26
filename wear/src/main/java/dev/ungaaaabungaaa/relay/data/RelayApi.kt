@@ -9,6 +9,7 @@ import dev.ungaaaabungaaa.relay.domain.parseApprovalRisk
 import dev.ungaaaabungaaa.relay.security.DeviceIdentity
 import dev.ungaaaabungaaa.relay.security.canonicalRequest
 import java.io.File
+import java.util.Base64
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,6 +23,7 @@ import org.json.JSONObject
 class RelayApi(
     private val preferences: RelayPreferences,
     private val identity: DeviceIdentity,
+    private val cloudTransport: RelayCloudTransport? = null,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
     suspend fun pairLegacy(code: String, name: String) = withContext(Dispatchers.IO) {
@@ -260,14 +262,39 @@ class RelayApi(
             val timestamp = System.currentTimeMillis()
             val nonce = UUID.randomUUID().toString()
             val canonical = canonicalRequest(deviceId, method, path, body, timestamp, nonce)
+            val signedHeaders = mutableMapOf(
+                "x-relay-device" to deviceId,
+                "x-relay-timestamp" to timestamp.toString(),
+                "x-relay-nonce" to nonce,
+                "x-relay-signature" to identity.sign(canonical),
+                "content-type" to contentType.toString(),
+            )
+            idempotencyKey?.let { signedHeaders["idempotency-key"] = it }
+            if (cloudTransport?.isPaired == true) {
+                val cloudBody = if (contentType == AUDIO) {
+                    signedHeaders["x-relay-body-encoding"] = "base64"
+                    Base64.getEncoder().encodeToString(body)
+                } else {
+                    body.decodeToString()
+                }
+                val response = cloudTransport.request(
+                    method = method,
+                    path = path,
+                    headers = signedHeaders,
+                    body = cloudBody,
+                )
+                if (response.status !in 200..299) {
+                    val message = runCatching {
+                        JSONObject(response.body).optString("error")
+                    }.getOrNull()
+                    error(message?.takeIf(String::isNotBlank) ?: "Relay request failed")
+                }
+                return@withContext JSONObject(response.body)
+            }
             val builder = Request.Builder()
                 .url("${preferences.bridgeUrl}$path")
-                .header("x-relay-device", deviceId)
-                .header("x-relay-timestamp", timestamp.toString())
-                .header("x-relay-nonce", nonce)
-                .header("x-relay-signature", identity.sign(canonical))
-            idempotencyKey?.let {
-                builder.header("idempotency-key", it)
+            for ((name, value) in signedHeaders) {
+                builder.header(name, value)
             }
             if (method == "POST") builder.post(body.toRequestBody(contentType))
             val response = client.newCall(builder.build()).execute()

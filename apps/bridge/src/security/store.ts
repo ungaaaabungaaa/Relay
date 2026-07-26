@@ -88,6 +88,11 @@ export interface SecurityStore {
     responseJson: string | null,
   ): void;
   audit(deviceId: string | null, action: string, target: string | null, result: string): void;
+  loadCloudSequenceState(kind: "incoming" | "outgoing"): Record<string, number>;
+  saveCloudSequenceState(
+    kind: "incoming" | "outgoing",
+    state: Record<string, number>,
+  ): void;
 }
 
 export class InMemorySecurityStore {
@@ -97,6 +102,7 @@ export class InMemorySecurityStore {
   readonly pairingSessions = new Map<string, StoredPairingSession>();
   readonly actions = new Map<string, StoredActionResult>();
   readonly auditEvents: AuditEvent[] = [];
+  readonly cloudSequenceState = new Map<string, Record<string, number>>();
 
   addDevice(
     publicId: string,
@@ -212,5 +218,16 @@ export class InMemorySecurityStore {
     result: string,
   ) {
     this.auditEvents.push({ deviceId, action, target, result });
+  }
+
+  loadCloudSequenceState(kind: "incoming" | "outgoing") {
+    return structuredClone(this.cloudSequenceState.get(kind) ?? {});
+  }
+
+  saveCloudSequenceState(
+    kind: "incoming" | "outgoing",
+    state: Record<string, number>,
+  ) {
+    this.cloudSequenceState.set(kind, structuredClone(state));
   }
 }

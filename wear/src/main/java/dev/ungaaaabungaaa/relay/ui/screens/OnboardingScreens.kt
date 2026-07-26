@@ -57,7 +57,7 @@ fun PairingCodeScreen(
                 when {
                     macName != null -> "Found $macName. Enter the code shown on the Mac."
                     discovering -> "Looking for Relay on this Wi-Fi…"
-                    else -> "Open Relay on the Mac and start secure pairing."
+                    else -> "Open Relay on the Mac, choose Pair a watch, then enter its code here."
                 },
                 color = RelayColors.Muted,
                 size = 10,
@@ -82,12 +82,12 @@ fun PairingCodeScreen(
         item {
             RelayActionButton(
                 "Pair watch",
-                enabled = pairingCode.length == 6 && (macName != null || showManualOrigin),
+                enabled = pairingCode.length == 6,
                 color = RelayColors.Green,
                 onClick = onPair,
             )
         }
-        if (macName == null) {
+        if (showManualOrigin && macName == null) {
             item { RelayTextButton("Search again", onClick = onRetryDiscovery) }
         }
         item { RelayTextButton("About Relay", onClick = onAbout) }

@@ -107,4 +107,11 @@ export class HibernatingTunnelRouter {
       this.#peers.delete(peerId);
     }
   }
+
+  terminate(peerId: string, code: number, reason: string): void {
+    const connected = this.#peers.get(peerId);
+    if (!connected) return;
+    connected.socket.close(code, reason);
+    this.disconnect(peerId, connected.socket);
+  }
 }

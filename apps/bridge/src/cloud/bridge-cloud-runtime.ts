@@ -24,7 +24,6 @@ export class BridgeCloudRuntime {
   readonly #options: BridgeCloudRuntimeOptions;
   readonly #rootKeys = new Map<string, CryptoKey>();
   readonly #adapters = new Map<string, CloudTunnelAdapter>();
-  #replayState: Record<string, number> = {};
 
   constructor(options: BridgeCloudRuntimeOptions) {
     this.#options = options;
@@ -60,9 +59,15 @@ export class BridgeCloudRuntime {
             if (!key) throw new Error("Unknown Relay cloud device");
             return key;
           },
-          loadReplayState: async () => structuredClone(this.#replayState),
+          loadReplayState: async () =>
+            this.#options.store.loadCloudSequenceState("incoming"),
           saveReplayState: async (state) => {
-            this.#replayState = structuredClone(state);
+            this.#options.store.saveCloudSequenceState("incoming", state);
+          },
+          loadOutgoingSequences: async () =>
+            this.#options.store.loadCloudSequenceState("outgoing"),
+          saveOutgoingSequences: async (state) => {
+            this.#options.store.saveCloudSequenceState("outgoing", state);
           },
           handler: this.#options.handler,
           ...(this.#options.now ? { now: this.#options.now } : {}),

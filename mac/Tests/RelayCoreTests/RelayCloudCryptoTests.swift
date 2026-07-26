@@ -67,7 +67,7 @@ func cloudReplayWindowRestoresTheLastSequence() throws {
 }
 
 @Test
-func approvedCloudPairingDerivesTheRegistrationStoredForTheBridge() throws {
+func approvedCloudPairingEncryptsWatchCredentialForWatchOnly() throws {
     let host = RelayCloudHostKeys(
         signingPrivateKey: P256.Signing.PrivateKey(),
         agreementPrivateKey: P256.KeyAgreement.PrivateKey()
@@ -90,17 +90,11 @@ func approvedCloudPairingDerivesTheRegistrationStoredForTheBridge() throws {
             screenShape: "round"
         )
     )
-    let approved = RelayCloudApprovedDevice(
-        id: "watch-1",
-        hostId: "host-1",
-        credential: "watch-credential",
-        sessionNonce: nonce.base64EncodedString()
-    )
-
-    let registration = try RelayCloudPairingMaterial.registration(
+    let prepared = try RelayCloudPairingMaterial.prepare(
+        accountID: "account-1",
         hostID: "host-1",
         request: request,
-        approved: approved,
+        sessionNonce: nonce.base64EncodedString(),
         hostKeys: host
     )
     let expected = try RelayCloudCrypto.deriveRootKey(
@@ -110,9 +104,40 @@ func approvedCloudPairingDerivesTheRegistrationStoredForTheBridge() throws {
     )
     let expectedData = expected.withUnsafeBytes { Data($0) }
 
-    #expect(registration.deviceId == "watch-1")
-    #expect(registration.signingPublicKey == "watch-signing-pem")
-    #expect(Data(base64URL: registration.rootKey) == expectedData)
+    let credential = try RelayCloudPairingMaterial.open(
+        prepared.payload,
+        requestID: request.id,
+        hostID: "host-1",
+        rootKey: expected
+    )
+
+    #expect(prepared.registration.deviceId == prepared.device.id)
+    #expect(prepared.registration.signingPublicKey == "watch-signing-pem")
+    #expect(Data(base64URL: prepared.registration.rootKey) == expectedData)
+    #expect(credential.accountId == "account-1")
+    #expect(credential.hostId == "host-1")
+    #expect(credential.deviceId == prepared.device.id)
+    #expect(credential.credential == prepared.rawCredential)
+    #expect(credential.apiVersion == 1)
+    #expect(prepared.credentialHash != prepared.rawCredential)
+    #expect(!prepared.payload.ciphertext.contains(prepared.rawCredential))
+}
+
+@Test
+func pairingCompletionOpensTheSharedCrossPlatformVector() throws {
+    let credential = try RelayCloudPairingMaterial.open(
+        RelayCloudPairingPayloadEnvelope(
+            version: 1,
+            nonce: "BwcHBwcHBwcHBwcH",
+            ciphertext: "Ipns_AseincDozOvrOAShV5XcyT0IcNnsqx5_4ACyn1hheZdO2yVENqvqHewusDboJLNJrXksCO4QF2L4ULZIrO0xtPQeZir4ejLnlNgyks06MUKP96sllHjC0kg-fTFUR69DnmQGHBd2uOniuIBj7C4Tu6AvsVnfqTYcO6xXJx855wfqzOAhKkTq1GUsQywQ5spui_x5IOsMHC3maU24urmS2n5eMw"
+        ),
+        requestID: "request-1",
+        hostID: "host-1",
+        rootKey: SymmetricKey(data: Data(repeating: 9, count: 32))
+    )
+
+    #expect(credential.deviceId == "watch-1")
+    #expect(credential.credential == "watch-secret")
 }
 
 private extension Data {

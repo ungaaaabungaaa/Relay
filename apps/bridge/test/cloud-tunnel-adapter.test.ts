@@ -72,6 +72,50 @@ describe("bridge cloud tunnel adapter", () => {
     });
   });
 
+  it("decodes authenticated base64 voice bodies before bridge handling", async () => {
+    const { watchRoot } = await fixture();
+    let received = new Uint8Array();
+    const adapter = new CloudTunnelAdapter({
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => ({}),
+      saveReplayState: async () => {},
+      handler: async (request) => {
+        received = new Uint8Array(await request.arrayBuffer());
+        return Response.json({ transcript: "hello" });
+      },
+      now: () => 2_000,
+    });
+    const incoming = await encryptRelayEnvelope(
+      {
+        version: 1,
+        messageId: "voice-1",
+        accountId: "account-1",
+        hostId: "host-1",
+        senderId: "watch-1",
+        recipientId: "host-1",
+        sentAt: 1_900,
+        sequence: 1,
+      },
+      {
+        kind: "request",
+        body: {
+          method: "POST",
+          path: "/v1/transcribe?durationMs=1000",
+          headers: {
+            "content-type": "audio/mp4",
+            "x-relay-body-encoding": "base64",
+          },
+          body: Buffer.from([0, 1, 2, 255]).toString("base64"),
+        },
+      },
+      watchRoot,
+    );
+
+    await adapter.receive(incoming);
+    assert.deepEqual(received, new Uint8Array([0, 1, 2, 255]));
+  });
+
   it("persists replay state and rejects duplicate delivery after restart", async () => {
     const { watchRoot } = await fixture();
     let persisted: Record<string, number> = {};
@@ -106,6 +150,52 @@ describe("bridge cloud tunnel adapter", () => {
     await assert.rejects(
       new CloudTunnelAdapter(options).receive(incoming),
       /replay/i,
+    );
+  });
+
+  it("persists host response sequence across bridge restarts", async () => {
+    const { watchRoot } = await fixture();
+    let replay: Record<string, number> = {};
+    let outgoing: Record<string, number> = {};
+    const options = {
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => replay,
+      saveReplayState: async (state: Record<string, number>) => {
+        replay = state;
+      },
+      loadOutgoingSequences: async () => outgoing,
+      saveOutgoingSequences: async (state: Record<string, number>) => {
+        outgoing = state;
+      },
+      handler: async () => Response.json({ ok: true }),
+      now: () => 2_000,
+    };
+    const request = async (sequence: number) => encryptRelayEnvelope(
+      {
+        version: 1,
+        messageId: `request-${sequence}`,
+        accountId: "account-1",
+        hostId: "host-1",
+        senderId: "watch-1",
+        recipientId: "host-1",
+        sentAt: 1_900,
+        sequence,
+      },
+      {
+        kind: "request",
+        body: { method: "GET", path: "/v1/tasks", headers: {}, body: "" },
+      },
+      watchRoot,
+    );
+
+    assert.equal(
+      (await new CloudTunnelAdapter(options).receive(await request(1))).sequence,
+      1,
+    );
+    assert.equal(
+      (await new CloudTunnelAdapter(options).receive(await request(2))).sequence,
+      2,
     );
   });
 
