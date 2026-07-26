@@ -81,6 +81,42 @@ func cloudClientRegistersOneHostAndCreatesItsPairingSession() async throws {
     })
 }
 
+@Test
+func cloudClientApprovesDeniesRevokesAndDeletesWithoutURLSecrets() async throws {
+    let recorder = SequenceRequestRecorder(responses: [
+        Data(#"{"id":"watch-1","hostId":"host-1","credential":"watch-secret","sessionNonce":"bm9uY2U"}"#.utf8),
+        Data(#"{"ok":true}"#.utf8),
+        Data(#"{"ok":true}"#.utf8),
+        Data(#"{"ok":true}"#.utf8),
+    ])
+    let client = RelayCloudClient(transport: recorder.send)
+    let approved = try await client.approvePairing(
+        accessToken: "access",
+        pairingToken: "pair-token",
+        requestID: "request-1"
+    )
+    try await client.denyPairing(
+        accessToken: "access",
+        pairingToken: "other-pair-token",
+        requestID: "request-2"
+    )
+    try await client.revokeDevice(
+        accessToken: "access",
+        deviceID: "watch-1"
+    )
+    try await client.deleteAccount(accessToken: "access")
+
+    #expect(approved.id == "watch-1")
+    let requests = await recorder.requests
+    #expect(requests.map(\.url?.path) == [
+        "/cloud/v1/pairing-sessions/pair-token/approve",
+        "/cloud/v1/pairing-sessions/other-pair-token/deny",
+        "/cloud/v1/devices/watch-1/revoke",
+        "/cloud/v1/account",
+    ])
+    #expect(requests.allSatisfy { $0.url?.query == nil })
+}
+
 private actor RequestRecorder {
     let response: HTTPURLResponse
     let data: Data

@@ -1,0 +1,61 @@
+name: Relay Cloud deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/cloud/**"
+      - "packages/cloud-protocol/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/cloud-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Protected Cloudflare environment
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-cloud-${{ inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target || 'staging' }}
+    env:
+      RELAY_CLOUD_ENV: ${{ inputs.target || 'staging' }}
+      RELAY_CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
+      RELAY_CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME }}
+      RELAY_API_HOST: ${{ vars.RELAY_API_HOST }}
+      RELAY_PUBLIC_HOST: ${{ vars.RELAY_PUBLIC_HOST }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @relay/cloud test
+      - run: pnpm --filter @relay/cloud build
+      - name: Render secret-safe deployment configuration
+        run: node apps/cloud/scripts/render-wrangler-config.mjs "$RUNNER_TEMP/relay-wrangler.jsonc"
+      - name: Apply D1 migrations
+        run: pnpm --filter @relay/cloud exec wrangler d1 migrations apply "$RELAY_CLOUDFLARE_D1_DATABASE_NAME" --remote --config "$RUNNER_TEMP/relay-wrangler.jsonc"
+      - name: Deploy Worker and Durable Object
+        run: pnpm --filter @relay/cloud exec wrangler deploy --config "$RUNNER_TEMP/relay-wrangler.jsonc"

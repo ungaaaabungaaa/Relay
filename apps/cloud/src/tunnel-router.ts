@@ -82,6 +82,23 @@ export class HibernatingTunnelRouter {
     return "offline";
   }
 
+  sendControl(
+    hostId: string,
+    message: Record<string, unknown>,
+  ): "delivered" | "offline" {
+    const host = this.#peers.get(hostId);
+    if (
+      !host ||
+      host.role !== "host" ||
+      host.peerId !== host.hostId ||
+      this.#revoked.has(host.peerId)
+    ) {
+      return "offline";
+    }
+    host.socket.send(JSON.stringify(message));
+    return "delivered";
+  }
+
   revoke(peerId: string): void {
     this.#revoked.add(peerId);
     const connected = this.#peers.get(peerId);

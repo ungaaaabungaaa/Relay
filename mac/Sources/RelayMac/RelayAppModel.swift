@@ -45,8 +45,11 @@ final class RelayAppModel: ObservableObject {
     let updateController = RelayUpdateController()
     private var tailscaleLoginTask: Task<Void, Never>?
     private let cloudClient = RelayCloudClient()
+    private let cloudTunnel = RelayCloudHostTunnel()
     private var cloudAccessToken: String?
     private var cloudLoginTask: Task<Void, Never>?
+    private var cloudTunnelTask: Task<Void, Never>?
+    private var cloudPairingRequests: [String: RelayCloudPairingRequest] = [:]
 
     init() {
         let secrets = KeychainStore()
@@ -98,6 +101,7 @@ final class RelayAppModel: ObservableObject {
             bridgeState = .running
             try? await Task.sleep(for: .milliseconds(250))
             await refresh()
+            await restoreRelayCloudSession()
         } catch {
             bridgeState = .failed
             lastError = "Relay could not start its local bridge."
@@ -111,7 +115,8 @@ final class RelayAppModel: ObservableObject {
             let status = try await adminClient.status()
             let selfTest = try await adminClient.securitySelfTest()
             devices = try await adminClient.devices()
-            pendingPairings = try await adminClient.pendingPairings()
+            let localPairings = try await adminClient.pendingPairings()
+            pendingPairings = localPairings + cloudPendingPairings
             workspaces = try await adminClient.workspaces()
             voiceConfigured = try await adminClient.voiceStatus().configured
             bridgeState = selfTest.ok ? .running : .failed
@@ -168,6 +173,7 @@ final class RelayAppModel: ObservableObject {
     func refreshPendingPairings() async {
         do {
             pendingPairings = try await adminClient.pendingPairings()
+                + cloudPendingPairings
             lastError = nil
         } catch {
             lastError = "Relay could not refresh pending watch approvals."
@@ -175,6 +181,10 @@ final class RelayAppModel: ObservableObject {
     }
 
     func approvePairing(_ pairing: AdminPendingPairing) async {
+        if let cloudRequest = cloudPairingRequests[pairing.id] {
+            await approveCloudPairing(cloudRequest)
+            return
+        }
         do {
             _ = try await adminClient.approvePairing(id: pairing.id)
             discoveryAdvertiser.stop()
@@ -191,6 +201,10 @@ final class RelayAppModel: ObservableObject {
     }
 
     func denyPairing(_ pairing: AdminPendingPairing) async {
+        if cloudPairingRequests[pairing.id] != nil {
+            await denyCloudPairing(pairing.id)
+            return
+        }
         do {
             try await adminClient.denyPairing(id: pairing.id)
             discoveryAdvertiser.stop()
@@ -344,10 +358,9 @@ final class RelayAppModel: ObservableObject {
                         }
                         cloudAccessToken = tokens.accessToken
                         cloudSignedIn = true
-                        cloudConnected = true
-                        funnelEnabled = true
                         cloudLoginInProgress = false
-                        diagnostic = "Relay Cloud is connected with end-to-end encryption."
+                        startCloudTunnel()
+                        diagnostic = "Relay Cloud sign-in completed. Connecting the encrypted tunnel…"
                         updateSetupState(bridgeReady: bridgeState == .running)
                         return
                     }
@@ -372,11 +385,13 @@ final class RelayAppModel: ObservableObject {
     }
 
     func signOutOfRelayCloud() async {
+        cloudTunnelTask?.cancel()
+        cloudTunnelTask = nil
+        await cloudTunnel.disconnect()
         if let refreshToken = try? secrets.value(for: .cloudRefreshToken) {
             try? await cloudClient.logout(refreshToken: refreshToken)
         }
         try? secrets.remove(.cloudRefreshToken)
-        try? secrets.remove(.cloudHostCredential)
         cloudAccessToken = nil
         cloudSignedIn = false
         cloudConnected = false
@@ -521,6 +536,8 @@ final class RelayAppModel: ObservableObject {
 
     func quit() async {
         cancelTailscaleLogin()
+        cloudTunnelTask?.cancel()
+        await cloudTunnel.disconnect()
         discoveryAdvertiser.stop()
         await closeTemporaryPairingTransport()
         try? await adminClient.shutdown()
@@ -546,6 +563,170 @@ final class RelayAppModel: ObservableObject {
         let token = Data(bytes).base64EncodedString()
         try secrets.set(token, for: .adminToken)
         return token
+    }
+
+    private var cloudPendingPairings: [AdminPendingPairing] {
+        cloudPairingRequests.values
+            .sorted { $0.expiresAt < $1.expiresAt }
+            .map {
+                AdminPendingPairing(
+                    id: $0.id,
+                    name: $0.metadata.model.isEmpty
+                        ? "Relay Watch"
+                        : $0.metadata.model,
+                    fingerprint: $0.fingerprint,
+                    metadata: AdminDeviceMetadata(
+                        platform: $0.metadata.platform,
+                        manufacturer: $0.metadata.manufacturer,
+                        model: $0.metadata.model,
+                        osVersion: $0.metadata.osVersion,
+                        appVersion: $0.metadata.appVersion,
+                        screenShape: $0.metadata.screenShape
+                    ),
+                    expiresAt: $0.expiresAt
+                )
+            }
+    }
+
+    private func restoreRelayCloudSession() async {
+        guard
+            let refreshToken = try? secrets.value(for: .cloudRefreshToken),
+            let hostID = try? secrets.value(for: .cloudHostID),
+            let hostCredential = try? secrets.value(for: .cloudHostCredential),
+            !refreshToken.isEmpty,
+            !hostID.isEmpty,
+            !hostCredential.isEmpty
+        else {
+            return
+        }
+        do {
+            let tokens = try await cloudClient.refresh(
+                refreshToken: refreshToken
+            )
+            try secrets.set(tokens.refreshToken, for: .cloudRefreshToken)
+            cloudAccessToken = tokens.accessToken
+            cloudSignedIn = true
+            for registration in try RelayCloudDeviceVault.devices(in: secrets) {
+                try await adminClient.registerCloudDevice(registration)
+            }
+            startCloudTunnel()
+        } catch {
+            try? secrets.remove(.cloudRefreshToken)
+            cloudSignedIn = false
+            cloudConnected = false
+            lastError = "Relay Cloud needs you to sign in again."
+        }
+    }
+
+    private func startCloudTunnel() {
+        cloudTunnelTask?.cancel()
+        guard
+            let hostID = try? secrets.value(for: .cloudHostID),
+            let credential = try? secrets.value(for: .cloudHostCredential),
+            !hostID.isEmpty,
+            !credential.isEmpty
+        else {
+            cloudConnected = false
+            return
+        }
+        cloudTunnelTask = Task {
+            var retrySeconds = 1
+            while !Task.isCancelled {
+                do {
+                    let events = await cloudTunnel.events(
+                        hostID: hostID,
+                        credential: credential
+                    )
+                    for try await event in events {
+                        try Task.checkCancellation()
+                        switch event {
+                        case .connected:
+                            cloudConnected = true
+                            funnelEnabled = true
+                            retrySeconds = 1
+                            diagnostic = "Relay Cloud is connected with end-to-end encryption."
+                        case .pairingRequest(let request):
+                            cloudPairingRequests[request.id] = request
+                            pendingPairings = cloudPendingPairings
+                            diagnostic = "A watch is waiting for fingerprint approval."
+                        case .envelope(let envelope):
+                            let response = try await adminClient
+                                .processCloudEnvelope(envelope)
+                            try await cloudTunnel.send(response)
+                        }
+                    }
+                } catch is CancellationError {
+                    break
+                } catch {
+                    cloudConnected = false
+                    funnelEnabled = false
+                }
+                guard !Task.isCancelled else { break }
+                try? await Task.sleep(for: .seconds(retrySeconds))
+                retrySeconds = min(retrySeconds * 2, 30)
+            }
+            cloudConnected = false
+            funnelEnabled = false
+        }
+    }
+
+    private func approveCloudPairing(
+        _ request: RelayCloudPairingRequest
+    ) async {
+        guard
+            let accessToken = cloudAccessToken,
+            let session = cloudPairingSession,
+            let hostID = try? secrets.value(for: .cloudHostID)
+        else {
+            lastError = "Start a new cloud pairing session."
+            return
+        }
+        do {
+            let approved = try await cloudClient.approvePairing(
+                accessToken: accessToken,
+                pairingToken: session.token,
+                requestID: request.id
+            )
+            let registration = try RelayCloudPairingMaterial.registration(
+                hostID: hostID,
+                request: request,
+                approved: approved,
+                hostKeys: RelayCloudHostKeys.loadOrCreate(in: secrets)
+            )
+            try RelayCloudDeviceVault.upsert(registration, in: secrets)
+            try await adminClient.registerCloudDevice(registration)
+            cloudPairingRequests.removeValue(forKey: request.id)
+            cloudPairingSession = nil
+            pendingPairings = cloudPendingPairings
+            await refresh()
+            diagnostic = "The watch is paired and its encrypted tunnel is active."
+            lastError = nil
+        } catch {
+            lastError = "That cloud pairing request expired. Start pairing again."
+        }
+    }
+
+    private func denyCloudPairing(_ requestID: String) async {
+        guard
+            let accessToken = cloudAccessToken,
+            let session = cloudPairingSession
+        else {
+            lastError = "Start a new cloud pairing session."
+            return
+        }
+        do {
+            try await cloudClient.denyPairing(
+                accessToken: accessToken,
+                pairingToken: session.token,
+                requestID: requestID
+            )
+            cloudPairingRequests.removeValue(forKey: requestID)
+            cloudPairingSession = nil
+            pendingPairings = cloudPendingPairings
+            lastError = nil
+        } catch {
+            lastError = "That cloud pairing request is no longer available."
+        }
     }
 
     private func locateBridgeExecutable() -> URL? {

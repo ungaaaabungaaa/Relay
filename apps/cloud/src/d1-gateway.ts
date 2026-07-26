@@ -16,6 +16,11 @@ type GatewayOptions = {
   publicOrigin: string;
   now?: () => number;
   sendMagicLink(email: string, url: string): Promise<void>;
+  notifyHost?(
+    accountId: string,
+    hostId: string,
+    message: Record<string, unknown>,
+  ): Promise<void>;
 };
 
 type AccessClaims = {
@@ -338,6 +343,7 @@ export class D1CommandGateway {
     const tokenHash = await this.#pairingTokenHash(rawTokenOrCode);
     const context = await this.#repository.getPairingContext(tokenHash);
     const requestId = randomUUID();
+    const expiresAt = this.#now() + 2 * 60_000;
     await this.#repository.createPairingRequest({
       id: requestId,
       tokenHash,
@@ -347,14 +353,28 @@ export class D1CommandGateway {
       signingPublicKey: requiredString(body, "signingPublicKey"),
       agreementPublicKey: requiredString(body, "agreementPublicKey"),
       metadata: object(body.metadata ?? {}),
-      expiresAt: this.#now() + 2 * 60_000,
+      expiresAt,
     });
+    await this.#options.notifyHost?.(
+      context.accountId,
+      context.hostId,
+      {
+        type: "pairing_request",
+        requestId,
+        fingerprint: requiredString(body, "fingerprint"),
+        signingPublicKey: requiredString(body, "signingPublicKey"),
+        agreementPublicKey: requiredString(body, "agreementPublicKey"),
+        expiresAt,
+        metadata: object(body.metadata ?? {}),
+      },
+    );
     return {
       id: requestId,
       hostId: context.hostId,
       sessionNonce: context.sessionNonce,
       macFingerprint: context.macFingerprint,
       macAgreementPublicKey: context.hostAgreementPublicKey,
+      expiresAt,
     };
   }
 

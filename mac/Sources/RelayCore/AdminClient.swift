@@ -85,6 +85,22 @@ public struct AdminDeviceMetadata: Codable, Equatable, Sendable {
     public var osVersion: String
     public var appVersion: String
     public var screenShape: String
+
+    public init(
+        platform: String,
+        manufacturer: String,
+        model: String,
+        osVersion: String,
+        appVersion: String,
+        screenShape: String
+    ) {
+        self.platform = platform
+        self.manufacturer = manufacturer
+        self.model = model
+        self.osVersion = osVersion
+        self.appVersion = appVersion
+        self.screenShape = screenShape
+    }
 }
 
 public struct AdminPendingPairing: Codable, Identifiable, Equatable, Sendable {
@@ -93,6 +109,45 @@ public struct AdminPendingPairing: Codable, Identifiable, Equatable, Sendable {
     public var fingerprint: String
     public var metadata: AdminDeviceMetadata
     public var expiresAt: Int64
+
+    public init(
+        id: String,
+        name: String,
+        fingerprint: String,
+        metadata: AdminDeviceMetadata,
+        expiresAt: Int64
+    ) {
+        self.id = id
+        self.name = name
+        self.fingerprint = fingerprint
+        self.metadata = metadata
+        self.expiresAt = expiresAt
+    }
+}
+
+public struct AdminCloudDeviceRegistration: Codable, Equatable, Sendable {
+    public var hostId: String
+    public var deviceId: String
+    public var name: String
+    public var signingPublicKey: String
+    public var rootKey: String
+    public var metadata: AdminDeviceMetadata
+
+    public init(
+        hostId: String,
+        deviceId: String,
+        name: String,
+        signingPublicKey: String,
+        rootKey: String,
+        metadata: AdminDeviceMetadata
+    ) {
+        self.hostId = hostId
+        self.deviceId = deviceId
+        self.name = name
+        self.signingPublicKey = signingPublicKey
+        self.rootKey = rootKey
+        self.metadata = metadata
+    }
 }
 
 private struct AdminPendingPairings: Codable, Sendable {
@@ -190,6 +245,26 @@ public struct AdminClient: Sendable {
         let _: AdminOK = try await request(
             ["v1", "pairing-sessions", id, "deny"],
             method: "POST"
+        )
+    }
+
+    public func registerCloudDevice(
+        _ registration: AdminCloudDeviceRegistration
+    ) async throws {
+        let _: AdminOK = try await request(
+            ["v1", "cloud", "devices"],
+            method: "POST",
+            body: try JSONEncoder().encode(registration)
+        )
+    }
+
+    public func processCloudEnvelope(
+        _ envelope: RelayTunnelEnvelope
+    ) async throws -> RelayTunnelEnvelope {
+        try await request(
+            ["v1", "cloud", "envelopes"],
+            method: "POST",
+            body: try JSONEncoder().encode(envelope)
         )
     }
 

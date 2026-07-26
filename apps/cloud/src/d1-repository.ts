@@ -15,6 +15,12 @@ type D1DatabaseLike = {
 };
 
 type RepositoryOptions = { now?: () => number };
+export type AuthenticatedTunnelPeer = {
+  accountId: string;
+  hostId: string;
+  peerId: string;
+  role: "host" | "device";
+};
 
 const AUTH_ERROR = "Authentication failed";
 const PAIRING_ERROR = "Pairing failed";
@@ -405,6 +411,28 @@ export class D1CloudRepository {
     }
   }
 
+  async authenticateHost(
+    hostId: string,
+    credentialHash: string,
+  ): Promise<AuthenticatedTunnelPeer> {
+    const host = await this.database
+      .prepare(
+        `SELECT account_id FROM hosts
+         WHERE id = ?
+           AND credential_hash = ?
+           AND revoked_at IS NULL`,
+      )
+      .bind(hostId, credentialHash)
+      .first<{ account_id: string }>();
+    if (!host) throw new Error(AUTH_ERROR);
+    return {
+      accountId: host.account_id,
+      hostId,
+      peerId: hostId,
+      role: "host",
+    };
+  }
+
   async createDevice(input: {
     id: string;
     accountId: string;
@@ -444,6 +472,28 @@ export class D1CloudRepository {
       )
       .run();
     if (changeCount(result) !== 1) throw new Error("Device limit reached");
+  }
+
+  async authenticateDevice(
+    deviceId: string,
+    credentialHash: string,
+  ): Promise<AuthenticatedTunnelPeer> {
+    const device = await this.database
+      .prepare(
+        `SELECT account_id, host_id FROM devices
+         WHERE id = ?
+           AND credential_hash = ?
+           AND revoked_at IS NULL`,
+      )
+      .bind(deviceId, credentialHash)
+      .first<{ account_id: string; host_id: string }>();
+    if (!device) throw new Error(AUTH_ERROR);
+    return {
+      accountId: device.account_id,
+      hostId: device.host_id,
+      peerId: deviceId,
+      role: "device",
+    };
   }
 
   async createPairingSession(input: {

@@ -71,6 +71,13 @@ export class DurableTunnelSession {
     this.#peers.delete(socket);
   }
 
+  sendControl(
+    hostId: string,
+    message: Record<string, unknown>,
+  ): "delivered" | "offline" {
+    return this.#router.sendControl(hostId, message);
+  }
+
   revoke(peerId: string): void {
     this.#router.revoke(peerId);
   }

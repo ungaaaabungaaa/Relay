@@ -173,4 +173,75 @@ describe("admin server", () => {
     assert.equal(read.status, 200);
     assert.deepEqual(await read.json(), { roots: [canonical] });
   });
+
+  it("accepts cloud keys and envelopes only through authenticated loopback admin", async () => {
+    const { options } = createOptions();
+    const registrations: unknown[] = [];
+    const envelopes: unknown[] = [];
+    const handler = createAdminRequestHandler({
+      ...options,
+      cloudRuntime: {
+        registerDevice: async (input) => {
+          registrations.push(input);
+        },
+        receive: async (envelope) => {
+          envelopes.push(envelope);
+          return {
+            ...envelope,
+            senderId: "host-1",
+            recipientId: "watch-1",
+            sequence: 2,
+          };
+        },
+      },
+    });
+
+    const registration = await handler(
+      authorized("/v1/cloud/devices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          hostId: "host-1",
+          deviceId: "watch-1",
+          name: "Galaxy Watch6",
+          signingPublicKey: "watch-signing-key",
+          rootKey: Buffer.alloc(32, 7).toString("base64url"),
+          metadata: {
+            platform: "wear-os",
+            manufacturer: "Samsung",
+            model: "Watch6",
+            osVersion: "5",
+            appVersion: "1",
+            screenShape: "round",
+          },
+        }),
+      }),
+    );
+    assert.equal(registration.status, 200);
+    assert.deepEqual(await registration.json(), { ok: true });
+    assert.equal(registrations.length, 1);
+
+    const envelope = {
+      version: 1,
+      messageId: "message-1",
+      accountId: "account-1",
+      hostId: "host-1",
+      senderId: "watch-1",
+      recipientId: "host-1",
+      sentAt: Date.now(),
+      sequence: 1,
+      nonce: "nonce",
+      ciphertext: "ciphertext",
+    };
+    const processed = await handler(
+      authorized("/v1/cloud/envelopes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(envelope),
+      }),
+    );
+    assert.equal(processed.status, 200);
+    assert.equal((await processed.json()).senderId, "host-1");
+    assert.equal(envelopes.length, 1);
+  });
 });

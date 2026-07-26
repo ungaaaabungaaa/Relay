@@ -6,6 +6,8 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { RelayTunnelEnvelope } from "../../../../packages/cloud-protocol/src/index.ts";
+import type { DeviceMetadata } from "../security/store.ts";
 import { PairingService } from "../security/pairing.ts";
 import type { PairingSessionService } from "../security/pairing-session.ts";
 import type { SecurityStore } from "../security/store.ts";
@@ -26,6 +28,17 @@ export type AdminServerOptions = {
   watchPort: number;
   codexStatus: () => CodexStatus;
   voiceConfigured: boolean;
+  cloudRuntime?: {
+    registerDevice(input: {
+      hostId: string;
+      deviceId: string;
+      name: string;
+      signingPublicKey: string;
+      rootKey: string;
+      metadata: DeviceMetadata;
+    }): Promise<void>;
+    receive(envelope: RelayTunnelEnvelope): Promise<RelayTunnelEnvelope>;
+  };
   shutdown: () => void;
 };
 
@@ -181,6 +194,74 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
       }
       if (request.method === "GET" && url.pathname === "/v1/devices") {
         return json({ devices: options.store.listDevices().map(publicDevice) });
+      }
+      if (
+        request.method === "POST" &&
+        url.pathname === "/v1/cloud/devices"
+      ) {
+        if (!options.cloudRuntime) {
+          return json({ error: "cloud unavailable" }, 503);
+        }
+        const body = await parseJson(request);
+        const metadata = body.metadata as Partial<DeviceMetadata> | undefined;
+        const rootKey =
+          typeof body.rootKey === "string"
+            ? Buffer.from(body.rootKey, "base64url")
+            : Buffer.alloc(0);
+        if (
+          typeof body.hostId !== "string" ||
+          typeof body.deviceId !== "string" ||
+          typeof body.name !== "string" ||
+          typeof body.signingPublicKey !== "string" ||
+          typeof body.rootKey !== "string" ||
+          rootKey.byteLength !== 32 ||
+          !metadata ||
+          !["wear-os", "watch-os"].includes(String(metadata.platform)) ||
+          typeof metadata.manufacturer !== "string" ||
+          typeof metadata.model !== "string" ||
+          typeof metadata.osVersion !== "string" ||
+          typeof metadata.appVersion !== "string" ||
+          !["round", "square"].includes(String(metadata.screenShape))
+        ) {
+          return json({ error: "invalid request" }, 400);
+        }
+        await options.cloudRuntime.registerDevice({
+          hostId: body.hostId,
+          deviceId: body.deviceId,
+          name: body.name,
+          signingPublicKey: body.signingPublicKey,
+          rootKey: body.rootKey,
+          metadata: metadata as DeviceMetadata,
+        });
+        return json({ ok: true });
+      }
+      if (
+        request.method === "POST" &&
+        url.pathname === "/v1/cloud/envelopes"
+      ) {
+        if (!options.cloudRuntime) {
+          return json({ error: "cloud unavailable" }, 503);
+        }
+        const body = await parseJson(request);
+        if (
+          body.version !== 1 ||
+          typeof body.messageId !== "string" ||
+          typeof body.accountId !== "string" ||
+          typeof body.hostId !== "string" ||
+          typeof body.senderId !== "string" ||
+          typeof body.recipientId !== "string" ||
+          typeof body.sentAt !== "number" ||
+          typeof body.sequence !== "number" ||
+          typeof body.nonce !== "string" ||
+          typeof body.ciphertext !== "string"
+        ) {
+          return json({ error: "invalid request" }, 400);
+        }
+        return json(
+          await options.cloudRuntime.receive(
+            body as unknown as RelayTunnelEnvelope,
+          ),
+        );
       }
       const revoke = url.pathname.match(/^\/v1\/devices\/([^/]+)\/revoke$/);
       if (request.method === "POST" && revoke?.[1]) {

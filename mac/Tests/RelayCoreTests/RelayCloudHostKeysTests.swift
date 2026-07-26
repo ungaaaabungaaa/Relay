@@ -16,6 +16,35 @@ func cloudHostKeysAreStableSeparateP256IdentitiesInKeychain() throws {
     #expect(first.fingerprint.split(separator: ":").count == 4)
 }
 
+@Test
+func approvedCloudDevicesRestoreFromKeychainWithoutLoggingRootKeys() throws {
+    let store = KeychainStore(
+        service: "test.relay.cloud-devices",
+        backend: CloudKeysMemoryBackend()
+    )
+    let registration = AdminCloudDeviceRegistration(
+        hostId: "host-1",
+        deviceId: "watch-1",
+        name: "Watch6",
+        signingPublicKey: "signing",
+        rootKey: "root-key-material",
+        metadata: AdminDeviceMetadata(
+            platform: "wear-os",
+            manufacturer: "Samsung",
+            model: "Watch6",
+            osVersion: "5",
+            appVersion: "1",
+            screenShape: "round"
+        )
+    )
+
+    try RelayCloudDeviceVault.upsert(registration, in: store)
+    #expect(try RelayCloudDeviceVault.devices(in: store) == [registration])
+    #expect(!String(describing: RelayCloudDeviceVault.self).contains("root-key-material"))
+    try RelayCloudDeviceVault.removeAll(from: store)
+    #expect(try RelayCloudDeviceVault.devices(in: store).isEmpty)
+}
+
 private final class CloudKeysMemoryBackend: KeychainBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: Data] = [:]

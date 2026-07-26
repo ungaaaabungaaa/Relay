@@ -157,6 +157,60 @@ func adminClientListsAndApprovesPendingWatchMetadata() async throws {
     ])
 }
 
+@Test
+func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
+    let transport = SequencedAdminTransport(
+        responses: [
+            (200, #"{"ok":true}"#),
+            (
+                200,
+                #"{"version":1,"messageId":"response-1","accountId":"account-1","hostId":"host-1","senderId":"host-1","recipientId":"watch-1","sentAt":1000,"sequence":1,"nonce":"nonce","ciphertext":"ciphertext"}"#
+            ),
+        ]
+    )
+    let client = AdminClient(
+        token: { "admin-secret" },
+        transport: transport
+    )
+    try await client.registerCloudDevice(
+        AdminCloudDeviceRegistration(
+            hostId: "host-1",
+            deviceId: "watch-1",
+            name: "Watch6",
+            signingPublicKey: "signing",
+            rootKey: "root-key",
+            metadata: AdminDeviceMetadata(
+                platform: "wear-os",
+                manufacturer: "Samsung",
+                model: "Watch6",
+                osVersion: "5",
+                appVersion: "1",
+                screenShape: "round"
+            )
+        )
+    )
+    let outgoing = try await client.processCloudEnvelope(
+        RelayTunnelEnvelope(
+            version: 1,
+            messageID: "request-1",
+            accountID: "account-1",
+            hostID: "host-1",
+            senderID: "watch-1",
+            recipientID: "host-1",
+            sentAt: 900,
+            sequence: 1,
+            nonce: "nonce",
+            ciphertext: "ciphertext"
+        )
+    )
+
+    #expect(outgoing.senderID == "host-1")
+    #expect(await transport.requests.map(\.url?.path) == [
+        "/v1/cloud/devices",
+        "/v1/cloud/envelopes",
+    ])
+}
+
 private actor RecordingAdminTransport: AdminTransport {
     private let statusCode: Int
     private let body: Data

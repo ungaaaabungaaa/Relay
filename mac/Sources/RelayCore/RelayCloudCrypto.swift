@@ -34,6 +34,17 @@ public struct RelayTunnelRouting: Codable, Equatable, Sendable {
         self.sentAt = sentAt
         self.sequence = sequence
     }
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case messageID = "messageId"
+        case accountID = "accountId"
+        case hostID = "hostId"
+        case senderID = "senderId"
+        case recipientID = "recipientId"
+        case sentAt
+        case sequence
+    }
 }
 
 public struct RelayTunnelEnvelope: Codable, Equatable, Sendable {
@@ -58,6 +69,19 @@ public struct RelayTunnelEnvelope: Codable, Equatable, Sendable {
             sentAt: sentAt,
             sequence: sequence
         )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case messageID = "messageId"
+        case accountID = "accountId"
+        case hostID = "hostId"
+        case senderID = "senderId"
+        case recipientID = "recipientId"
+        case sentAt
+        case sequence
+        case nonce
+        case ciphertext
     }
 }
 

@@ -29,6 +29,13 @@ public struct RelayCloudPairingSession: Codable, Equatable, Sendable {
     public var macFingerprint: String
 }
 
+public struct RelayCloudApprovedDevice: Codable, Equatable, Sendable {
+    public var id: String
+    public var hostId: String
+    public var credential: String
+    public var sessionNonce: String
+}
+
 public enum RelayCloudClientError: Error, Equatable, Sendable {
     case invalidResponse
     case authenticationFailed
@@ -176,6 +183,86 @@ public struct RelayCloudClient: Sendable {
             RelayCloudPairingSession.self,
             from: data
         )
+    }
+
+    public func approvePairing(
+        accessToken: String,
+        pairingToken: String,
+        requestID: String
+    ) async throws -> RelayCloudApprovedDevice {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "requestId": requestID,
+        ])
+        let (data, response) = try await transport(
+            request(
+                path: "/cloud/v1/pairing-sessions/\(pairingToken)/approve",
+                method: "POST",
+                body: body,
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
+        return try JSONDecoder().decode(
+            RelayCloudApprovedDevice.self,
+            from: data
+        )
+    }
+
+    public func denyPairing(
+        accessToken: String,
+        pairingToken: String,
+        requestID: String
+    ) async throws {
+        try await okRequest(
+            path: "/cloud/v1/pairing-sessions/\(pairingToken)/deny",
+            method: "POST",
+            body: try JSONSerialization.data(withJSONObject: [
+                "requestId": requestID,
+            ]),
+            accessToken: accessToken
+        )
+    }
+
+    public func revokeDevice(
+        accessToken: String,
+        deviceID: String
+    ) async throws {
+        try await okRequest(
+            path: "/cloud/v1/devices/\(deviceID)/revoke",
+            method: "POST",
+            body: Data("{}".utf8),
+            accessToken: accessToken
+        )
+    }
+
+    public func deleteAccount(accessToken: String) async throws {
+        try await okRequest(
+            path: "/cloud/v1/account",
+            method: "DELETE",
+            body: Data("{}".utf8),
+            accessToken: accessToken
+        )
+    }
+
+    private func okRequest(
+        path: String,
+        method: String,
+        body: Data,
+        accessToken: String
+    ) async throws {
+        let (_, response) = try await transport(
+            request(
+                path: path,
+                method: method,
+                body: body,
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
     }
 
     private func request(

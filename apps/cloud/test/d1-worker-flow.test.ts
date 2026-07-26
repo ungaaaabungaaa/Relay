@@ -50,6 +50,7 @@ async function setup() {
     expiresAt: 60_000,
   });
   const magicLinks: string[] = [];
+  const hostNotifications: unknown[] = [];
   const gateway = new D1CommandGateway(repo, {
     jwtSecret,
     piiKey,
@@ -59,8 +60,16 @@ async function setup() {
     sendMagicLink: async (_email, url) => {
       magicLinks.push(url);
     },
+    notifyHost: async (_accountId, _hostId, message) => {
+      hostNotifications.push(message);
+    },
   });
-  return { database, magicLinks, worker: createWorker(gateway) };
+  return {
+    database,
+    hostNotifications,
+    magicLinks,
+    worker: createWorker(gateway),
+  };
 }
 
 async function json(
@@ -82,7 +91,7 @@ async function json(
 
 describe("D1-backed Worker flow", () => {
   it("runs invite login, host registration, pairing, and refresh reuse defense", async () => {
-    const { database, magicLinks, worker } = await setup();
+    const { database, hostNotifications, magicLinks, worker } = await setup();
     const verifier = "a-valid-pkce-verifier-with-at-least-forty-three-characters";
     const challenge = createHash("sha256").update(verifier).digest("base64url");
 
@@ -157,6 +166,17 @@ describe("D1-backed Worker flow", () => {
       },
     );
     assert.equal(request.response.status, 200);
+    assert.deepEqual(hostNotifications, [
+      {
+        type: "pairing_request",
+        requestId: request.body.id,
+        fingerprint: "WATCH FP",
+        signingPublicKey: "watch-signing-key",
+        agreementPublicKey: "watch-agreement-key",
+        expiresAt: 121_000,
+        metadata: { platform: "wear", model: "Watch6" },
+      },
+    ]);
 
     const approval = await json(
       worker,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
@@ -38,6 +39,60 @@ async function repository(now = 1_000) {
 }
 
 describe("D1 authentication and pairing state", () => {
+  it("authenticates tunnel peers by hashed credential and account ownership", async () => {
+    const { repo } = await repository();
+    await repo.createTestAccount("account-1");
+    await repo.createHost({
+      id: "host-1",
+      accountId: "account-1",
+      name: "Mac",
+      credentialHash: createHash("sha256")
+        .update("host-secret")
+        .digest("base64url"),
+    });
+    await repo.createDevice({
+      id: "watch-1",
+      accountId: "account-1",
+      hostId: "host-1",
+      credentialHash: createHash("sha256")
+        .update("watch-secret")
+        .digest("base64url"),
+      signingPublicKey: "signing",
+      agreementPublicKey: "agreement",
+      metadata: {},
+    });
+
+    assert.deepEqual(
+      await repo.authenticateHost("host-1", createHash("sha256")
+        .update("host-secret")
+        .digest("base64url")),
+      {
+        accountId: "account-1",
+        hostId: "host-1",
+        peerId: "host-1",
+        role: "host",
+      },
+    );
+    assert.deepEqual(
+      await repo.authenticateDevice("watch-1", createHash("sha256")
+        .update("watch-secret")
+        .digest("base64url")),
+      {
+        accountId: "account-1",
+        hostId: "host-1",
+        peerId: "watch-1",
+        role: "device",
+      },
+    );
+    await assert.rejects(
+      repo.authenticateDevice(
+        "watch-1",
+        createHash("sha256").update("wrong").digest("base64url"),
+      ),
+      /authentication failed/i,
+    );
+  });
+
   it("consumes a verified device-login and its invite exactly once", async () => {
     const { repo } = await repository();
     await repo.createInvite({

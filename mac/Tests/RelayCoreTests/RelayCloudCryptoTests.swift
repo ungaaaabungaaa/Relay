@@ -65,3 +65,62 @@ func cloudReplayWindowRestoresTheLastSequence() throws {
         try restored.accept(senderID: "watch-1", sequence: 9)
     }
 }
+
+@Test
+func approvedCloudPairingDerivesTheRegistrationStoredForTheBridge() throws {
+    let host = RelayCloudHostKeys(
+        signingPrivateKey: P256.Signing.PrivateKey(),
+        agreementPrivateKey: P256.KeyAgreement.PrivateKey()
+    )
+    let watchAgreement = P256.KeyAgreement.PrivateKey()
+    let nonce = Data(repeating: 6, count: 32)
+    let request = RelayCloudPairingRequest(
+        id: "request-1",
+        fingerprint: "WATCH FP",
+        signingPublicKey: "watch-signing-pem",
+        agreementPublicKey: watchAgreement.publicKey.x963Representation
+            .base64EncodedString(),
+        expiresAt: 120_000,
+        metadata: RelayCloudDeviceMetadata(
+            platform: "wear-os",
+            manufacturer: "Samsung",
+            model: "Watch6",
+            osVersion: "5",
+            appVersion: "1",
+            screenShape: "round"
+        )
+    )
+    let approved = RelayCloudApprovedDevice(
+        id: "watch-1",
+        hostId: "host-1",
+        credential: "watch-credential",
+        sessionNonce: nonce.base64EncodedString()
+    )
+
+    let registration = try RelayCloudPairingMaterial.registration(
+        hostID: "host-1",
+        request: request,
+        approved: approved,
+        hostKeys: host
+    )
+    let expected = try RelayCloudCrypto.deriveRootKey(
+        privateKey: watchAgreement,
+        peerPublicKey: host.agreementPrivateKey.publicKey,
+        pairingSessionNonce: nonce
+    )
+    let expectedData = expected.withUnsafeBytes { Data($0) }
+
+    #expect(registration.deviceId == "watch-1")
+    #expect(registration.signingPublicKey == "watch-signing-pem")
+    #expect(Data(base64URL: registration.rootKey) == expectedData)
+}
+
+private extension Data {
+    init?(base64URL: String) {
+        var value = base64URL
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        value += String(repeating: "=", count: (4 - value.count % 4) % 4)
+        self.init(base64Encoded: value)
+    }
+}

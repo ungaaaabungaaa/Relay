@@ -6,9 +6,10 @@ import {
   listenAdminServer,
 } from "./admin/admin-server.ts";
 import { CodexAdapter } from "./codex/adapter.ts";
+import { BridgeCloudRuntime } from "./cloud/bridge-cloud-runtime.ts";
 import { PairingService } from "./security/pairing.ts";
 import { PairingSessionService } from "./security/pairing-session.ts";
-import { createRelayServer } from "./server.ts";
+import { createRelayServer, createRequestHandler } from "./server.ts";
 import { SqliteStore } from "./store/sqlite-store.ts";
 import { OpenAITranscriber } from "./transcription/openai-transcriber.ts";
 import { WorkspacePolicy } from "./workspaces/workspace-policy.ts";
@@ -50,7 +51,7 @@ if (command === "serve") {
       console.error("Relay could not connect to Codex");
     },
   );
-  const server = createRelayServer({
+  const relayOptions = {
     store,
     pairingSessions,
     adapter,
@@ -62,6 +63,11 @@ if (command === "serve") {
           transcriptionTemporaryDirectory: join(dataDir, "transcription"),
         }
       : {}),
+  };
+  const server = createRelayServer(relayOptions);
+  const cloudRuntime = new BridgeCloudRuntime({
+    store,
+    handler: createRequestHandler(relayOptions),
   });
   server.listen(port, host, () => {
     const address = server.address();
@@ -88,6 +94,7 @@ if (command === "serve") {
       watchPort: port,
       codexStatus: () => codexStatus,
       voiceConfigured: Boolean(openAiApiKey),
+      cloudRuntime,
       shutdown,
     },
     adminPort,

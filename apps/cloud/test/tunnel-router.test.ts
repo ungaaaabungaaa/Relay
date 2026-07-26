@@ -95,4 +95,35 @@ describe("hibernating tunnel routing", () => {
     assert.deepEqual(watch.closed, { code: 4003, reason: "Device revoked" });
     assert.throws(() => router.route(envelope), /authentication failed/i);
   });
+
+  it("delivers pairing control metadata only to the connected host", () => {
+    const router = new HibernatingTunnelRouter();
+    const host = new TestSocket();
+    const watch = new TestSocket();
+    router.connect(
+      { accountId: "account-1", hostId: "host-1", peerId: "host-1", role: "host" },
+      host,
+    );
+    router.connect(
+      { accountId: "account-1", hostId: "host-1", peerId: "watch-1", role: "device" },
+      watch,
+    );
+
+    assert.equal(
+      router.sendControl("host-1", {
+        type: "pairing_request",
+        requestId: "request-1",
+      }),
+      "delivered",
+    );
+    assert.deepEqual(JSON.parse(host.messages[0] ?? "{}"), {
+      type: "pairing_request",
+      requestId: "request-1",
+    });
+    assert.equal(watch.messages.length, 0);
+    assert.equal(
+      router.sendControl("offline-host", { type: "pairing_request" }),
+      "offline",
+    );
+  });
 });

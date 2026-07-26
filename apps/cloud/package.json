@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "wrangler deploy --dry-run --outdir ../../build/cloud-worker",
+    "dev": "wrangler dev --local",
     "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
   }
 }
