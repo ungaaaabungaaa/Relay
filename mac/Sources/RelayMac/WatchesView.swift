@@ -16,9 +16,9 @@ struct WatchesView: View {
                         Image(systemName: "storefront")
                             .foregroundStyle(RelayPalette.accent)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Install Relay from Google Play")
+                            Text("Install Relay on Apple Watch")
                                 .font(.headline)
-                            Text("No phone companion, ADB, developer mode, VPN, or port forwarding is required.")
+                            Text("Use TestFlight during development and the App Store after release. Relay needs no VPN or port forwarding.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

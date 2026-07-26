@@ -1,8 +1,8 @@
 # Relay for Apple Watch
 
-This is the Phase 2 foundation for an independent watch-only SwiftUI app
-targeting watchOS 10+. It does not require an iPhone companion and is not part
-of the Wear-first public beta.
+Relay for Apple Watch is the project's independent watchOS 10+ client. It pairs
+directly with Relay Cloud and a Relay Mac; Relay has no separate iPhone
+companion target in this repository.
 
 The source now contains:
 
@@ -15,16 +15,17 @@ The source now contains:
 - native routes for inbox, approvals, questions, tasks, activity,
   instructions, voice, new tasks, history, and settings.
 
-The destination screens still use preview content. Before TestFlight they must
-be wired to real response/event models, actions, reviewed voice capture, and
-reconnect callbacks. Physical Wi-Fi/cellular transitions, battery, revocation,
-and TestFlight updates are also unverified.
+The destination screens still use preview content. Developers must connect them
+to response and event models, actions, reviewed voice capture, and reconnect
+callbacks. The team has not verified physical Wi-Fi or cellular transitions,
+battery behavior, revocation, signing, or TestFlight updates.
 
 Run `../scripts/check-watchos-source.sh` for a watchOS 10+ compiler check, then
-open `RelayWatch.xcodeproj` in Xcode. Set your Apple team and use a physical
-Apple Watch for pairing, Wi-Fi/cellular transitions, approvals, voice, battery,
-revocation, and TestFlight update tests.
+open `RelayWatch.xcodeproj` in Xcode. Set your Apple team and signing assets,
+then use a physical Apple Watch for pairing, Wi-Fi or cellular transitions,
+approvals, voice, battery, revocation, and TestFlight update tests.
 
-The future app will require Relay Mac `1.0.0+` and API version `1`. Apple
-distributes public watchOS apps through TestFlight and the App Store. A DMG
-cannot install an Apple Watch app.
+The watch client requires Relay Mac `1.0.0+` and API version `1`. Apple
+distributes watchOS apps through TestFlight and the App Store. This repository
+does not include a signed TestFlight or App Store build. A DMG cannot install an
+Apple Watch app.

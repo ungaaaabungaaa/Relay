@@ -102,7 +102,7 @@ struct SetupView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .watchPairing:
-            Text("Install Relay from Google Play, open Watches, and enter the six-character code.")
+            Text("Install Relay on your Apple Watch, open Watches, and enter the six-character code.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .workspaces:

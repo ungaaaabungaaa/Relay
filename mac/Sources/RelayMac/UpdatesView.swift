@@ -9,13 +9,13 @@ struct UpdatesView: View {
                 DashboardHeader(
                     eyebrow: "GitHub Releases",
                     title: "Updates",
-                    detail: "Sparkle updates the Mac app. Google Play updates the Wear OS app independently."
+                    detail: "Sparkle updates the Mac app. TestFlight or the App Store updates the Apple Watch app."
                 )
                 RelayPanel {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Relay development build").font(.headline)
-                            Text("Apple silicon · Wear OS 3+")
+                            Text("Apple silicon · watchOS 10+")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -47,7 +47,7 @@ struct UpdatesView: View {
                     Label("Rollback protection", systemImage: "checkmark.shield.fill")
                         .font(.headline)
                         .foregroundStyle(RelayPalette.accent)
-                    Text("A failed or older Mac download never replaces the working app. Play keeps the watch app on its signed release track.")
+                    Text("A failed or older Mac download never replaces the working app. Apple manages signed Apple Watch updates.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.top, 5)

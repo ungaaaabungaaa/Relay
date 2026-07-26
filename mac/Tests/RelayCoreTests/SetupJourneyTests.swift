@@ -35,3 +35,13 @@ func setupJourneyIsCompleteOnlyAfterWorkspaceAndLoginItemChoice() {
     #expect(!journey.isComplete)
     #expect(journey.current?.id == .workspaces)
 }
+
+@Test
+func watchPairingStepUsesAppleDistribution() throws {
+    let step = try #require(
+        SetupJourney.complete.steps.first(where: { $0.id == .watchPairing })
+    )
+
+    #expect(step.detail.contains("Apple Watch"))
+    #expect(step.detail.contains("TestFlight or the App Store"))
+}

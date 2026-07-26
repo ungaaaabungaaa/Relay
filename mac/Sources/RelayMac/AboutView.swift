@@ -11,9 +11,9 @@ struct AboutView: View {
                 )
                 RelayPanel {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Built for round Wear OS watches", systemImage: "applewatch")
+                        Label("Built for Apple Watch", systemImage: "applewatch")
                         Label("Mac bridge stays loopback-only", systemImage: "lock.shield")
-                        Label("No Relay cloud account", systemImage: "cloud.slash")
+                        Label("Relay Cloud routes only encrypted task data", systemImage: "cloud.slash")
                         Label("Apache License 2.0", systemImage: "doc.text")
                     }
                     .font(.headline)

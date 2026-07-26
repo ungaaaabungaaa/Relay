@@ -10,7 +10,7 @@ struct VoiceView: View {
                 DashboardHeader(
                     eyebrow: "Optional",
                     title: "Voice instructions",
-                    detail: "Wear OS system input needs no key. Custom hold-to-record uses an OpenAI key stored only in macOS Keychain."
+                    detail: "Apple Watch text input needs no key. Custom hold-to-record uses an OpenAI key stored only in macOS Keychain."
                 )
                 RelayPanel {
                     VStack(alignment: .leading, spacing: 14) {

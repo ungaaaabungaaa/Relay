@@ -49,7 +49,7 @@ public struct SetupJourney: Equatable, Sendable {
             SetupJourneyStep(
                 id: .watchPairing,
                 title: "Pair a watch",
-                detail: "Install Relay from Google Play, enter the code, and compare fingerprints.",
+                detail: "Install Relay on your Apple Watch from TestFlight or the App Store, enter the code, and compare fingerprints.",
                 complete: watchPaired
             ),
             SetupJourneyStep(
