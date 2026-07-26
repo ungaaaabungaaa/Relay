@@ -20,7 +20,8 @@ After setup:
 
 ## Pair and install
 
-Use the Relay Mac wizard. For command-line diagnosis:
+This ADB path is for developer installation only. Beta acceptance must also use
+the Google Play closed-test listing.
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
@@ -30,7 +31,7 @@ ADB="$ANDROID_HOME/platform-tools/adb"
 "$ADB" connect WATCH_IP:CONNECTION_PORT
 "$ADB" devices
 ./gradlew :wear:installDebug
-"$ADB" shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
+"$ADB" shell am start -n com.relayforcodex.wear/dev.ungaaaabungaaa.relay.MainActivity
 ```
 
 The pairing and connection ports are different. Confirm `"$ADB" devices` lists
@@ -61,11 +62,11 @@ exact command and working directory remain visible.
 ## Required physical matrix
 
 Record the result and evidence without storing task text, commands, device
-keys, pairing codes, account names, or the private Funnel URL.
+keys, pairing codes, account names, or cloud credentials.
 
 | Test | Result | Evidence |
 | --- | --- | --- |
-| Fresh install and `adb install -r` upgrade from Mac wizard | Pending | |
+| Fresh Play install and Play update preserving pairing | Pending | |
 | Round safe areas, rotary input, default and large text | Pending | |
 | Wi-Fi and LTE when available | Pending | |
 | Foreground WebSocket events | Pending | |
@@ -83,15 +84,17 @@ Version 1 remains blocked until all ten criteria pass:
 1. A clean Apple silicon Mac installs the notarized DMG without a development
    toolchain.
 2. The first-run wizard reaches healthy using only its plain-language steps.
-3. A reset Galaxy Watch6 installs and pairs using only the Mac wizard.
-4. The watch discovers an existing Codex task through Funnel.
+3. A reset Galaxy Watch6 installs from the Play test track and pairs with the
+   Mac's six-character cloud code.
+4. The watch discovers an existing Codex task through Relay Cloud on Wi-Fi and
+   LTE.
 5. One normal and one dangerous approval use the correct confirmation policy.
 6. Questions, instructions, both voice modes, steering, stopping, and new-task
    creation work end to end.
 7. Workspace escape, replay, revocation, and unauthenticated metadata tests
    fail safely.
 8. Live Monitoring state and battery cost are visible and documented.
-9. Mac and APK updates preserve the previous app and watch pairing.
+9. Sparkle and Play updates preserve the previous app and watch pairing.
 10. Tag, source, checksums, DMG, APK, license, notes, and compatibility data
     all agree.
 

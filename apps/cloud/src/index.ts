@@ -34,6 +34,7 @@ declare const WebSocketPair: {
 type CloudEnvironment = {
   DB: ConstructorParameters<typeof D1CloudRepository>[0];
   ACCOUNT_TUNNEL: DurableObjectNamespace;
+  CLOUD_ADMIN_CREDENTIAL: string;
   JWT_SECRET: string;
   PII_ENCRYPTION_KEY: string;
   EMAIL_HMAC_KEY: string;
@@ -96,6 +97,7 @@ async function connectTunnel(
 function runtime(environment: CloudEnvironment) {
   const repository = new D1CloudRepository(environment.DB);
   const gateway = new D1CommandGateway(repository, {
+    adminCredential: environment.CLOUD_ADMIN_CREDENTIAL,
     jwtSecret: secret(environment.JWT_SECRET),
     piiKey: secret(environment.PII_ENCRYPTION_KEY),
     emailHmacKey: secret(environment.EMAIL_HMAC_KEY),

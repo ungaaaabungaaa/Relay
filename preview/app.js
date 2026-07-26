@@ -2,7 +2,7 @@ const watchScreens = {
   pairing: {
     index: "01",
     title: "Secure pairing",
-    body: "The watch finds the five-minute Bonjour session, reads pairing details over HTTPS, and waits for explicit Mac approval.",
+    body: "The watch enters the six-character code from the Mac, verifies its fingerprint, and waits for explicit Mac approval.",
     rule: "Both people-visible fingerprints must match",
     render: () => `
       <span class="watch-time">PAIRING · 04:38</span>
@@ -124,7 +124,7 @@ const watchScreens = {
       <div class="offline-symbol" aria-hidden="true"></div>
       <p class="watch-kicker" style="color:var(--amber)">Mac offline</p>
       <h3 class="watch-title">Wake your Mac</h3>
-      <p class="watch-copy">Confirm Relay and Tailscale are running, then reconnect.</p>
+      <p class="watch-copy">Wake the Mac and confirm Relay Cloud is connected.</p>
       <button class="watch-button primary wide">Reconnect</button>
       <button class="watch-button wide">Settings</button>
     `,
@@ -134,42 +134,42 @@ const watchScreens = {
 const dashboardPanels = {
   setup: {
     eyebrow: "Start here",
-    title: "Nine steps, one installer",
-    subtitle: "The wizard resumes at the first unfinished step and keeps permanent remote access off until the end.",
+    title: "Nine steps, three installs",
+    subtitle: "Install Codex and Relay on the Mac, then Relay on the watch. The wizard resumes at the first unfinished step.",
     rows: [
       ["01", "Relay and Codex", "Verify the arm64 sidecar and installed Codex.", "Done", true],
-      ["02", "Official Tailscale", "Install or open the signed Mac app.", "Done", true],
-      ["03", "Tailscale sign-in", "Complete the official browser login.", "Done", true],
+      ["02", "Email sign-in", "Use the one-time link in your browser.", "Done", true],
+      ["03", "Cloud connection", "Open an outbound encrypted Relay tunnel.", "Done", true],
       ["04", "Security preflight", "Both Relay ports remain loopback-only.", "Done", true],
-      ["05", "Platform Tools", "Google archive verified by SHA-256.", "Current", false],
-      ["06", "Watch install", "Wireless ADB installs the bundled APK.", "Waiting", false],
-      ["07", "Pair and approve", "Compare Mac and watch fingerprints.", "Waiting", false],
+      ["05", "Install watch app", "Get Relay from the Play closed-test track.", "Current", false],
+      ["06", "Enter pairing code", "The six-character code expires in five minutes.", "Waiting", false],
+      ["07", "Pair and approve", "Compare fingerprints before approving.", "Waiting", false],
       ["08", "Workspaces", "Choose the only folders visible to Relay.", "Waiting", false],
-      ["09", "Remote access", "Permanent Funnel access stays off.", "Off · safe", true],
+      ["09", "Start at login", "Optional; disabled until you choose it.", "Off · safe", true],
     ],
-    action: "Install verified tools",
+    action: "Continue setup",
   },
   watches: {
-    eyebrow: "Physical devices",
+    eyebrow: "Play closed test",
     title: "Install and pair a watch",
-    subtitle: "Relay downloads verified Platform Tools, discovers Wireless ADB, and installs the matching signed APK.",
+    subtitle: "The consumer setup uses Google Play. ADB remains an optional developer-only fallback outside this wizard.",
     rows: [
-      ["01", "Platform Tools", "Official archive verified by pinned SHA-256.", "Ready", true],
-      ["02", "Wireless ADB", "Pairing and connection ports are separate.", "Waiting", false],
-      ["03", "Relay APK", "Install with adb install -r; keep pairing data.", "Waiting", false],
+      ["01", "Play invitation", "Open the closed-test link with your Google account.", "Ready", true],
+      ["02", "Relay for Wear OS", "Install directly on a Wear OS 3+ watch.", "Waiting", false],
+      ["03", "Secure pairing", "Enter the Mac code and compare fingerprints.", "Waiting", false],
     ],
-    action: "Find watch",
+    action: "Open pairing",
   },
   remote: {
-    eyebrow: "Public ingress",
-    title: "Remote access is off",
-    subtitle: "Funnel can be enabled only after the bridge proves loopback binding, authentication, replay rejection, and generic errors.",
+    eyebrow: "Encrypted transport",
+    title: "Relay Cloud is connected",
+    subtitle: "Both apps connect outbound. Relay Cloud routes authenticated ciphertext but has no key that can read Codex content.",
     rows: [
       ["LB", "Loopback bridge", "Admin and watch listeners are local only.", "Ready", true],
       ["ST", "Security self-test", "Unsigned and replayed requests are rejected.", "Ready", true],
-      ["FN", "Tailscale Funnel", "Public endpoint has not been enabled.", "Off · safe", true],
+      ["E2", "Encrypted tunnel", "Per-watch AES-GCM root key is device-held.", "Connected", true],
     ],
-    action: "Enable after setup",
+    action: "Manage connection",
   },
   workspaces: {
     eyebrow: "Filesystem boundary",
@@ -197,7 +197,7 @@ const dashboardPanels = {
     subtitle: "Relay verifies the Ed25519 manifest, Apple silicon architecture, tag, version, and SHA-256 before offering an update.",
     rows: [
       ["MAC", "Relay for Mac", "Sparkle stable or beta signed feed.", "Current", true],
-      ["APK", "Relay for Wear OS 3+", "Bundled version comes from release metadata.", "Current", true],
+      ["PLAY", "Relay for Wear OS 3+", "Google Play installs signed watch updates.", "Current", true],
       ["CDX", "Codex compatibility", "Supported range comes from the release manifest.", "Checked", true],
     ],
     action: "Check again",

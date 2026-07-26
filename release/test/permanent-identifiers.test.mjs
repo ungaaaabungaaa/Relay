@@ -15,4 +15,8 @@ test("consumer builds use the permanent Relay product identifiers", async () => 
   assert.match(wear, /applicationId = "com\.relayforcodex\.wear"/);
   assert.match(macPackaging, /com\.relayforcodex\.mac/);
   assert.doesNotMatch(wear, /applicationId = "dev\.ungaaaabungaaa\.relay"/);
+  assert.doesNotMatch(macPackaging, /Resources\/relay-wear\.apk/);
+  assert.doesNotMatch(macPackaging, /cp .*relay-wear\.apk/);
+  assert.doesNotMatch(macPackaging, /NSBonjourServices/);
+  assert.doesNotMatch(macPackaging, /NSLocalNetworkUsageDescription/);
 });

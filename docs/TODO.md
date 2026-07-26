@@ -1,59 +1,58 @@
-# Relay progress
-
-This is the short release scoreboard. The detailed engineering record is in
-`docs/superpowers/plans/2026-07-25-relay-public-release.md`.
+# Relay public-beta scoreboard
 
 ## Implemented and locally verified
 
-- [x] Codex protocol adapter and capability mapping
-- [x] Localhost-only bridge and separate authenticated admin API
-- [x] Device pairing, signatures, timestamp checks, nonce replay rejection,
-      revocation, rate limits, and generic unauthorized responses
-- [x] Tokenized Bonjour pairing sessions, hashed codes and tokens, pending Mac
-      approval, pairing metadata, expiry, and global/source throttles
-- [x] Idempotent approvals, questions, instructions, steering, stop, and new
-      task
-- [x] Canonical approved-workspace boundaries
-- [x] Resumable WebSocket events and snapshot fallback
-- [x] Reviewed voice transcription with temporary-audio cleanup
-- [x] Complete native watch screen map and safer approval policy
-- [x] Visible, time-limited, battery-aware Live Monitoring
-- [x] Native Apple silicon Mac menu app and dashboard
-- [x] Verified Platform Tools download, Wireless ADB wizard, and APK installer
-- [x] Tailscale preflight, Funnel controls, and Emergency Stop
-- [x] Official Tailscale browser login with cancellation and timeout
-- [x] Resumable nine-step Mac setup and off-by-default Login Item
-- [x] Wear OS 3/API 30 policy and round/square layouts
-- [x] Sparkle 2, signed stable/beta appcast workflow, version-aware APK install,
-      production icon, and hardened DMG packaging
-- [x] Independent watchOS 10 source target and Xcode project foundation
-- [x] Self-contained arm64 bridge sidecar
-- [x] Apache 2.0 license, third-party notices, compatibility and release docs
-- [x] Node, Wear OS, Swift, secret-scan, package, manifest, and GitHub workflow
-      gates
-- [x] Clickable HTML UI preview
+- [x] Cloudflare Worker, D1 migrations, hibernating Durable Object router,
+      staging/production configuration, and deploy workflow
+- [x] Invite-only passwordless email sessions, PKCE, magic links, access
+      tokens, refresh rotation/reuse defense, logout, and account deletion
+- [x] Encrypted email storage and hashed account/device credentials
+- [x] P-256 ECDH, HKDF-SHA256, AES-256-GCM envelopes, shared Mac/Wear vectors,
+      replay state, and authenticated routing metadata
+- [x] Native Mac outbound tunnel, Keychain identities, reconnect, device
+      management, workspace policy, Emergency Stop, and Login Item
+- [x] Wear OS cloud code entry, fingerprint confirmation, approval polling,
+      API-30 secure fallback, encrypted requests, revoked/offline states, round
+      and square layouts, and reviewed voice transport
+- [x] Loopback bridge authorization, signed inner requests, idempotent
+      mutations, Codex adapter, workspace boundaries, and redacted audit data
+- [x] Google Play application ID and signed APK/AAB-capable Gradle release setup
+- [x] Sparkle 2, hardened Mac packaging, signed manifest, notarization workflow,
+      and advanced GitHub APK fallback
+- [x] Consumer Mac app no longer contains Tailscale, Funnel, Platform Tools,
+      Wireless ADB, or a bundled APK
+- [x] Native Apple Watch project foundation for Phase 2
+- [x] HTML UI preview and README screen boards
 
-## External release gates
+## Code work still open
 
-- [ ] Finish Samsung setup on the reset Galaxy Watch6
-- [ ] Pair the Watch6 over Wireless ADB
-- [ ] Run `connectedDebugAndroidTest` on the physical watch
-- [ ] Complete every physical-device matrix row
-- [ ] Install and sign in to Tailscale on the Mac
-- [ ] Test Funnel from a second Wi-Fi network and LTE when available
-- [ ] Complete a one-hour battery observation in normal and Live Monitoring
-      modes
-- [ ] Configure protected Apple Developer ID, notarization, Android signing,
-      Relay manifest Ed25519, and Sparkle Ed25519 material in GitHub
-- [ ] Install the notarized DMG on a clean Apple silicon Mac
-- [ ] Tag and publish the first verified GitHub Release
-- [x] Type-check the Apple Watch target against the watchOS 10+ SDK in CI
-- [ ] Sign and run the Apple Watch target, then complete the
-      physical/TestFlight Phase 2 matrix
+- [x] Production invite-administration command and protected operator workflow
+- [ ] True pushed cloud event stream for Live Monitoring; the current cloud
+      build uses safe foreground/periodic snapshot refresh
+- [ ] 128 KiB chunked voice transfer for the full 2 MiB protocol limit
+- [ ] Finish Apple Watch cloud transport and physical TestFlight flow
+- [ ] Complete store listing assets, reviewer instructions, privacy/terms copy,
+      and production support pages
 
-## Release rule
+## Owner and external launch gates
 
-Do not call version 1 released, open the final release pull request, or publish
-a `v*` tag until every external gate above is checked with evidence. Local
-green tests prove the code checkpoint; they do not prove the physical watch,
-public network, Apple notarization account, or clean-machine experience.
+- [ ] Acquire and verify `relayforcodex.com` and permanent store names
+- [ ] Organization-owned Cloudflare, Resend, Apple Developer, and Google Play
+      accounts
+- [ ] Configure D1 IDs, DNS, verified sending domain, protected GitHub
+      environments, and production Worker secrets
+- [ ] Store Apple, Android, Sparkle, release-manifest, JWT, PII-encryption,
+      email-HMAC, and cloud-admin signing material outside Git
+- [ ] External review of authentication, pairing, and cryptography
+- [ ] Seven-day five-user dogfood and 24-hour reconnect test
+- [ ] Google Play closed test with the required continuous testers
+- [ ] Three physical Wear OS devices across two OEMs, including Wear OS 3,
+      small/large screens, and a Wi-Fi-to-LTE transition
+- [ ] Normal and Live Monitoring battery observations
+- [ ] Account deletion, Emergency Stop, key rotation, and D1 restore drill
+- [ ] Notarized DMG installation on a clean Apple-silicon Mac
+- [ ] Publish `v0.2.0-beta.1` only after every beta gate has evidence
+
+Local green tests prove the code checkpoint. They do not prove Cloudflare or
+store deployment, physical hardware behavior, notarization credentials, or
+review approval.

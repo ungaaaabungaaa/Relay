@@ -1,0 +1,29 @@
+name: Relay Cloud beta invites
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-cloud-production-invites
+  cancel-in-progress: false
+
+jobs:
+  create-invites:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RELAY_API_ORIGIN: ${{ vars.RELAY_API_ORIGIN }}
+      RELAY_CLOUD_ADMIN_CREDENTIAL: ${{ secrets.CLOUD_ADMIN_CREDENTIAL }}
+      RELAY_BETA_INVITE_EMAILS: ${{ secrets.BETA_INVITE_EMAILS }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Create protected invite list
+        run: node apps/cloud/scripts/create-invites.mjs

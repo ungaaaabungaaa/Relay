@@ -9,6 +9,7 @@ const staticCommands = new Map<string, string>([
   ["POST /cloud/v1/auth/magic-links", "auth.magicLinks.create"],
   ["POST /cloud/v1/auth/refresh", "auth.refresh"],
   ["POST /cloud/v1/auth/logout", "auth.logout"],
+  ["POST /cloud/v1/admin/invites", "admin.invites.create"],
   ["DELETE /cloud/v1/account", "account.delete"],
   ["POST /cloud/v1/hosts", "hosts.create"],
   ["POST /cloud/v1/relay", "relay.send"],

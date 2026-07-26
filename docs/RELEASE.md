@@ -1,13 +1,13 @@
 # Relay release guide
 
-This is the maintainer path for a GitHub-only public release. A tag must not be
-created until the clean-Mac and physical Galaxy Watch6 checklist in
+This is the maintainer path for the Mac GitHub Release and matching Wear OS
+closed-test build. A tag must not be created until the clean-Mac and physical watch checklist in
 `docs/PHYSICAL-WATCH-TEST.md` is complete.
 
 ## What the workflow publishes
 
 - notarized Apple silicon `Relay.dmg`;
-- signed `relay-wear.apk`;
+- signed `relay-wear.apk` as an advanced developer fallback;
 - source archive for the exact tag;
 - `SHA256SUMS` and Ed25519-signed `release-manifest.json`;
 - Sparkle-signed `appcast.xml` and `appcast-beta.xml` on GitHub Pages;
@@ -51,10 +51,22 @@ backup. Losing a key blocks upgrades for that channel. Never put a private key,
 certificate password, OpenAI key, device key, or admin token in a GitHub issue,
 workflow file, release asset, or diagnostic report.
 
+The consumer Mac DMG contains the Mac app and ARM64 bridge sidecar only. Relay
+for Wear OS is installed and updated through Google Play during the closed
+beta; the GitHub APK is not bundled into the DMG.
+
+The separate protected `production` environment controls Relay Cloud. Store
+`CLOUD_ADMIN_CREDENTIAL` and `BETA_INVITE_EMAILS` there, define
+`RELAY_API_ORIGIN=https://api.relayforcodex.com`, require a reviewer, and use
+the manual **Relay Cloud beta invites** workflow. The same admin credential
+must be configured as a Worker secret; never add the beta address list to a
+workflow input or repository variable.
+
 ## Before tagging
 
 1. Start from a clean `main` commit with the quality workflow green.
-2. Update the Wear version code. It must only increase.
+2. Update the Wear version code. It must only increase, and the signed AAB sent
+   to Google Play must be built from this exact commit.
 3. Confirm the compatibility range against the installed Codex release.
 4. Complete every physical-device row and record the evidence.
 5. Install the locally packaged app on a clean Apple silicon Mac.
@@ -93,7 +105,7 @@ xcrun stapler validate Relay.dmg
 apksigner verify --verbose --print-certs relay-wear.apk
 ```
 
-Then run the manifest verifier using the trusted public key distributed
+Then run the manifest verifier for the advanced APK fallback using the trusted public key distributed
 separately from the manifest:
 
 ```bash

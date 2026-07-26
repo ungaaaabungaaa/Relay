@@ -47,6 +47,23 @@ describe("Relay Cloud Worker routes", () => {
     assert.equal(signup.status, 404);
   });
 
+  it("maps invite creation only to the protected operator command", async () => {
+    const { worker, calls } = env();
+    const response = await worker.fetch(
+      new Request("https://relay.test/cloud/v1/admin/invites", {
+        method: "POST",
+        headers: {
+          authorization: "Admin opaque-operator-credential",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: "tester@example.com" }),
+      }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(calls.at(-1)?.name, "admin.invites.create");
+  });
+
   it("returns generic errors and never echoes credentials or request bodies", async () => {
     const worker = createWorker({
       command: async () => {

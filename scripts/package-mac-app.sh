@@ -10,7 +10,6 @@ sparkle_public_key=${RELAY_SPARKLE_PUBLIC_KEY:-}
 sparkle_stable_feed=${RELAY_SPARKLE_STABLE_FEED_URL:-}
 sparkle_beta_feed=${RELAY_SPARKLE_BETA_FEED_URL:-}
 output_directory=${RELAY_OUTPUT_DIR:-"${repository_root}/release/out"}
-apk_path=${RELAY_APK_PATH:-"${repository_root}/wear/build/outputs/apk/release/wear-release.apk"}
 swift_scratch=${RELAY_SWIFT_SCRATCH:-"${repository_root}/.build-release"}
 application_path="${output_directory}/Relay.app"
 contents_path="${application_path}/Contents"
@@ -36,7 +35,6 @@ fi
 
 for required_file in \
   "${repository_root}/dist/relay-bridge-arm64" \
-  "${apk_path}" \
   "${repository_root}/LICENSE" \
   "${repository_root}/NOTICE" \
   "${repository_root}/THIRD_PARTY_NOTICES.md"
@@ -67,7 +65,6 @@ swift_binary_path=$(swift build \
 cp "${swift_binary_path}/RelayMac" "${macos_path}/Relay"
 cp -R "${swift_binary_path}/Sparkle.framework" "${frameworks_path}/Sparkle.framework"
 cp "${repository_root}/dist/relay-bridge-arm64" "${resources_path}/relay-bridge-arm64"
-cp "${apk_path}" "${resources_path}/relay-wear.apk"
 cp "${repository_root}/LICENSE" "${resources_path}/LICENSE"
 cp "${repository_root}/NOTICE" "${resources_path}/NOTICE"
 cp "${repository_root}/THIRD_PARTY_NOTICES.md" "${resources_path}/THIRD_PARTY_NOTICES.md"
@@ -115,9 +112,6 @@ rm -rf "${asset_catalog_path}" "${output_directory}/asset-info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 14.0" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string Relay records only while you hold the watch record control." "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :NSLocalNetworkUsageDescription string Relay discovers your watch only during a five-minute pairing session." "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :NSBonjourServices array" "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :NSBonjourServices:0 string _relay-pair._tcp" "${contents_path}/Info.plist"
 if [[ -n "${release_public_key}" ]]; then
   /usr/libexec/PlistBuddy -c "Add :RelayReleasePublicKey string ${release_public_key}" "${contents_path}/Info.plist"
 fi

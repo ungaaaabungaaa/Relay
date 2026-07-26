@@ -8,27 +8,15 @@ final class RelayAppModel: ObservableObject {
     @Published var setupState = SetupState.checking
     @Published var bridgeState: BridgeSupervisorState = .stopped
     @Published var codexStatus = "Checking"
-    @Published var funnelEnabled = false
     @Published var devices: [AdminDevice] = []
     @Published var workspaces: [String] = []
     @Published var voiceConfigured = false
-    @Published var pairingCode: AdminPairingCode?
-    @Published var pairingSession: AdminPairingSession?
     @Published var pendingPairings: [AdminPendingPairing] = []
     @Published var hostFingerprint = "Loading…"
     @Published var pendingActionCount = 0
     @Published var updateAvailable = false
     @Published var lastError: String?
     @Published var diagnostic = "Relay is starting…"
-    @Published var platformToolsReady = false
-    @Published var adbWizardState: ADBWizardState = .idle
-    @Published var tailscaleInstalled = false
-    @Published var tailscaleSignedIn = false
-    @Published var tailscaleLoginInProgress = false
-    @Published var funnelOrigin: URL?
-    @Published var temporaryPairingTransport = false
-    @Published var watchInstalled = false
-    @Published var emergencyStopResult: EmergencyStopResult?
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
     @Published var cloudSignedIn = false
     @Published var cloudConnected = false
@@ -38,12 +26,7 @@ final class RelayAppModel: ObservableObject {
     private let secrets: KeychainStore
     private let adminClient: AdminClient
     private var supervisor: BridgeSupervisor?
-    private var adbWizard: ADBWizard?
-    private var tailscaleClient: TailscaleClient?
-    private let discoveryAdvertiser = PairingDiscoveryAdvertiser()
-    private let pairingTransportLease = TemporaryPairingTransportLease()
     let updateController = RelayUpdateController()
-    private var tailscaleLoginTask: Task<Void, Never>?
     private let cloudClient = RelayCloudClient()
     private let cloudTunnel = RelayCloudHostTunnel()
     private var cloudAccessToken: String?
@@ -84,7 +67,6 @@ final class RelayAppModel: ObservableObject {
     }
 
     func bootstrap() async {
-        await detectLocalDependencies()
         do {
             hostFingerprint = try RelayHostIdentity.loadOrCreate(
                 in: secrets
@@ -115,15 +97,14 @@ final class RelayAppModel: ObservableObject {
             let status = try await adminClient.status()
             let selfTest = try await adminClient.securitySelfTest()
             devices = try await adminClient.devices()
-            let localPairings = try await adminClient.pendingPairings()
-            pendingPairings = localPairings + cloudPendingPairings
+            pendingPairings = cloudPendingPairings
             workspaces = try await adminClient.workspaces()
             voiceConfigured = try await adminClient.voiceStatus().configured
             bridgeState = selfTest.ok ? .running : .failed
             codexStatus = status.codex.capitalized
             diagnostic = selfTest.ok
                 ? "Local security self-test passed. Admin and watch ports are loopback-only."
-                : "Local security self-test failed. Remote access remains disabled."
+                : "Local security self-test failed. Relay Cloud actions remain disabled."
             lastError = nil
             updateSetupState(bridgeReady: selfTest.ok)
         } catch {
@@ -131,15 +112,6 @@ final class RelayAppModel: ObservableObject {
             codexStatus = "Unavailable"
             lastError = "The local bridge is not responding."
             updateSetupState(bridgeReady: false)
-        }
-    }
-
-    func createPairingCode() async {
-        do {
-            pairingCode = try await adminClient.pairingCode()
-            lastError = nil
-        } catch {
-            lastError = "Relay could not create a pairing code."
         }
     }
 
@@ -171,52 +143,24 @@ final class RelayAppModel: ObservableObject {
     }
 
     func refreshPendingPairings() async {
-        do {
-            pendingPairings = try await adminClient.pendingPairings()
-                + cloudPendingPairings
-            lastError = nil
-        } catch {
-            lastError = "Relay could not refresh pending watch approvals."
-        }
+        pendingPairings = cloudPendingPairings
+        lastError = nil
     }
 
     func approvePairing(_ pairing: AdminPendingPairing) async {
-        if let cloudRequest = cloudPairingRequests[pairing.id] {
-            await approveCloudPairing(cloudRequest)
+        guard let cloudRequest = cloudPairingRequests[pairing.id] else {
+            lastError = "That pairing request is no longer available."
             return
         }
-        do {
-            _ = try await adminClient.approvePairing(id: pairing.id)
-            discoveryAdvertiser.stop()
-            pairingSession = nil
-            pendingPairings = []
-            let closed = await closeTemporaryPairingTransport()
-            await refresh()
-            if !closed {
-                reportTemporaryPairingCloseFailure()
-            }
-        } catch {
-            lastError = "That pairing request expired. Start pairing again."
-        }
+        await approveCloudPairing(cloudRequest)
     }
 
     func denyPairing(_ pairing: AdminPendingPairing) async {
-        if cloudPairingRequests[pairing.id] != nil {
-            await denyCloudPairing(pairing.id)
+        guard cloudPairingRequests[pairing.id] != nil else {
+            lastError = "That pairing request is no longer available."
             return
         }
-        do {
-            try await adminClient.denyPairing(id: pairing.id)
-            discoveryAdvertiser.stop()
-            pairingSession = nil
-            pendingPairings = []
-            let closed = await closeTemporaryPairingTransport()
-            if closed {
-                lastError = nil
-            }
-        } catch {
-            lastError = "That pairing request is no longer available."
-        }
+        await denyCloudPairing(pairing.id)
     }
 
     func revoke(_ device: AdminDevice) async {
@@ -269,9 +213,6 @@ final class RelayAppModel: ObservableObject {
     }
 
     func emergencyStop() async {
-        funnelEnabled = false
-        temporaryPairingTransport = false
-        await pairingTransportLease.promote()
         cloudTunnelTask?.cancel()
         cloudTunnelTask = nil
         await cloudTunnel.disconnect()
@@ -285,62 +226,12 @@ final class RelayAppModel: ObservableObject {
             )
         }
         try? RelayCloudDeviceVault.removeAll(from: secrets)
-        let bridgeStopped = (try? await adminClient.shutdown()) != nil
-        emergencyStopResult = EmergencyStopResult(
-            funnelDisabled: true,
-            bridgeStopped: bridgeStopped
-        )
+        _ = try? await adminClient.shutdown()
         await supervisor?.emergencyStop()
         bridgeState = .emergencyStopped
         cloudConnected = false
         diagnostic = "Emergency Stop closed Relay watch access. Codex tasks were left running."
         updateSetupState(bridgeReady: false)
-    }
-
-    func installPlatformTools() async {
-        do {
-            let support = applicationSupportDirectory()
-            let adb = try await PlatformToolsManager().install(
-                installationRoot: support
-            )
-            platformToolsReady = true
-            adbWizard = ADBWizard(client: ADBClient(executableURL: adb))
-            adbWizardState = .idle
-            lastError = nil
-            diagnostic = "Official Platform Tools 37.0.0 passed SHA-256 verification."
-        } catch {
-            platformToolsReady = false
-            lastError = "Platform Tools failed integrity verification or installation."
-        }
-    }
-
-    func signInToTailscale() {
-        guard let client = tailscaleClient else {
-            lastError = "Install the official Tailscale Mac app first."
-            return
-        }
-        tailscaleLoginTask?.cancel()
-        tailscaleLoginInProgress = true
-        lastError = nil
-        tailscaleLoginTask = Task {
-            do {
-                let status = try await client.login { url in
-                    await MainActor.run {
-                        _ = NSWorkspace.shared.open(url)
-                    }
-                }
-                tailscaleSignedIn = status.signedIn
-                tailscaleLoginInProgress = false
-                diagnostic = "Tailscale sign-in completed through the official browser flow."
-                updateSetupState(bridgeReady: bridgeState == .running)
-            } catch is CancellationError {
-                tailscaleLoginInProgress = false
-                lastError = "Tailscale sign-in was cancelled."
-            } catch {
-                tailscaleLoginInProgress = false
-                lastError = "Tailscale sign-in did not finish within two minutes."
-            }
-        }
     }
 
     func signInToRelayCloud(email: String) {
@@ -418,7 +309,6 @@ final class RelayAppModel: ObservableObject {
         cloudAccessToken = nil
         cloudSignedIn = false
         cloudConnected = false
-        funnelEnabled = false
         updateSetupState(bridgeReady: bridgeState == .running)
     }
 
@@ -459,11 +349,6 @@ final class RelayAppModel: ObservableObject {
         }
     }
 
-    func cancelTailscaleLogin() {
-        tailscaleLoginTask?.cancel()
-        tailscaleLoginTask = nil
-    }
-
     func setStartAtLogin(_ enabled: Bool) {
         do {
             if enabled {
@@ -479,127 +364,9 @@ final class RelayAppModel: ObservableObject {
         }
     }
 
-    func discoverWatch() async {
-        guard let adbWizard else {
-            lastError = "Install or locate Android Platform Tools first."
-            return
-        }
-        await adbWizard.discover()
-        adbWizardState = await adbWizard.state
-    }
-
-    func pairWatch(
-        pairingAddress: String,
-        code: String,
-        connectionAddress: String
-    ) async {
-        guard let adbWizard else {
-            lastError = "Android Platform Tools are not ready."
-            return
-        }
-        await adbWizard.pairAndConnect(
-            pairingAddress: pairingAddress,
-            code: code,
-            connectionAddress: connectionAddress
-        )
-        adbWizardState = await adbWizard.state
-        if case .failed(let message) = adbWizardState {
-            lastError = message
-        } else {
-            lastError = nil
-        }
-    }
-
-    func installWatchApp() async {
-        guard let adbWizard else {
-            lastError = "Connect the watch first."
-            return
-        }
-        guard let apk = locateWatchAPK() else {
-            lastError = "The bundled Relay watch APK could not be found."
-            return
-        }
-        guard let metadata = bundledReleaseMetadata() else {
-            lastError = "The bundled watch release metadata is missing or invalid."
-            return
-        }
-        await adbWizard.install(
-            apk: apk,
-            packageID: "dev.ungaaaabungaaa.relay",
-            expectedVersionCode: metadata.watchVersionCode,
-            component: "dev.ungaaaabungaaa.relay/.MainActivity"
-        )
-        adbWizardState = await adbWizard.state
-        if case .ready = adbWizardState {
-            watchInstalled = true
-            diagnostic = "Relay was installed and its version verified on the watch."
-            lastError = nil
-        } else if case .failed(let message) = adbWizardState {
-            lastError = message
-        }
-        updateSetupState(bridgeReady: bridgeState == .running)
-    }
-
-    func enableRemoteAccess() async {
-        guard let tailscaleClient else {
-            lastError = "Install Tailscale, sign in, then run checks again."
-            return
-        }
-        do {
-            if temporaryPairingTransport {
-                let preflight = try await adminClient.securitySelfTest()
-                guard preflight.ok else {
-                    throw TailscaleClientError.bridgeSecurityCheckFailed
-                }
-                await pairingTransportLease.promote()
-            } else {
-                funnelOrigin = try await tailscaleClient.enableFunnel {
-                    try await self.adminClient.securitySelfTest()
-                }
-            }
-            funnelEnabled = true
-            temporaryPairingTransport = false
-            lastError = nil
-            diagnostic = "Funnel exposes only the authenticated watch port. Admin stays local."
-        } catch {
-            funnelEnabled = false
-            lastError = "Remote access preflight failed. Relay left Funnel disabled."
-        }
-        updateSetupState(bridgeReady: bridgeState == .running)
-    }
-
-    func disableRemoteAccess() async {
-        guard let tailscaleClient else {
-            funnelEnabled = false
-            return
-        }
-        if temporaryPairingTransport {
-            let closed = await closeTemporaryPairingTransport()
-            funnelEnabled = !closed
-            if closed {
-                lastError = nil
-            }
-            updateSetupState(bridgeReady: bridgeState == .running)
-            return
-        }
-        do {
-            try await tailscaleClient.disableFunnel()
-            funnelEnabled = false
-            funnelOrigin = nil
-            temporaryPairingTransport = false
-            lastError = nil
-        } catch {
-            lastError = "Relay could not confirm that Funnel was disabled."
-        }
-        updateSetupState(bridgeReady: bridgeState == .running)
-    }
-
     func quit() async {
-        cancelTailscaleLogin()
         cloudTunnelTask?.cancel()
         await cloudTunnel.disconnect()
-        discoveryAdvertiser.stop()
-        await closeTemporaryPairingTransport()
         try? await adminClient.shutdown()
         await supervisor?.stop()
     }
@@ -702,7 +469,6 @@ final class RelayAppModel: ObservableObject {
                         switch event {
                         case .connected:
                             cloudConnected = true
-                            funnelEnabled = true
                             retrySeconds = 1
                             diagnostic = "Relay Cloud is connected with end-to-end encryption."
                         case .pairingRequest(let request):
@@ -719,14 +485,12 @@ final class RelayAppModel: ObservableObject {
                     break
                 } catch {
                     cloudConnected = false
-                    funnelEnabled = false
                 }
                 guard !Task.isCancelled else { break }
                 try? await Task.sleep(for: .seconds(retrySeconds))
                 retrySeconds = min(retrySeconds * 2, 30)
             }
             cloudConnected = false
-            funnelEnabled = false
         }
     }
 
@@ -810,118 +574,6 @@ final class RelayAppModel: ObservableObject {
         return candidates
             .compactMap { $0 }
             .first { fileManager.isExecutableFile(atPath: $0.path) }
-    }
-
-    private func locateWatchAPK() -> URL? {
-        let fileManager = FileManager.default
-        let candidates: [URL?] = [
-            Bundle.main.url(forResource: "relay-wear", withExtension: "apk"),
-            URL(fileURLWithPath: fileManager.currentDirectoryPath)
-                .appendingPathComponent("wear/build/outputs/apk/debug/wear-debug.apk"),
-        ]
-        return candidates
-            .compactMap { $0 }
-            .first { fileManager.fileExists(atPath: $0.path) }
-    }
-
-    private func bundledReleaseMetadata() -> BundledReleaseMetadata? {
-        let fileManager = FileManager.default
-        let candidates: [URL?] = [
-            Bundle.main.url(forResource: "relay-release", withExtension: "json"),
-            URL(fileURLWithPath: fileManager.currentDirectoryPath)
-                .appendingPathComponent("release/bundled-metadata.json"),
-        ]
-        return candidates
-            .compactMap { $0 }
-            .first(where: { fileManager.fileExists(atPath: $0.path) })
-            .flatMap { try? Data(contentsOf: $0) }
-            .flatMap { try? BundledReleaseMetadata.decode($0) }
-    }
-
-    @discardableResult
-    private func closeTemporaryPairingTransport() async -> Bool {
-        await pairingTransportLease.finish()
-        if temporaryPairingTransport {
-            await expireTemporaryPairingTransport()
-        }
-        return !temporaryPairingTransport
-    }
-
-    private func expireTemporaryPairingTransport(
-        expectedSessionID: String? = nil
-    ) async {
-        if let expectedSessionID, pairingSession?.id != expectedSessionID {
-            return
-        }
-        guard temporaryPairingTransport, let tailscaleClient else {
-            return
-        }
-        discoveryAdvertiser.stop()
-        pairingSession = nil
-        pendingPairings = []
-        do {
-            try await tailscaleClient.disableFunnel()
-            temporaryPairingTransport = false
-            funnelOrigin = nil
-            diagnostic = "The temporary pairing endpoint closed."
-        } catch {
-            reportTemporaryPairingCloseFailure()
-        }
-    }
-
-    private func reportTemporaryPairingCloseFailure() {
-        diagnostic = "Temporary access may still be open. Use Emergency Stop and check Tailscale."
-        lastError = "Relay could not confirm that temporary pairing access closed."
-    }
-
-    private func detectLocalDependencies() async {
-        if let adb = locateADB() {
-            platformToolsReady = true
-            adbWizard = ADBWizard(client: ADBClient(executableURL: adb))
-        }
-        if let tailscale = locateTailscale() {
-            tailscaleInstalled = true
-            let client = TailscaleClient(executableURL: tailscale)
-            tailscaleClient = client
-            if let status = try? await client.status() {
-                tailscaleSignedIn = status.signedIn
-                funnelEnabled = (try? await client.funnelEnabled()) ?? false
-                if funnelEnabled, let dnsName = status.dnsName {
-                    funnelOrigin = URL(string: "https://\(dnsName)")
-                }
-            }
-        }
-        updateSetupState(bridgeReady: bridgeState == .running)
-    }
-
-    private func locateADB() -> URL? {
-        let fileManager = FileManager.default
-        let environment = ProcessInfo.processInfo.environment
-        let candidates: [URL?] = [
-            environment["ANDROID_HOME"].map {
-                URL(fileURLWithPath: $0).appendingPathComponent("platform-tools/adb")
-            },
-            environment["ANDROID_SDK_ROOT"].map {
-                URL(fileURLWithPath: $0).appendingPathComponent("platform-tools/adb")
-            },
-            fileManager.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Android/sdk/platform-tools/adb"),
-            applicationSupportDirectory().appendingPathComponent("platform-tools/adb"),
-        ]
-        return candidates
-            .compactMap { $0 }
-            .first { fileManager.isExecutableFile(atPath: $0.path) }
-    }
-
-    private func locateTailscale() -> URL? {
-        let fileManager = FileManager.default
-        let candidates = [
-            "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
-            "/Applications/Tailscale.app/Contents/MacOS/tailscale",
-            "/opt/homebrew/bin/tailscale",
-            "/usr/local/bin/tailscale",
-        ].map(URL.init(fileURLWithPath:))
-        return candidates.first { fileManager.isExecutableFile(atPath: $0.path) }
     }
 
     private func makeSupervisor(

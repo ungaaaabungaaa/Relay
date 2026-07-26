@@ -1,192 +1,97 @@
 # Set up Relay
 
-There are two paths below. Use the first one after a verified GitHub Release is
-published. Use the developer path today.
+The public-beta flow uses Codex, one Mac app, and one Wear OS app. It does not
+use Tailscale, ADB, developer mode, port forwarding, or an Android emulator.
 
 ## What you need
 
-- an Apple silicon Mac: M1 or newer;
-- macOS 14 or newer;
-- Codex installed, signed in, and able to open a task;
-- Tailscale on the Mac; its free plan is enough;
-- a Wear OS 3+ watch;
-- Wi-Fi shared by the Mac and watch for the one-time install.
+- an Apple-silicon Mac running macOS 14 or newer;
+- Codex installed, signed in, and able to run a task;
+- an invite to the Relay beta;
+- a Wear OS 3/API 30 or newer watch;
+- Wi-Fi or LTE on the watch;
+- the Mac awake and online while using Relay.
 
-A reset Bluetooth/Wi-Fi Galaxy Watch6 normally needs the Galaxy Wearable app on
-a compatible Android phone to finish Samsung's initial setup. Relay itself
-does not require the phone after that.
+A Samsung watch may need Galaxy Wearable on an Android phone to complete the
+manufacturer's initial setup. Relay itself has no required phone companion.
 
-Do not install an Android emulator, create an Android Virtual Device, or
-download a Wear OS system image.
+## Beta user flow
 
-## Easy install from GitHub Release
+1. Download the notarized `Relay.dmg` from the matching GitHub Release.
+2. Drag Relay to Applications and open it.
+3. Relay verifies its embedded bridge and the local Codex installation.
+4. Enter the invited email address. Relay opens the official browser page and
+   sends a single-use magic link through Resend.
+5. Open the link. The Mac receives short-lived access and rotating refresh
+   credentials through PKCE; the refresh token stays in macOS Keychain.
+6. Install **Relay for Wear OS** from the Google Play closed-test link.
+7. On the Mac, choose **Start secure pairing**. A six-character code is valid
+   for five minutes.
+8. Enter that code on the watch. Compare the Mac fingerprint on both devices.
+9. Confirm the fingerprint on the watch, then approve the watch fingerprint on
+   the Mac within two minutes.
+10. Choose the Mac workspace folders that the watch may browse.
+11. Optionally enable **Start Relay at login**.
 
-This route becomes available only after the repository publishes a notarized
-release.
+The watch then works over normal Wi-Fi or LTE. If the Mac disconnects, cached
+summaries become stale and every approval or mutation is disabled. Relay never
+queues an action to run later.
 
-1. Open the repository's **Releases** page.
-2. Download `Relay.dmg` and `SHA256SUMS`.
-3. Verify the checksum:
+## Daily use
 
-   ```bash
-   shasum -a 256 -c SHA256SUMS
-   ```
+- Keep Relay, Codex, and the Mac awake and online.
+- Use the watch for tasks, approvals, questions, instructions, and new tasks.
+- Risky approvals require a press-and-hold and show the exact command, folder,
+  reason, and consequence.
+- System keyboard/dictation needs no OpenAI key.
+- Optional hold-to-record transcription uses an OpenAI key stored only in the
+  Mac Keychain and always shows a transcript review before sending.
 
-4. Open `Relay.dmg` and drag Relay to Applications.
-5. Open Relay. macOS should accept the Developer ID and notarization without a
-   security override.
-6. Open the Relay dashboard from the menu-bar icon.
-7. Install Tailscale from its official Mac download. Relay opens Tailscale's
-   browser sign-in and checks status for up to two minutes.
-8. In **Setup**, choose **Install verified tools**. Relay downloads only the
-   pinned official Android Platform Tools archive; it does not install Android
-   Studio or an emulator.
-9. On the watch, enable Developer Options and Wireless Debugging using the
-   steps below.
-10. In **Watches**, pair, connect, and install Relay.
-11. Start secure pairing in the Mac app. Relay opens a temporary,
-    security-checked Funnel endpoint for pairing. The watch discovers it over
-    Bonjour.
-12. Compare the Mac fingerprint, enter the six-character code, then compare
-    the watch fingerprint before you approve it on the Mac. Relay closes the
-    temporary pairing endpoint after approval, denial, or session expiry.
-13. Add only the Mac workspace folders you want the watch to browse.
-14. In **Remote Access**, run checks, then enable permanent access.
-15. Test once with the watch on a different Wi-Fi network.
-16. Turn Wireless Debugging off on the watch.
+## Lost watch or suspected compromise
 
-Remote Access is deliberately last. The bridge stays private until the local
-security self-test passes.
+- Revoke one watch from **Watches** to close its tunnel immediately.
+- Use **Emergency Stop** to revoke all watches, rotate the Mac host credential,
+  disconnect cloud tunnels, and stop the bridge. Existing Codex tasks continue
+  on the Mac.
+- Use **Delete Relay Account** to remove the account and device metadata and
+  clear Relay Cloud keys from the Mac. Codex repositories stay untouched.
 
-## Prepare the physical watch
+## Developer setup
 
-1. Open **Settings → About watch → Software information**.
-2. Tap **Software version** five times.
-3. Go back and open **Developer options**.
-4. Enable **ADB debugging** and **Wireless debugging**.
-5. If available, enable **Turn off automatic Wi-Fi** while installing.
-6. Open **Wireless debugging → Pair new device**.
-7. Keep the watch on this page while Relay searches.
-
-The pairing port and connection port are different and may change whenever
-Wireless Debugging restarts.
-
-## Developer setup today
-
-Current local development uses Android Studio only for its bundled Java and SDK.
-No emulator is used.
-
-### 1. Open the project
-
-Open the repository root in Android Studio and allow Gradle to sync. Confirm
-these SDK pieces in **Settings → Languages & Frameworks → Android SDK**:
-
-- Android SDK Platform 36.1;
-- Android SDK Build Tools 36.0.0;
-- Android SDK Platform-Tools.
-
-### 2. Build and run the Mac app
-
-From the repository root:
+Android Studio is needed only for Java, Android SDK tools, building, and
+installing a debug build on a physical watch. Do not install an emulator.
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build:bridge-sea
+
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 xcrun swift run --package-path mac RelayMac
-```
 
-Relay creates a random 32-byte admin token and stores it in macOS Keychain. The
-app starts one local bridge process, checks Codex, and never prints the token.
-
-### 3. Pair the watch over Wireless ADB
-
-You can use the Relay Watches screen or Android Studio's Terminal:
-
-```bash
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-ADB="$ANDROID_HOME/platform-tools/adb"
-"$ADB" pair WATCH_IP:PAIRING_PORT
-"$ADB" connect WATCH_IP:CONNECTION_PORT
-"$ADB" devices
-```
-
-Enter the six-digit Wireless ADB code. `"$ADB" devices` must list exactly the
-watch you intend to use.
-
-### 4. Install the debug APK
-
-```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-ADB="$ANDROID_HOME/platform-tools/adb"
-./gradlew :wear:installDebug
-"$ADB" shell am start -n dev.ungaaaabungaaa.relay/.MainActivity
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+./gradlew :wear:assembleDebug
 ```
 
-For the safe local development loop, keep the bridge on localhost and forward
-the watch-local port through ADB:
+For physical debug installation only, follow
+[PHYSICAL-WATCH-TEST.md](PHYSICAL-WATCH-TEST.md). Release builds always use
+Relay Cloud HTTPS/WSS; manual origins and the legacy loopback path are debug
+recovery features.
 
-```bash
-"$ADB" reverse tcp:43117 tcp:43117
-```
+## Cloud maintainer setup
 
-The watch can then use `http://127.0.0.1:43117` without exposing the bridge.
-The release APK disables cleartext networking and uses the HTTPS Funnel origin.
+Production launch additionally needs organization-owned Cloudflare and Resend
+accounts, the `relayforcodex.com` zone, D1 IDs, Worker secrets, protected GitHub
+environments, and verified email sending. See [RELEASE.md](RELEASE.md) and
+[TODO.md](TODO.md). Never commit credentials or paste magic links into logs.
 
-### 5. Manual bridge fallback
-
-Normally the Mac app manages the bridge. For bridge-only development:
-
-```bash
-export CODEWATCH_ADMIN_TOKEN="$(openssl rand -base64 32)"
-export CODEWATCH_BIND_HOST=127.0.0.1
-export CODEWATCH_ADMIN_HOST=127.0.0.1
-node apps/bridge/src/cli.ts serve
-```
-
-Use the Mac app for release-style pairing. The old unrestricted `/v1/pair`
-route remains available for debug migration and will be removed after both
-watch clients use session pairing. Do not paste the admin token into source,
-`.env` files, issues, or logs.
-
-## Optional reviewed voice
-
-The watch's built-in keyboard/dictation works without an OpenAI key. For
-hold-to-record transcription:
-
-1. Open **Voice** in the Mac dashboard.
-2. Paste the OpenAI key there.
-3. Relay stores it in Keychain.
-4. Test one recording and verify the transcript before sending.
-
-Audio is temporary, is deleted after transcription or failure, and is never
-sent to Codex automatically.
-
-## Turn on remote access
-
-Install and sign in to the official Tailscale Mac app. Relay runs:
-
-```bash
-tailscale status --json
-TAILSCALE_BE_CLI=1 tailscale funnel --bg http://127.0.0.1:43117
-tailscale funnel status --json
-```
-
-Funnel is public internet ingress, but it forwards only to the localhost
-bridge. Relay still requires the watch's device signature on every private
-request.
-
-Emergency Stop disables Funnel and closes watch access while leaving Codex
-tasks running. It does not silently revoke the watch; revocation is a separate
-deliberate action.
-
-## Daily use
-
-- Keep the Mac awake, online, and running Relay and Codex.
-- Keep Tailscale connected for remote networks.
-- Start Live Monitoring only when you want visible real-time background
-  updates; it ends after four hours or on low battery.
-- If the Mac is offline, cached watch data is marked stale and controls are
-  disabled. Relay does not queue actions to run later.
+The Worker secrets are `JWT_SECRET`, `PII_ENCRYPTION_KEY`, `EMAIL_HMAC_KEY`,
+`RESEND_API_KEY`, and `CLOUD_ADMIN_CREDENTIAL`. The first three are independent
+32-byte base64url values. The cloud-admin credential is also stored in the
+protected GitHub `production` environment, alongside a secret
+`BETA_INVITE_EMAILS` list containing at most 25 comma- or newline-separated
+addresses. Set the non-secret `RELAY_API_ORIGIN` environment variable, require
+an environment reviewer, and manually run **Relay Cloud beta invites**. The
+workflow sends one address at a time and logs only the final count; D1 stores
+encrypted email bytes plus a separate HMAC lookup.

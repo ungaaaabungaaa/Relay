@@ -149,8 +149,7 @@ jobs:
             --sign "${APPLE_SIGNING_IDENTITY}" \
             dist/relay-bridge-arm64
           pnpm smoke:bridge-sea
-          RELAY_APK_PATH="${GITHUB_WORKSPACE}/release/out/relay-wear.apk" \
-            scripts/package-mac-app.sh
+          scripts/package-mac-app.sh
       - name: Notarize and staple
         run: |
           xcrun notarytool submit release/out/Relay.dmg \

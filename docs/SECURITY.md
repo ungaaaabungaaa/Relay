@@ -1,140 +1,111 @@
 # Relay security model
 
-Relay gives a paired watch meaningful power over Codex. The safer public
-defaults are part of the product, not optional advice.
+Relay gives a paired watch meaningful control over Codex. Safer behavior is the
+default, not an optional mode.
 
 ## Default policy
 
-- Remote Access is off until the local security self-test passes.
 - The bridge and private admin API bind only to `127.0.0.1`.
+- The Mac opens an outbound Relay Cloud connection; there is no inbound public
+  Mac port.
 - The watch can browse only roots explicitly approved in the Mac app.
-- Deny and normal approval are one tap.
-- Dangerous, destructive, elevated, or uncertain approval requires a
-  1.5-second press-and-hold.
-- Stale or offline screens are read-only and do not queue actions.
+- Dangerous, destructive, elevated, or uncertain approvals require a
+  press-and-hold and retain exact command/folder/consequence text.
+- Stale or offline screens are read-only and never queue actions.
 - Voice transcripts are reviewed before sending.
 - Live Monitoring is visible, opt-in, time-limited, and battery-aware.
-
-An advanced single-tap-all policy may be added later only with a warning on
-both devices, device-specific storage, and audit visibility. It is not the
-public default.
 
 ## Trust boundaries
 
 ### Watch
 
-- Generates a non-exportable signing key in Android Keystore.
-- Stores a device ID, bridge origin, connection preferences, last event
-  sequence, and minimal stale summaries.
-- Stores no Codex credential, OpenAI key, Mac password, repository contents, or
-  raw audio history.
-- Deletes the credential and private cache when unpaired or revoked.
+- Generates separate P-256 signing and key-agreement identities.
+- Uses Android Keystore ECDH on API 31+.
+- On API 30, encrypts a software P-256 private key with a non-exportable
+  Android Keystore AES key.
+- Stores the scoped cloud credential and E2EE root key only inside
+  Keystore-protected encrypted storage.
+- Stores no Codex/OpenAI credential, Mac password, repository content, or raw
+  audio history.
 
-### Tailscale Funnel
+### Relay Cloud
 
-- Provides a public HTTPS route to one localhost port.
-- Is transport, not watch identity.
-- Its headers are never accepted as proof that a request came from the watch.
-- Can be disabled independently without stopping Codex tasks.
+- Stores account and device routing metadata, encrypted email, and hashed
+  refresh/host/watch credentials.
+- Routes opaque encrypted envelopes through one hibernating Durable Object per
+  account.
+- Has no Mac/watch private key or E2EE root key and cannot decrypt Codex
+  content.
+- Applies account, host, device, IP, and pairing limits and returns generic
+  authentication errors.
+- Retains bounded operational metadata for seven days, then purges it.
+- Does not queue actions while the Mac is offline.
 
-### Mac bridge
+### Mac and bridge
 
-- Authenticates the watch before loading private data.
-- Checks device ID, timestamp, nonce, body digest, signature, and revocation.
-- Applies deterministic risk and approved-workspace rules.
-- Uses idempotency keys so repeated taps do not repeat actions.
-- Is the only component that talks to Codex and optional OpenAI transcription.
-
-### Private admin API
-
-- Runs on a separate loopback port.
-- Requires a random token of at least 32 bytes stored in macOS Keychain.
-- Returns fingerprints and status, never admin tokens, OpenAI keys, or stored
-  watch public keys.
-- Produces generic errors that do not reveal secrets.
+- Stores Mac identities, refresh token, host credential, and watch root keys in
+  macOS Keychain.
+- Authenticates and decrypts the outer envelope before applying the existing
+  signed-request contract.
+- Checks device ID, timestamp, nonce, body digest, signature, revocation, and
+  idempotency after decryption. Cloud delivery is never authorization.
+- Is the only component that talks to Codex and optional transcription.
 
 ## Pairing
 
-1. The Mac bridge creates a six-character code valid for five minutes.
-2. The watch creates its Android Keystore signing key.
-3. The watch submits the code and public key.
-4. The Mac displays the watch identity and key fingerprint for confirmation.
-5. The bridge stores the device public key and returns the device identity and
-   configured remote origin.
+1. The signed-in Mac creates a five-minute session and six-character code.
+2. The watch sends its signing/agreement public keys and device metadata.
+3. Both devices show fingerprints for comparison.
+4. The Mac approves within two minutes.
+5. Mac and watch derive the same root key with P-256 ECDH and HKDF-SHA256 using
+   the pairing session nonce.
+6. The Mac creates the watch credential, sends only its SHA-256 hash to D1, and
+   encrypts the real credential for the watch with AES-256-GCM.
+7. The watch polls with a separate high-entropy token and decrypts the payload.
 
-Pairing has per-origin and global attempt limits. The code cannot be reused.
+Cloud stores only the short-lived opaque completion payload. Denial, expiry, or
+cancellation creates no active watch.
 
-## Requests and replay protection
+## Encrypted requests and replay protection
 
-Every authenticated request includes the device ID, timestamp, random nonce,
-body digest, and signature over the canonical method and path. The bridge
-rejects an unknown or revoked device, stale timestamp, reused nonce, invalid
-body digest, or invalid signature before processing the request.
+Outer routing fields are canonical authenticated additional data. Each peer
+persists monotonically increasing sequences, rejects replay across reconnects
+and process restarts, and rejects stale or modified envelopes.
 
-Every state-changing request also includes an idempotency key. A retry returns
-the original result instead of approving, steering, stopping, or creating
-twice.
+Inside the encrypted message, the watch retains the signed canonical request,
+timestamp, random nonce, replay protection, revocation, and idempotency key.
+A retry returns the first mutation result instead of acting twice.
 
-## Workspaces
+## Workspaces and voice
 
-Only folder names below approved roots are exposed. Relay canonicalizes paths,
-checks symlinks, paginates listings, and rejects traversal outside a root. It
-does not read file contents for the watch. macOS privacy permissions remain in
-force.
+Relay canonicalizes approved paths, resolves symlinks, and rejects traversal
+outside allowed roots. It does not expose repository file contents through the
+folder browser.
 
-## Voice
+System input needs no OpenAI key. Optional recordings are capped at 30 seconds
+and 2 MiB by protocol policy, authenticated inside the tunnel, deleted after
+success/failure/timeout, and never sent to Codex without transcript review.
 
-- Wear OS system input does not need an OpenAI key.
-- Optional recording requests microphone permission just in time.
-- The bridge enforces duration and payload limits.
-- The OpenAI key stays in macOS Keychain.
-- Audio is removed on success, provider failure, timeout, cancellation, and
-  restart cleanup.
-- A transcript is never automatically sent to Codex.
+## Account controls
 
-## Logs and local data
-
-Logs redact credentials, authorization headers, prompts, command output, file
-contents, audio, and Funnel origins. Audit records retain only the device,
-action type, target, decision, time, risk class, and result.
-
-Local storage contains paired-device public keys, revocation state, replay
-nonces, idempotency results, bounded event metadata, workspace policy, task
-aliases, and redacted audit rows. Repository files and complete Codex
-conversations are not copied into Relay's database.
+- **Revoke** marks one device revoked in D1, closes its connected tunnel, and
+  removes its Mac root key.
+- **Emergency Stop** revokes all watches, rotates the host credential,
+  disconnects tunnels, clears watch root keys, and stops the bridge while
+  leaving Codex tasks running.
+- **Delete Relay Account** removes PII/device metadata, revokes all sessions,
+  and clears Relay Cloud credentials from the Mac.
 
 ## Release integrity
 
-Public releases are allowed only from `v*` tags in a protected GitHub
-environment. The workflow:
+Protected workflows build a signed Wear package and Apple-silicon Mac app,
+verify the arm64 sidecar and package identifiers, sign the manifest and Sparkle
+feed, notarize/staple the DMG, scan for secrets, and reject modified bytes,
+wrong tags, downgrades, unsigned APK metadata, or missing license assets.
 
-- signs the Android APK with a protected stable key;
-- signs every nested Mac executable with Developer ID;
-- notarizes and staples the DMG;
-- creates an Ed25519-signed manifest;
-- binds the tag, versions, Codex range, filenames, architectures, and SHA-256
-  digests together;
-- rejects Intel builds, unsigned APK metadata, changed bytes, wrong tags,
-  downgrades, and missing license assets.
+Published tags and assets are never silently replaced. A broken release is
+withdrawn and replaced by a higher version.
 
-The update public key must be trusted outside the release manifest. A failed
-update preserves the previous working app or APK.
-
-## Emergency response
-
-If the watch is lost or a credential may be compromised:
-
-1. Choose **Emergency Stop** on the Mac. Confirm Funnel and bridge shutdown
-   results separately.
-2. Revoke the lost watch in **Watches**.
-3. Review the redacted audit history.
-4. Re-pair only a watch you physically control.
-5. Re-enable Funnel only after the local security self-test passes again.
-
-If a release-signing key may be compromised, do not ship another tag. Remove
-release access, preserve evidence, rotate the affected trust path, and publish
-a clear incident notice.
-
-Report vulnerabilities privately through GitHub's private vulnerability
-reporting feature when enabled. Do not include real credentials or private
-task content.
+Report vulnerabilities privately through GitHub private vulnerability
+reporting when enabled. Never include real credentials, magic links, pairing
+codes, prompts, commands, repository paths, or task output.

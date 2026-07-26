@@ -1,5 +1,5 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { emailLookupHash } from "./auth.ts";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { emailLookupHash, encryptEmail } from "./auth.ts";
 import { D1CloudRepository } from "./d1-repository.ts";
 
 const encoder = new TextEncoder();
@@ -10,6 +10,7 @@ const ACCESS_TOKEN_LIFETIME_MS = 15 * 60_000;
 const REFRESH_TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60_000;
 
 type GatewayOptions = {
+  adminCredential: string;
   jwtSecret: Uint8Array;
   piiKey: Uint8Array;
   emailHmacKey: Uint8Array;
@@ -129,6 +130,8 @@ export class D1CommandGateway {
           await sha256(requiredString(body, "refreshToken")),
         );
         return { ok: true };
+      case "admin.invites.create":
+        return this.#createInvite(request, body);
       case "hosts.create":
         return this.#createHost(await this.#authorize(request), body);
       case "pairingSessions.create":
@@ -174,6 +177,49 @@ export class D1CommandGateway {
       default:
         throw new Error(AUTH_ERROR);
     }
+  }
+
+  async #createInvite(
+    request: Request,
+    body: Record<string, unknown>,
+  ): Promise<{ ok: true }> {
+    const authorization = request.headers.get("authorization");
+    if (
+      this.#options.adminCredential.length < 32 ||
+      !authorization?.startsWith("Admin ")
+    ) {
+      throw new Error(AUTH_ERROR);
+    }
+    const supplied = Buffer.from(await sha256(authorization.slice(6)));
+    const expected = Buffer.from(
+      await sha256(this.#options.adminCredential),
+    );
+    if (
+      supplied.byteLength !== expected.byteLength ||
+      !timingSafeEqual(supplied, expected)
+    ) {
+      throw new Error(AUTH_ERROR);
+    }
+
+    const email = requiredString(body, "email").trim().toLowerCase();
+    if (
+      email.length > 320 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      throw new Error(AUTH_ERROR);
+    }
+    await this.#repository.createInvite({
+      id: randomUUID(),
+      emailCiphertext: encoder.encode(
+        await encryptEmail(email, this.#options.piiKey),
+      ),
+      emailLookupHash: await emailLookupHash(
+        email,
+        this.#options.emailHmacKey,
+      ),
+      expiresAt: this.#now() + 30 * 24 * 60 * 60_000,
+    });
+    return { ok: true };
   }
 
   async #startDeviceLogin(

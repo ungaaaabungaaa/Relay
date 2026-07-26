@@ -60,7 +60,7 @@ export const SCREEN_GROUPS = [
         layout: "status",
         eyebrow: "CONNECTION",
         title: ["Mac offline"],
-        body: ["Wake the Mac and check", "Relay + Tailscale"],
+        body: ["Wake the Mac and check", "Relay Cloud"],
         primary: "Reconnect",
         tone: "amber",
       },

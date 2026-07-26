@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
-import { emailLookupHash } from "../src/auth.ts";
+import { decryptEmail, emailLookupHash } from "../src/auth.ts";
 import { D1CommandGateway } from "../src/d1-gateway.ts";
 import { D1CloudRepository } from "../src/d1-repository.ts";
 import { createWorker } from "../src/worker.ts";
@@ -58,6 +58,7 @@ async function setup() {
   const magicLinks: string[] = [];
   const hostNotifications: unknown[] = [];
   const gateway = new D1CommandGateway(repo, {
+    adminCredential: "production-admin-credential-32-bytes",
     jwtSecret,
     piiKey,
     emailHmacKey,
@@ -96,6 +97,40 @@ async function json(
 }
 
 describe("D1-backed Worker flow", () => {
+  it("creates encrypted invites only with the operator credential", async () => {
+    const { database, worker } = await setup();
+    const denied = await json(worker, "/cloud/v1/admin/invites", {
+      method: "POST",
+      headers: { authorization: "Admin wrong" },
+      body: JSON.stringify({ email: "beta@example.com" }),
+    });
+    assert.equal(denied.response.status, 401);
+
+    const created = await json(worker, "/cloud/v1/admin/invites", {
+      method: "POST",
+      headers: {
+        authorization: "Admin production-admin-credential-32-bytes",
+      },
+      body: JSON.stringify({ email: " Beta@Example.com " }),
+    });
+    assert.equal(created.response.status, 200);
+    assert.deepEqual(created.body, { ok: true });
+
+    const stored = database.prepare(
+      "SELECT email_ciphertext, email_lookup_hash FROM invites WHERE id != ?",
+    ).get("invite-1") as {
+      email_ciphertext: Uint8Array;
+      email_lookup_hash: string;
+    };
+    const ciphertext = new TextDecoder().decode(stored.email_ciphertext);
+    assert.equal(await decryptEmail(ciphertext, piiKey), "beta@example.com");
+    assert.equal(
+      stored.email_lookup_hash,
+      await emailLookupHash("beta@example.com", emailHmacKey),
+    );
+    assert.doesNotMatch(ciphertext, /beta@example\.com/);
+  });
+
   it("runs invite login, host registration, pairing, and refresh reuse defense", async () => {
     const { database, hostNotifications, magicLinks, worker } = await setup();
     const verifier = "a-valid-pkce-verifier-with-at-least-forty-three-characters";
