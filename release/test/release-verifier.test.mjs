@@ -17,6 +17,8 @@ import assert from "node:assert/strict";
 
 import {
   canonicalizeManifestPayload,
+  RELEASE_TAG_PATTERN,
+  RELEASE_VERSION_PATTERN,
   verifyRelease,
 } from "../../scripts/verify-release.mjs";
 import { createReleasePayload } from "../../scripts/create-release-manifest.mjs";
@@ -30,6 +32,25 @@ const REQUIRED_ARTIFACT_NAMES = [
   "NOTICE",
   "THIRD_PARTY_NOTICES.md",
   "COMPATIBILITY.md",
+];
+const INVALID_RELEASE_VERSIONS = [
+  "1.0",
+  "1..0",
+  "1.0.0.0",
+  "1.nope.0",
+  "01.0.0",
+  "1.0.0-beta..1",
+  "1.0.0-beta.01",
+  "1.0.0-",
+  "1.0.0+build",
+];
+const VALID_RELEASE_VERSIONS = [
+  "0.0.0",
+  "1.0.0",
+  "1.0.0-0",
+  "1.0.0-beta",
+  "1.0.0-beta.10",
+  "1.0.0-0alpha",
 ];
 
 test("accepts a signed, internally consistent Apple silicon release", async () => {
@@ -89,6 +110,80 @@ test("rejects a tag that does not match the release version", async () => {
     );
   });
 });
+
+test("manifest creation rejects malformed release versions", async () => {
+  await withFixture(async ({ directory }) => {
+    for (const version of INVALID_RELEASE_VERSIONS) {
+      await assert.rejects(
+        createReleasePayload({
+          artifactsDirectory: directory,
+          tag: `v${version}`,
+          codexMinimumVersion: "0.144.0",
+          codexMaximumVersion: "0.144.x",
+        }),
+        /tag must use strict SemVer/,
+      );
+    }
+  });
+});
+
+test("runtime and JSON Schema use the same strict release SemVer grammar", async () => {
+  const schema = JSON.parse(
+    await readFile(
+      new URL("../release-manifest.schema.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const schemaVersionPattern = new RegExp(
+    schema.$defs.releaseVersion.pattern,
+  );
+  const schemaTagPattern = new RegExp(schema.$defs.releaseTag.pattern);
+  const schemaSourcePattern = new RegExp(
+    schema.$defs.sourceArtifactName.pattern,
+  );
+
+  for (const version of VALID_RELEASE_VERSIONS) {
+    assert.equal(RELEASE_VERSION_PATTERN.test(version), true, version);
+    assert.equal(RELEASE_TAG_PATTERN.test(`v${version}`), true, version);
+    assert.equal(schemaVersionPattern.test(version), true, version);
+    assert.equal(schemaTagPattern.test(`v${version}`), true, version);
+    assert.equal(
+      schemaSourcePattern.test(`Relay-${version}.tar.gz`),
+      true,
+      version,
+    );
+  }
+  for (const version of INVALID_RELEASE_VERSIONS) {
+    assert.equal(RELEASE_VERSION_PATTERN.test(version), false, version);
+    assert.equal(RELEASE_TAG_PATTERN.test(`v${version}`), false, version);
+    assert.equal(schemaVersionPattern.test(version), false, version);
+    assert.equal(schemaTagPattern.test(`v${version}`), false, version);
+    assert.equal(
+      schemaSourcePattern.test(`Relay-${version}.tar.gz`),
+      false,
+      version,
+    );
+  }
+});
+
+for (const version of INVALID_RELEASE_VERSIONS) {
+  test(`release verification rejects malformed version ${version}`, async () => {
+    await withFixture(
+      async ({ directory, manifest, publicKey }) => {
+        await assert.rejects(
+          verifyRelease({
+            manifest,
+            artifactsDirectory: directory,
+            expectedTag: `v${version}`,
+            publicKey,
+          }),
+          /release tag does not match the expected tag and version/,
+        );
+      },
+      (payload) => setPayloadVersion(payload, version),
+    );
+  });
+}
 
 test("rejects an Intel Mac artifact", async () => {
   await withFixture(
@@ -167,6 +262,123 @@ test("rejects a signed payload containing the retired watch key", async () => {
       payload.watch = {
         artifact: "retired-watch-package",
       };
+    },
+  );
+});
+
+test("rejects an unsigned envelope property added after signing", async () => {
+  await withFixture(async ({ directory, manifest, publicKey }) => {
+    manifest.releaseChannel = "retired";
+
+    await assert.rejects(
+      verifyRelease({
+        manifest,
+        artifactsDirectory: directory,
+        expectedTag: TAG,
+        publicKey,
+      }),
+      /unsupported release manifest property releaseChannel/,
+    );
+  });
+});
+
+test("rejects an inherited required envelope property", async () => {
+  await withFixture(async ({ directory, manifest, publicKey }) => {
+    const inheritedSignatureManifest = Object.assign(
+      Object.create({ signature: manifest.signature }),
+      { payload: manifest.payload },
+    );
+
+    await assert.rejects(
+      verifyRelease({
+        manifest: inheritedSignatureManifest,
+        artifactsDirectory: directory,
+        expectedTag: TAG,
+        publicKey,
+      }),
+      /release manifest property signature is missing/,
+    );
+  });
+});
+
+test("rejects accessor-backed manifests before signature verification", async () => {
+  await withFixture(async ({ directory, manifest, publicKey }) => {
+    const signedPayload = manifest.payload;
+    const tamperedPayload = structuredClone(signedPayload);
+    tamperedPayload.codex.minimumVersion = "9.9.9";
+    let payloadReads = 0;
+    const accessorManifest = { signature: manifest.signature };
+    Object.defineProperty(accessorManifest, "payload", {
+      enumerable: true,
+      get() {
+        payloadReads += 1;
+        return payloadReads < 3 ? signedPayload : tamperedPayload;
+      },
+    });
+
+    await assert.rejects(
+      verifyRelease({
+        manifest: accessorManifest,
+        artifactsDirectory: directory,
+        expectedTag: TAG,
+        publicKey,
+      }),
+      /release manifest must contain only plain JSON data/,
+    );
+    assert.equal(payloadReads, 0);
+  });
+});
+
+test("rejects a Mac property added after signing", async () => {
+  await withFixture(async ({ directory, manifest, publicKey }) => {
+    manifest.payload.mac.minimumSystemVersion = "14.0";
+
+    await assert.rejects(
+      verifyRelease({
+        manifest,
+        artifactsDirectory: directory,
+        expectedTag: TAG,
+        publicKey,
+      }),
+      /unsupported Mac release metadata property minimumSystemVersion/,
+    );
+  });
+});
+
+test("rejects a signed payload containing an unknown Codex property", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /unsupported Codex compatibility metadata property channel/,
+      );
+    },
+    (payload) => {
+      payload.codex.channel = "stable";
+    },
+  );
+});
+
+test("rejects a signed payload containing an unknown artifact property", async () => {
+  await withFixture(
+    async ({ directory, manifest, publicKey }) => {
+      await assert.rejects(
+        verifyRelease({
+          manifest,
+          artifactsDirectory: directory,
+          expectedTag: TAG,
+          publicKey,
+        }),
+        /unsupported release artifact property downloadURL/,
+      );
+    },
+    (payload) => {
+      payload.artifacts[0].downloadURL = "https://example.invalid/Relay.dmg";
     },
   );
 });
@@ -347,4 +559,16 @@ function architectureFor(name) {
 
 function sha256(data) {
   return createHash("sha256").update(data).digest("hex");
+}
+
+function setPayloadVersion(payload, version) {
+  payload.tag = `v${version}`;
+  payload.version = version;
+  payload.mac.version = version;
+  for (const artifact of payload.artifacts) {
+    artifact.version = version;
+    if (artifact.name.endsWith(".tar.gz")) {
+      artifact.name = `Relay-${version}.tar.gz`;
+    }
+  }
 }

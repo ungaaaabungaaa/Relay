@@ -20,8 +20,8 @@
       ],
       "properties": {
         "schemaVersion": { "const": 2 },
-        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
-        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+        "tag": { "$ref": "#/$defs/releaseTag" },
+        "version": { "$ref": "#/$defs/releaseVersion" },
         "license": { "const": "Apache-2.0" },
         "mac": { "$ref": "#/$defs/mac" },
         "codex": { "$ref": "#/$defs/codex" },
@@ -49,9 +49,7 @@
                 "type": "object",
                 "required": ["name", "architecture", "signed"],
                 "properties": {
-                  "name": {
-                    "pattern": "^Relay-[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?\\.tar\\.gz$"
-                  },
+                  "name": { "$ref": "#/$defs/sourceArtifactName" },
                   "architecture": { "const": "source" },
                   "signed": { "const": false }
                 }
@@ -122,12 +120,24 @@
     }
   },
   "$defs": {
+    "releaseVersion": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+    },
+    "releaseTag": {
+      "type": "string",
+      "pattern": "^v(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+    },
+    "sourceArtifactName": {
+      "type": "string",
+      "pattern": "^Relay-(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?\\.tar\\.gz$"
+    },
     "mac": {
       "type": "object",
       "additionalProperties": false,
       "required": ["version", "artifact", "architecture"],
       "properties": {
-        "version": { "type": "string" },
+        "version": { "$ref": "#/$defs/releaseVersion" },
         "artifact": { "const": "Relay.dmg" },
         "architecture": { "const": "arm64" }
       }
@@ -155,17 +165,14 @@
         "name": {
           "oneOf": [
             { "const": "Relay.dmg" },
-            {
-              "type": "string",
-              "pattern": "^Relay-[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?\\.tar\\.gz$"
-            },
+            { "$ref": "#/$defs/sourceArtifactName" },
             { "const": "LICENSE" },
             { "const": "NOTICE" },
             { "const": "THIRD_PARTY_NOTICES.md" },
             { "const": "COMPATIBILITY.md" }
           ]
         },
-        "version": { "type": "string" },
+        "version": { "$ref": "#/$defs/releaseVersion" },
         "architecture": {
           "enum": ["arm64", "source", "text"]
         },

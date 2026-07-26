@@ -103,29 +103,47 @@ public struct ReleaseClient: Sendable {
         _ data: Data,
         currentVersion: String
     ) throws -> ReleaseManifestPayload {
-        let payloadKeys: Set<String>
         do {
             guard
                 let document = try JSONSerialization.jsonObject(with: data)
                     as? [String: Any],
-                let rawPayload = document["payload"] as? [String: Any]
+                Set(document.keys) == ["payload", "signature"],
+                let rawPayload = document["payload"] as? [String: Any],
+                Set(rawPayload.keys) == [
+                    "schemaVersion",
+                    "tag",
+                    "version",
+                    "license",
+                    "mac",
+                    "codex",
+                    "artifacts",
+                ],
+                let rawMac = rawPayload["mac"] as? [String: Any],
+                Set(rawMac.keys) == [
+                    "version",
+                    "artifact",
+                    "architecture",
+                ],
+                let rawCodex = rawPayload["codex"] as? [String: Any],
+                Set(rawCodex.keys) == [
+                    "minimumVersion",
+                    "maximumVersion",
+                ],
+                let rawArtifacts = rawPayload["artifacts"]
+                    as? [[String: Any]],
+                rawArtifacts.allSatisfy({
+                    Set($0.keys) == [
+                        "name",
+                        "version",
+                        "architecture",
+                        "sha256",
+                        "signed",
+                    ]
+                })
             else {
                 throw ReleaseClientError.invalidManifest
             }
-            payloadKeys = Set(rawPayload.keys)
         } catch {
-            throw ReleaseClientError.invalidManifest
-        }
-        let requiredPayloadKeys: Set<String> = [
-            "schemaVersion",
-            "tag",
-            "version",
-            "license",
-            "mac",
-            "codex",
-            "artifacts",
-        ]
-        guard payloadKeys == requiredPayloadKeys else {
             throw ReleaseClientError.invalidManifest
         }
 
@@ -289,32 +307,135 @@ public struct ReleaseClient: Sendable {
     }
 }
 
+private enum SemanticVersionIdentifier: Equatable {
+    case numeric(String)
+    case nonnumeric(String)
+}
+
 private struct SemanticVersion: Comparable {
-    let components: [Int]
-    let prerelease: String?
+    let core: [String]
+    let prerelease: [SemanticVersionIdentifier]?
 
     init?(_ value: String) {
-        let sections = value.split(separator: "-", maxSplits: 1).map(String.init)
-        let numbers = sections[0].split(separator: ".").compactMap { Int($0) }
-        guard numbers.count >= 2, numbers.count <= 4 else {
+        let sections = value.split(
+            separator: "-",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        )
+        guard let rawCoreSection = sections.first else {
             return nil
         }
-        components = numbers + Array(
-            repeating: 0,
-            count: 4 - numbers.count
+        let rawCore = rawCoreSection.split(
+            separator: ".",
+            omittingEmptySubsequences: false
         )
-        prerelease = sections.count == 2 ? sections[1] : nil
+        guard
+            rawCore.count == 3,
+            rawCore.allSatisfy(Self.isValidNumericIdentifier)
+        else {
+            return nil
+        }
+        core = rawCore.map(String.init)
+
+        guard sections.count == 2 else {
+            prerelease = nil
+            return
+        }
+        let rawPrerelease = sections[1].split(
+            separator: ".",
+            omittingEmptySubsequences: false
+        )
+        guard
+            !sections[1].isEmpty,
+            rawPrerelease.allSatisfy(Self.isValidPrereleaseIdentifier)
+        else {
+            return nil
+        }
+        prerelease = rawPrerelease.map { identifier in
+            let value = String(identifier)
+            if identifier.utf8.allSatisfy(Self.isASCIIDigit) {
+                return .numeric(value)
+            }
+            return .nonnumeric(value)
+        }
     }
 
     static func < (left: SemanticVersion, right: SemanticVersion) -> Bool {
-        if left.components != right.components {
-            return left.components.lexicographicallyPrecedes(right.components)
+        for (leftCore, rightCore) in zip(left.core, right.core) {
+            if leftCore != rightCore {
+                return numericIdentifierLess(leftCore, rightCore)
+            }
         }
         return switch (left.prerelease, right.prerelease) {
         case (.some, .none): true
         case (.none, .some): false
-        case let (.some(left), .some(right)): left < right
+        case let (.some(leftIdentifiers), .some(rightIdentifiers)):
+            prereleaseLess(leftIdentifiers, rightIdentifiers)
         case (.none, .none): false
         }
+    }
+
+    private static func prereleaseLess(
+        _ left: [SemanticVersionIdentifier],
+        _ right: [SemanticVersionIdentifier]
+    ) -> Bool {
+        for (leftIdentifier, rightIdentifier) in zip(left, right) {
+            guard leftIdentifier != rightIdentifier else {
+                continue
+            }
+            return switch (leftIdentifier, rightIdentifier) {
+            case let (.numeric(left), .numeric(right)):
+                numericIdentifierLess(left, right)
+            case (.numeric, .nonnumeric): true
+            case (.nonnumeric, .numeric): false
+            case let (.nonnumeric(left), .nonnumeric(right)): left < right
+            }
+        }
+        return left.count < right.count
+    }
+
+    private static func numericIdentifierLess(
+        _ left: String,
+        _ right: String
+    ) -> Bool {
+        if left.utf8.count != right.utf8.count {
+            return left.utf8.count < right.utf8.count
+        }
+        return left < right
+    }
+
+    private static func isValidNumericIdentifier(
+        _ value: Substring
+    ) -> Bool {
+        !value.isEmpty
+            && value.utf8.allSatisfy(Self.isASCIIDigit)
+            && (value == "0" || value.first != "0")
+    }
+
+    private static func isValidPrereleaseIdentifier(
+        _ value: Substring
+    ) -> Bool {
+        guard
+            !value.isEmpty,
+            value.utf8.allSatisfy(Self.isASCIIAlphaNumericOrHyphen)
+        else {
+            return false
+        }
+        return !value.utf8.allSatisfy(Self.isASCIIDigit)
+            || value == "0"
+            || value.first != "0"
+    }
+
+    private static func isASCIIDigit(_ character: UInt8) -> Bool {
+        character >= 0x30 && character <= 0x39
+    }
+
+    private static func isASCIIAlphaNumericOrHyphen(
+        _ character: UInt8
+    ) -> Bool {
+        isASCIIDigit(character)
+            || (character >= 0x41 && character <= 0x5A)
+            || (character >= 0x61 && character <= 0x7A)
+            || character == 0x2D
     }
 }

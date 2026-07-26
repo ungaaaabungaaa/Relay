@@ -11,8 +11,18 @@ import { pathToFileURL } from "node:url";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
-const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const SEMVER_CORE_IDENTIFIER = "(?:0|[1-9][0-9]*)";
+const SEMVER_PRERELEASE_IDENTIFIER =
+  "(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";
+const RELEASE_VERSION_SOURCE =
+  `${SEMVER_CORE_IDENTIFIER}\\.${SEMVER_CORE_IDENTIFIER}`
+  + `\\.${SEMVER_CORE_IDENTIFIER}`
+  + `(?:-${SEMVER_PRERELEASE_IDENTIFIER}`
+  + `(?:\\.${SEMVER_PRERELEASE_IDENTIFIER})*)?`;
+export const RELEASE_VERSION_PATTERN = new RegExp(`^${RELEASE_VERSION_SOURCE}$`);
+export const RELEASE_TAG_PATTERN = new RegExp(`^v${RELEASE_VERSION_SOURCE}$`);
 const CODEX_RANGE_PATTERN = /^\d+\.\d+\.(?:\d+|x)$/;
+const RELEASE_MANIFEST_PROPERTIES = new Set(["payload", "signature"]);
 const RELEASE_PAYLOAD_PROPERTIES = new Set([
   "schemaVersion",
   "tag",
@@ -21,6 +31,22 @@ const RELEASE_PAYLOAD_PROPERTIES = new Set([
   "mac",
   "codex",
   "artifacts",
+]);
+const RELEASE_MAC_PROPERTIES = new Set([
+  "version",
+  "artifact",
+  "architecture",
+]);
+const RELEASE_CODEX_PROPERTIES = new Set([
+  "minimumVersion",
+  "maximumVersion",
+]);
+const RELEASE_ARTIFACT_PROPERTIES = new Set([
+  "name",
+  "version",
+  "architecture",
+  "sha256",
+  "signed",
 ]);
 
 export function canonicalizeManifestPayload(payload) {
@@ -34,11 +60,11 @@ export async function verifyRelease({
   expectedTag,
   publicKey,
 }) {
-  const loadedManifest = manifest
+  const providedManifest = manifest
     ?? JSON.parse(await readFile(manifestPath, "utf8"));
+  const loadedManifest = snapshotReleaseManifest(providedManifest);
+  assertRawReleaseShape(loadedManifest);
   const trustedPublicKey = normalizePublicKey(publicKey);
-  assertObject(loadedManifest, "release manifest");
-  assertObject(loadedManifest.payload, "release payload");
   if (
     typeof loadedManifest.signature !== "string"
     || !verify(
@@ -118,27 +144,12 @@ export async function verifyRelease({
 }
 
 function assertReleaseShape(payload, expectedTag) {
-  const payloadProperties = Object.keys(payload);
-  const unsupportedProperty = payloadProperties.find(
-    (property) => !RELEASE_PAYLOAD_PROPERTIES.has(property),
-  );
-  if (unsupportedProperty) {
-    throw new Error(
-      `unsupported release payload property ${unsupportedProperty}`,
-    );
-  }
-  const missingProperty = [...RELEASE_PAYLOAD_PROPERTIES].find(
-    (property) => !Object.hasOwn(payload, property),
-  );
-  if (missingProperty) {
-    throw new Error(`release payload property ${missingProperty} is missing`);
-  }
   if (payload.schemaVersion !== 2) {
     throw new Error("unsupported release schema version");
   }
   if (
     typeof payload.version !== "string"
-    || !VERSION_PATTERN.test(payload.version)
+    || !RELEASE_VERSION_PATTERN.test(payload.version)
     || payload.tag !== `v${payload.version}`
     || payload.tag !== expectedTag
   ) {
@@ -167,6 +178,162 @@ function assertReleaseShape(payload, expectedTag) {
   if (!Array.isArray(payload.artifacts)) {
     throw new Error("release artifacts must be an array");
   }
+}
+
+function assertRawReleaseShape(manifest) {
+  assertExactOwnProperties(
+    manifest,
+    RELEASE_MANIFEST_PROPERTIES,
+    "release manifest",
+  );
+  const payload = manifest.payload;
+  assertExactOwnProperties(
+    payload,
+    RELEASE_PAYLOAD_PROPERTIES,
+    "release payload",
+  );
+  assertExactOwnProperties(
+    payload.mac,
+    RELEASE_MAC_PROPERTIES,
+    "Mac release metadata",
+  );
+  assertExactOwnProperties(
+    payload.codex,
+    RELEASE_CODEX_PROPERTIES,
+    "Codex compatibility metadata",
+  );
+  if (!Array.isArray(payload.artifacts)) {
+    throw new Error("release artifacts must be an array");
+  }
+  for (const artifact of payload.artifacts) {
+    assertExactOwnProperties(
+      artifact,
+      RELEASE_ARTIFACT_PROPERTIES,
+      "release artifact",
+    );
+  }
+}
+
+function assertExactOwnProperties(value, expectedProperties, label) {
+  assertObject(value, label);
+  const ownProperties = Object.keys(value);
+  const unsupportedProperty = ownProperties.find(
+    (property) => !expectedProperties.has(property),
+  );
+  if (unsupportedProperty) {
+    throw new Error(`unsupported ${label} property ${unsupportedProperty}`);
+  }
+  const missingProperty = [...expectedProperties].find(
+    (property) => (
+      !Object.hasOwn(value, property)
+      || !ownProperties.includes(property)
+    ),
+  );
+  if (missingProperty) {
+    throw new Error(`${label} property ${missingProperty} is missing`);
+  }
+}
+
+function snapshotReleaseManifest(manifest) {
+  try {
+    // Capture each own value once so accessors cannot swap the signed payload.
+    return snapshotJSONValue(manifest, new Set());
+  } catch {
+    throw new Error("release manifest must contain only plain JSON data");
+  }
+}
+
+function snapshotJSONValue(value, ancestors) {
+  if (
+    value === null
+    || typeof value === "string"
+    || typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (!value || typeof value !== "object" || ancestors.has(value)) {
+    throw new Error("value is not plain JSON data");
+  }
+
+  ancestors.add(value);
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Array.isArray(value)) {
+      return snapshotJSONArray(descriptors, ancestors);
+    }
+    const snapshot = {};
+    for (const property of Reflect.ownKeys(descriptors)) {
+      const descriptor = descriptors[property];
+      if (
+        typeof property !== "string"
+        || !descriptor.enumerable
+        || !Object.hasOwn(descriptor, "value")
+      ) {
+        throw new Error("object properties must be enumerable data properties");
+      }
+      Object.defineProperty(snapshot, property, {
+        configurable: true,
+        enumerable: true,
+        value: snapshotJSONValue(descriptor.value, ancestors),
+        writable: true,
+      });
+    }
+    return snapshot;
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function snapshotJSONArray(descriptors, ancestors) {
+  const lengthDescriptor = descriptors.length;
+  if (
+    !lengthDescriptor
+    || !Object.hasOwn(lengthDescriptor, "value")
+    || !Number.isSafeInteger(lengthDescriptor.value)
+    || lengthDescriptor.value < 0
+  ) {
+    throw new Error("array length must be a data property");
+  }
+
+  const length = lengthDescriptor.value;
+  const ownProperties = Reflect.ownKeys(descriptors);
+  if (
+    ownProperties.length !== length + 1
+    || ownProperties.some((property) => (
+      typeof property !== "string"
+      || (
+        property !== "length"
+        && !isArrayIndex(property, length)
+      )
+    ))
+  ) {
+    throw new Error("arrays must be dense and contain no custom properties");
+  }
+
+  const snapshot = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (
+      !descriptor
+      || !descriptor.enumerable
+      || !Object.hasOwn(descriptor, "value")
+    ) {
+      throw new Error("array elements must be enumerable data properties");
+    }
+    snapshot.push(snapshotJSONValue(descriptor.value, ancestors));
+  }
+  return snapshot;
+}
+
+function isArrayIndex(property, length) {
+  if (!/^(?:0|[1-9][0-9]*)$/.test(property)) {
+    return false;
+  }
+  const index = Number(property);
+  return Number.isSafeInteger(index) && index < length;
 }
 
 function normalizePublicKey(publicKey) {

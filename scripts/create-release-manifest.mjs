@@ -5,6 +5,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { RELEASE_TAG_PATTERN } from "./verify-release.mjs";
+
 function option(args, name) {
   const index = args.indexOf(name);
   if (index < 0 || !args[index + 1]) {
@@ -33,8 +35,8 @@ export async function createReleasePayload({
   codexMinimumVersion,
   codexMaximumVersion,
 }) {
-  if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) {
-    throw new Error("tag must look like v1.2.3");
+  if (typeof tag !== "string" || !RELEASE_TAG_PATTERN.test(tag)) {
+    throw new Error("tag must use strict SemVer such as v1.2.3");
   }
   const version = tag.slice(1);
   const artifactDefinitions = [

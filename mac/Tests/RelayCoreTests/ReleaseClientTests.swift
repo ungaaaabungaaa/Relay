@@ -84,6 +84,65 @@ func releaseClientRejectsUnknownRawPayloadProperties() throws {
 }
 
 @Test
+func releaseClientRejectsUnknownRawEnvelopeAndNestedProperties() throws {
+    let signingKey = Curve25519.Signing.PrivateKey()
+    let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
+    let payload = validReleasePayload(version: "1.1.0")
+    let signature = try signingKey.signature(
+        for: ReleaseClient.signingData(for: payload)
+    )
+    let manifest = SignedReleaseManifest(
+        payload: payload,
+        signature: signature.base64EncodedString()
+    )
+    let encodedManifest = try JSONEncoder().encode(manifest)
+
+    func expectInvalid(
+        _ mutation: (inout [String: Any]) throws -> Void
+    ) throws {
+        var document = try #require(
+            JSONSerialization.jsonObject(with: encodedManifest)
+                as? [String: Any]
+        )
+        try mutation(&document)
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.sortedKeys]
+        )
+        #expect(throws: ReleaseClientError.invalidManifest) {
+            try client.verifyManifest(data, currentVersion: "1.0.0")
+        }
+    }
+
+    try expectInvalid { document in
+        document["releaseChannel"] = "retired"
+    }
+    try expectInvalid { document in
+        var rawPayload = try #require(document["payload"] as? [String: Any])
+        var mac = try #require(rawPayload["mac"] as? [String: Any])
+        mac["minimumSystemVersion"] = "14.0"
+        rawPayload["mac"] = mac
+        document["payload"] = rawPayload
+    }
+    try expectInvalid { document in
+        var rawPayload = try #require(document["payload"] as? [String: Any])
+        var codex = try #require(rawPayload["codex"] as? [String: Any])
+        codex["channel"] = "stable"
+        rawPayload["codex"] = codex
+        document["payload"] = rawPayload
+    }
+    try expectInvalid { document in
+        var rawPayload = try #require(document["payload"] as? [String: Any])
+        var artifacts = try #require(
+            rawPayload["artifacts"] as? [[String: Any]]
+        )
+        artifacts[0]["downloadURL"] = "https://example.invalid/Relay.dmg"
+        rawPayload["artifacts"] = artifacts
+        document["payload"] = rawPayload
+    }
+}
+
+@Test
 func releaseClientRequiresTheExactSixReleaseArtifacts() throws {
     let signingKey = Curve25519.Signing.PrivateKey()
     let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
@@ -131,6 +190,73 @@ func releaseClientRequiresTheExactSixReleaseArtifacts() throws {
                 currentVersion: "1.0.0"
             )
         }
+    }
+}
+
+@Test
+func releaseClientOrdersSemanticVersionPrereleases() throws {
+    let signingKey = Curve25519.Signing.PrivateKey()
+    let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
+
+    let beta10 = validReleasePayload(version: "1.0.0-beta.10")
+    let beta10Data = try signedManifestData(beta10, signingKey: signingKey)
+    #expect(
+        try client.verifyManifest(
+            beta10Data,
+            currentVersion: "1.0.0-beta.2"
+        ) == beta10
+    )
+
+    let beta2 = validReleasePayload(version: "1.0.0-beta.2")
+    let beta2Data = try signedManifestData(beta2, signingKey: signingKey)
+    #expect(throws: ReleaseClientError.notNewer) {
+        try client.verifyManifest(
+            beta2Data,
+            currentVersion: "1.0.0-beta.10"
+        )
+    }
+
+    let stable = validReleasePayload(version: "1.0.0")
+    let stableData = try signedManifestData(stable, signingKey: signingKey)
+    #expect(
+        try client.verifyManifest(
+            stableData,
+            currentVersion: "1.0.0-beta.10"
+        ) == stable
+    )
+    #expect(throws: ReleaseClientError.notNewer) {
+        try client.verifyManifest(beta10Data, currentVersion: "1.0.0")
+    }
+}
+
+@Test
+func releaseClientRejectsMalformedSemanticVersions() throws {
+    let signingKey = Curve25519.Signing.PrivateKey()
+    let client = ReleaseClient(publicKey: signingKey.publicKey.rawRepresentation)
+    let malformedVersions = [
+        "1.0",
+        "1..0",
+        "1.0.0.0",
+        "1.nope.0",
+        "01.0.0",
+        "1.0.0-beta..1",
+        "1.0.0-beta.01",
+        "1.0.0-",
+        "1.0.0+build",
+    ]
+
+    for version in malformedVersions {
+        let payload = validReleasePayload(version: version)
+        let data = try signedManifestData(payload, signingKey: signingKey)
+        #expect(throws: ReleaseClientError.invalidManifest) {
+            try client.verifyManifest(data, currentVersion: "0.9.0")
+        }
+    }
+
+    let valid = validReleasePayload(version: "1.0.0")
+    let validData = try signedManifestData(valid, signingKey: signingKey)
+    #expect(throws: ReleaseClientError.invalidManifest) {
+        try client.verifyManifest(validData, currentVersion: "1.0")
     }
 }
 
@@ -264,5 +390,20 @@ private func validReleasePayload(version: String) -> ReleaseManifestPayload {
                 signed: false
             ),
         ]
+    )
+}
+
+private func signedManifestData(
+    _ payload: ReleaseManifestPayload,
+    signingKey: Curve25519.Signing.PrivateKey
+) throws -> Data {
+    let signature = try signingKey.signature(
+        for: ReleaseClient.signingData(for: payload)
+    )
+    return try JSONEncoder().encode(
+        SignedReleaseManifest(
+            payload: payload,
+            signature: signature.base64EncodedString()
+        )
     )
 }

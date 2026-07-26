@@ -44,7 +44,10 @@ jobs:
         run: |
           version=${RELAY_VERSION#v}
           test "${RELAY_VERSION}" = "v${version}"
-          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          semver_core='(0|[1-9][0-9]*)'
+          semver_prerelease='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+          semver_pattern="^${semver_core}\\.${semver_core}\\.${semver_core}(-${semver_prerelease}(\\.${semver_prerelease})*)?$"
+          [[ "${version}" =~ ${semver_pattern} ]]
           test -n "${RELAY_RELEASE_PUBLIC_KEY_BASE64}"
           test -n "${RELAY_SPARKLE_PUBLIC_KEY}"
           [[ "${RELAY_SPARKLE_STABLE_FEED_URL}" == https://* ]]
