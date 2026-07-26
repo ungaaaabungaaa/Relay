@@ -67,6 +67,7 @@ if (command === "serve") {
   const server = createRelayServer(relayOptions);
   const cloudRuntime = new BridgeCloudRuntime({
     store,
+    eventHub: adapter.events,
     handler: createRequestHandler(relayOptions),
   });
   server.listen(port, host, () => {

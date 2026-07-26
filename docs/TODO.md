@@ -27,8 +27,8 @@
 ## Code work still open
 
 - [x] Production invite-administration command and protected operator workflow
-- [ ] True pushed cloud event stream for Live Monitoring; the current cloud
-      build uses safe foreground/periodic snapshot refresh
+- [x] Persistent encrypted cloud event stream for Live Monitoring, with one
+      ordered response/event sequence and periodic snapshot reconciliation
 - [ ] 128 KiB chunked voice transfer for the full 2 MiB protocol limit
 - [ ] Finish Apple Watch cloud transport and physical TestFlight flow
 - [ ] Complete store listing assets, reviewer instructions, privacy/terms copy,

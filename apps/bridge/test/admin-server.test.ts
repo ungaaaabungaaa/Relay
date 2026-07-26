@@ -174,7 +174,7 @@ describe("admin server", () => {
     assert.deepEqual(await read.json(), { roots: [canonical] });
   });
 
-  it("accepts cloud keys and envelopes only through authenticated loopback admin", async () => {
+  it("accepts cloud keys and drains encrypted events only through authenticated loopback admin", async () => {
     const { options } = createOptions();
     const registrations: unknown[] = [];
     const envelopes: unknown[] = [];
@@ -186,13 +186,21 @@ describe("admin server", () => {
         },
         receive: async (envelope) => {
           envelopes.push(envelope);
-          return {
-            ...envelope,
+        },
+        drainEvents: async () => [
+          {
+            version: 1,
+            messageId: "event-1",
+            accountId: "account-1",
+            hostId: "host-1",
             senderId: "host-1",
             recipientId: "watch-1",
-            sequence: 2,
-          };
-        },
+            sentAt: 1_000,
+            sequence: 3,
+            nonce: "nonce",
+            ciphertext: "ciphertext",
+          },
+        ],
       },
     });
 
@@ -201,6 +209,7 @@ describe("admin server", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          accountId: "account-1",
           hostId: "host-1",
           deviceId: "watch-1",
           name: "Galaxy Watch6",
@@ -220,6 +229,10 @@ describe("admin server", () => {
     assert.equal(registration.status, 200);
     assert.deepEqual(await registration.json(), { ok: true });
     assert.equal(registrations.length, 1);
+
+    const events = await handler(authorized("/v1/cloud/events"));
+    assert.equal(events.status, 200);
+    assert.equal((await events.json()).envelopes[0].messageId, "event-1");
 
     const envelope = {
       version: 1,
@@ -241,7 +254,7 @@ describe("admin server", () => {
       }),
     );
     assert.equal(processed.status, 200);
-    assert.equal((await processed.json()).senderId, "host-1");
+    assert.deepEqual(await processed.json(), { ok: true });
     assert.equal(envelopes.length, 1);
   });
 });

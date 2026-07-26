@@ -13,6 +13,15 @@ data class RelayTunnelHTTPResponse(
     val body: String,
 )
 
+sealed interface RelayCloudIncoming {
+    data class Response(
+        val requestId: String,
+        val response: RelayTunnelHTTPResponse,
+    ) : RelayCloudIncoming
+
+    data class Event(val body: JSONObject) : RelayCloudIncoming
+}
+
 class RelayCloudTunnelCodec(
     private val accountId: String,
     private val hostId: String,
@@ -76,6 +85,17 @@ class RelayCloudTunnelCodec(
         envelope: RelayTunnelEnvelope,
         expectedRequestId: String,
     ): RelayTunnelHTTPResponse {
+        val incoming = decryptIncoming(envelope)
+        if (
+            incoming !is RelayCloudIncoming.Response ||
+            incoming.requestId != expectedRequestId
+        ) {
+            throw SecurityException("Relay response request mismatch")
+        }
+        return incoming.response
+    }
+
+    fun decryptIncoming(envelope: RelayTunnelEnvelope): RelayCloudIncoming {
         if (
             envelope.accountId != accountId ||
             envelope.hostId != hostId ||
@@ -87,21 +107,25 @@ class RelayCloudTunnelCodec(
         }
         val plaintext = RelayCloudCrypto.decrypt(envelope, rootKey)
         val inner = JSONObject(plaintext.decodeToString())
-        if (inner.getString("kind") != "response") {
-            throw SecurityException("Relay response authentication failed")
-        }
-        val response = inner.getJSONObject("body")
-        if (response.getString("requestId") != expectedRequestId) {
-            throw SecurityException("Relay response request mismatch")
+        val kind = inner.getString("kind")
+        val body = inner.getJSONObject("body")
+        val decoded = when (kind) {
+            "response" -> {
+                val headersObject = body.getJSONObject("headers")
+                RelayCloudIncoming.Response(
+                    requestId = body.getString("requestId"),
+                    response = RelayTunnelHTTPResponse(
+                        status = body.getInt("status"),
+                        headers = headersObject.keys().asSequence()
+                            .associateWith(headersObject::getString),
+                        body = body.getString("body"),
+                    ),
+                )
+            }
+            "event" -> RelayCloudIncoming.Event(body)
+            else -> throw SecurityException("Relay response authentication failed")
         }
         hostReplay.accept(hostId, envelope.sequence)
-        val headersObject = response.getJSONObject("headers")
-        val headers = headersObject.keys().asSequence()
-            .associateWith(headersObject::getString)
-        return RelayTunnelHTTPResponse(
-            status = response.getInt("status"),
-            headers = headers,
-            body = response.getString("body"),
-        )
+        return decoded
     }
 }

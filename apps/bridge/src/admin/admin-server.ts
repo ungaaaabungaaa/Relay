@@ -30,6 +30,7 @@ export type AdminServerOptions = {
   voiceConfigured: boolean;
   cloudRuntime?: {
     registerDevice(input: {
+      accountId: string;
       hostId: string;
       deviceId: string;
       name: string;
@@ -37,7 +38,8 @@ export type AdminServerOptions = {
       rootKey: string;
       metadata: DeviceMetadata;
     }): Promise<void>;
-    receive(envelope: RelayTunnelEnvelope): Promise<RelayTunnelEnvelope>;
+    receive(envelope: RelayTunnelEnvelope): Promise<void>;
+    drainEvents(limit?: number): Promise<RelayTunnelEnvelope[]>;
   };
   shutdown: () => void;
 };
@@ -209,6 +211,7 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
             ? Buffer.from(body.rootKey, "base64url")
             : Buffer.alloc(0);
         if (
+          typeof body.accountId !== "string" ||
           typeof body.hostId !== "string" ||
           typeof body.deviceId !== "string" ||
           typeof body.name !== "string" ||
@@ -226,6 +229,7 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
           return json({ error: "invalid request" }, 400);
         }
         await options.cloudRuntime.registerDevice({
+          accountId: body.accountId,
           hostId: body.hostId,
           deviceId: body.deviceId,
           name: body.name,
@@ -234,6 +238,15 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
           metadata: metadata as DeviceMetadata,
         });
         return json({ ok: true });
+      }
+      if (
+        request.method === "GET" &&
+        url.pathname === "/v1/cloud/events"
+      ) {
+        if (!options.cloudRuntime) {
+          return json({ error: "cloud unavailable" }, 503);
+        }
+        return json({ envelopes: await options.cloudRuntime.drainEvents() });
       }
       if (
         request.method === "POST" &&
@@ -257,11 +270,10 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
         ) {
           return json({ error: "invalid request" }, 400);
         }
-        return json(
-          await options.cloudRuntime.receive(
-            body as unknown as RelayTunnelEnvelope,
-          ),
+        await options.cloudRuntime.receive(
+          body as unknown as RelayTunnelEnvelope,
         );
+        return json({ ok: true });
       }
       const revoke = url.pathname.match(/^\/v1\/devices\/([^/]+)\/revoke$/);
       if (request.method === "POST" && revoke?.[1]) {

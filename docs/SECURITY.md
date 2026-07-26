@@ -14,6 +14,8 @@ default, not an optional mode.
 - Stale or offline screens are read-only and never queue actions.
 - Voice transcripts are reviewed before sending.
 - Live Monitoring is visible, opt-in, time-limited, and battery-aware.
+- API responses and pushed events share one authenticated, replay-protected
+  sequence over the watch's persistent encrypted cloud socket.
 
 ## Trust boundaries
 

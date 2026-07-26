@@ -199,6 +199,45 @@ describe("bridge cloud tunnel adapter", () => {
     );
   });
 
+  it("encrypts pushed events with the same persisted host sequence", async () => {
+    const { watchRoot } = await fixture();
+    let outgoing: Record<string, number> = { "watch-1": 4 };
+    const adapter = new CloudTunnelAdapter({
+      hostId: "host-1",
+      keyForDevice: async () => watchRoot,
+      loadReplayState: async () => ({}),
+      saveReplayState: async () => {},
+      loadOutgoingSequences: async () => outgoing,
+      saveOutgoingSequences: async (state) => {
+        outgoing = state;
+      },
+      handler: async () => Response.json({ ok: true }),
+      now: () => 2_000,
+    });
+
+    const pushed = await adapter.pushEvent({
+      accountId: "account-1",
+      deviceId: "watch-1",
+      event: {
+        id: 12,
+        type: "task.updated",
+        data: { threadId: "thread-1" },
+        createdAt: 1_990,
+      },
+    });
+
+    assert.equal(pushed.sequence, 5);
+    assert.deepEqual(await decryptRelayEnvelope(pushed, watchRoot), {
+      kind: "event",
+      body: {
+        id: 12,
+        type: "task.updated",
+        data: { threadId: "thread-1" },
+        createdAt: 1_990,
+      },
+    });
+  });
+
   it("rejects stale envelopes and never queues actions while disconnected", async () => {
     const { watchRoot } = await fixture();
     const adapter = new CloudTunnelAdapter({

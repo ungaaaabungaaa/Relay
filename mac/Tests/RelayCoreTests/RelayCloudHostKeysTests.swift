@@ -23,6 +23,7 @@ func approvedCloudDevicesRestoreFromKeychainWithoutLoggingRootKeys() throws {
         backend: CloudKeysMemoryBackend()
     )
     let registration = AdminCloudDeviceRegistration(
+        accountId: "account-1",
         hostId: "host-1",
         deviceId: "watch-1",
         name: "Watch6",

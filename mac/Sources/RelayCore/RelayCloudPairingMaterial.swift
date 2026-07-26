@@ -80,6 +80,7 @@ public enum RelayCloudPairingMaterial {
             rootKey: rootKey
         )
         let registration = AdminCloudDeviceRegistration(
+            accountId: accountID,
             hostId: hostID,
             deviceId: deviceID,
             name: request.metadata.model.isEmpty

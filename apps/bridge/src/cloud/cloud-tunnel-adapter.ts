@@ -5,6 +5,7 @@ import {
   type RelayInnerMessage,
   type RelayTunnelEnvelope,
 } from "../../../../packages/cloud-protocol/src/index.ts";
+import type { RelayEvent } from "../events/event-hub.ts";
 
 type TunnelRequestBody = {
   method: string;
@@ -60,6 +61,7 @@ function responseHeaders(response: Response): Record<string, string> {
 export class CloudTunnelAdapter {
   readonly #options: CloudTunnelAdapterOptions;
   readonly #outgoingSequence = new Map<string, number>();
+  #sequenceGate: Promise<void> = Promise.resolve();
 
   constructor(options: CloudTunnelAdapterOptions) {
     this.#options = options;
@@ -105,16 +107,9 @@ export class CloudTunnelAdapter {
       },
     );
     const response = await this.#options.handler(request);
-    const persistedOutgoing = this.#options.loadOutgoingSequences
-      ? await this.#options.loadOutgoingSequences()
-      : Object.fromEntries(this.#outgoingSequence);
-    const outgoingSequence = (persistedOutgoing[envelope.senderId] ?? 0) + 1;
-    persistedOutgoing[envelope.senderId] = outgoingSequence;
-    if (this.#options.saveOutgoingSequences) {
-      await this.#options.saveOutgoingSequences(persistedOutgoing);
-    } else {
-      this.#outgoingSequence.set(envelope.senderId, outgoingSequence);
-    }
+    const outgoingSequence = await this.#nextOutgoingSequence(
+      envelope.senderId,
+    );
 
     return encryptRelayEnvelope(
       {
@@ -138,5 +133,47 @@ export class CloudTunnelAdapter {
       },
       key,
     );
+  }
+
+  async pushEvent(input: {
+    accountId: string;
+    deviceId: string;
+    event: RelayEvent;
+  }): Promise<RelayTunnelEnvelope> {
+    const now = (this.#options.now ?? Date.now)();
+    const key = await this.#options.keyForDevice(input.deviceId);
+    return encryptRelayEnvelope(
+      {
+        version: 1,
+        messageId: crypto.randomUUID(),
+        accountId: input.accountId,
+        hostId: this.#options.hostId,
+        senderId: this.#options.hostId,
+        recipientId: input.deviceId,
+        sentAt: now,
+        sequence: await this.#nextOutgoingSequence(input.deviceId),
+      },
+      { kind: "event", body: input.event },
+      key,
+    );
+  }
+
+  async #nextOutgoingSequence(deviceId: string): Promise<number> {
+    let next = 0;
+    const update = this.#sequenceGate.then(async () => {
+      const persisted = this.#options.loadOutgoingSequences
+        ? await this.#options.loadOutgoingSequences()
+        : Object.fromEntries(this.#outgoingSequence);
+      next = (persisted[deviceId] ?? 0) + 1;
+      persisted[deviceId] = next;
+      if (this.#options.saveOutgoingSequences) {
+        await this.#options.saveOutgoingSequences(persisted);
+      } else {
+        this.#outgoingSequence.set(deviceId, next);
+      }
+    });
+    this.#sequenceGate = update.catch(() => {});
+    await update;
+    return next;
   }
 }

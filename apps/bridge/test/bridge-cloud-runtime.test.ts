@@ -6,6 +6,7 @@ import {
   encryptRelayEnvelope,
 } from "../../../packages/cloud-protocol/src/index.ts";
 import { BridgeCloudRuntime } from "../src/cloud/bridge-cloud-runtime.ts";
+import { EventHub } from "../src/events/event-hub.ts";
 import { canonicalRequest } from "../src/security/authentication.ts";
 import { InMemorySecurityStore } from "../src/security/store.ts";
 
@@ -21,12 +22,15 @@ describe("bridge cloud runtime", () => {
     );
     const signing = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
     const store = new InMemorySecurityStore();
+    const eventHub = new EventHub();
     const runtime = new BridgeCloudRuntime({
       store,
+      eventHub,
       handler: async () => Response.json({ data: [{ id: "task-1" }] }),
       now: () => 2_000,
     });
     await runtime.registerDevice({
+      accountId: "account-1",
       hostId: "host-1",
       deviceId: "watch-1",
       name: "Watch6",
@@ -86,10 +90,21 @@ describe("bridge cloud runtime", () => {
       rootKey,
     );
 
-    const response = await runtime.receive(envelope);
+    await runtime.receive(envelope);
     assert.equal(store.getDevice("watch-1")?.metadata?.model, "Watch6");
+    const [response] = await runtime.drainEvents();
+    assert.ok(response);
     const inner = await decryptRelayEnvelope(response, rootKey);
     assert.equal(inner.kind, "response");
     assert.equal((inner.body as { status: number }).status, 200);
+
+    eventHub.publish("task.updated", { threadId: "thread-1" });
+    const [eventEnvelope] = await runtime.drainEvents();
+    assert.ok(eventEnvelope);
+    assert.equal(eventEnvelope.recipientId, "watch-1");
+    const pushed = await decryptRelayEnvelope(eventEnvelope, rootKey);
+    assert.equal(pushed.kind, "event");
+    assert.equal((pushed.body as { type: string }).type, "task.updated");
+    assert.equal(eventEnvelope.sequence, response.sequence + 1);
   });
 });

@@ -126,6 +126,7 @@ public struct AdminPendingPairing: Codable, Identifiable, Equatable, Sendable {
 }
 
 public struct AdminCloudDeviceRegistration: Codable, Equatable, Sendable {
+    public var accountId: String
     public var hostId: String
     public var deviceId: String
     public var name: String
@@ -134,6 +135,7 @@ public struct AdminCloudDeviceRegistration: Codable, Equatable, Sendable {
     public var metadata: AdminDeviceMetadata
 
     public init(
+        accountId: String,
         hostId: String,
         deviceId: String,
         name: String,
@@ -141,6 +143,7 @@ public struct AdminCloudDeviceRegistration: Codable, Equatable, Sendable {
         rootKey: String,
         metadata: AdminDeviceMetadata
     ) {
+        self.accountId = accountId
         self.hostId = hostId
         self.deviceId = deviceId
         self.name = name
@@ -174,6 +177,10 @@ public struct AdminVoiceStatus: Codable, Equatable, Sendable {
 private struct AdminOK: Codable, Sendable {
     var ok: Bool?
     var stopping: Bool?
+}
+
+private struct AdminCloudEvents: Codable, Sendable {
+    var envelopes: [RelayTunnelEnvelope]
 }
 
 public struct AdminClient: Sendable {
@@ -260,12 +267,19 @@ public struct AdminClient: Sendable {
 
     public func processCloudEnvelope(
         _ envelope: RelayTunnelEnvelope
-    ) async throws -> RelayTunnelEnvelope {
-        try await request(
+    ) async throws {
+        let _: AdminOK = try await request(
             ["v1", "cloud", "envelopes"],
             method: "POST",
             body: try JSONEncoder().encode(envelope)
         )
+    }
+
+    public func cloudEvents() async throws -> [RelayTunnelEnvelope] {
+        try await request(
+            ["v1", "cloud", "events"],
+            as: AdminCloudEvents.self
+        ).envelopes
     }
 
     public func revoke(deviceID: String) async throws {

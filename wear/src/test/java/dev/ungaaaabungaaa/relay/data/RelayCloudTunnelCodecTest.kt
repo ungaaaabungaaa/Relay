@@ -85,4 +85,43 @@ class RelayCloudTunnelCodecTest {
             codec.decryptResponse(response, "request-1")
         }
     }
+
+    @Test
+    fun pushedEventUsesTheSameAuthenticatedHostReplayWindow() {
+        val rootKey = ByteArray(32) { 5 }
+        val codec = RelayCloudTunnelCodec(
+            accountId = "account-1",
+            hostId = "host-1",
+            deviceId = "watch-1",
+            rootKey = rootKey,
+            initialHostSequence = 8,
+            now = { 1_000 },
+        )
+        val event = RelayCloudCrypto.encrypt(
+            RelayRoutingFields(
+                1,
+                "event-envelope-1",
+                "account-1",
+                "host-1",
+                "host-1",
+                "watch-1",
+                1_000,
+                9,
+            ),
+            """{"kind":"event","body":{"id":12,"type":"task.updated","data":{"threadId":"thread-1"},"createdAt":990}}"""
+                .toByteArray(),
+            rootKey,
+            ByteArray(12) { 6 },
+        )
+
+        val incoming = codec.decryptIncoming(event)
+        assertEquals(
+            "task.updated",
+            (incoming as RelayCloudIncoming.Event).body.getString("type"),
+        )
+        assertEquals(9, codec.highestHostSequence)
+        assertThrows(SecurityException::class.java) {
+            codec.decryptIncoming(event)
+        }
+    }
 }

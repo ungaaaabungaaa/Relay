@@ -112,6 +112,7 @@ func approvedCloudPairingEncryptsWatchCredentialForWatchOnly() throws {
     )
 
     #expect(prepared.registration.deviceId == prepared.device.id)
+    #expect(prepared.registration.accountId == "account-1")
     #expect(prepared.registration.signingPublicKey == "watch-signing-pem")
     #expect(Data(base64URL: prepared.registration.rootKey) == expectedData)
     #expect(credential.accountId == "account-1")

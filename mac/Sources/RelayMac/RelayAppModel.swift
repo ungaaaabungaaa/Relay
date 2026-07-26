@@ -464,6 +464,22 @@ final class RelayAppModel: ObservableObject {
                         hostID: hostID,
                         credential: credential
                     )
+                    let eventPump = Task { @MainActor in
+                        while !Task.isCancelled {
+                            do {
+                                for envelope in try await adminClient.cloudEvents() {
+                                    try await cloudTunnel.send(envelope)
+                                }
+                            } catch is CancellationError {
+                                break
+                            } catch {
+                                try? await Task.sleep(for: .seconds(1))
+                                continue
+                            }
+                            try? await Task.sleep(for: .milliseconds(500))
+                        }
+                    }
+                    defer { eventPump.cancel() }
                     for try await event in events {
                         try Task.checkCancellation()
                         switch event {
@@ -476,9 +492,7 @@ final class RelayAppModel: ObservableObject {
                             pendingPairings = cloudPendingPairings
                             diagnostic = "A watch is waiting for fingerprint approval."
                         case .envelope(let envelope):
-                            let response = try await adminClient
-                                .processCloudEnvelope(envelope)
-                            try await cloudTunnel.send(response)
+                            try await adminClient.processCloudEnvelope(envelope)
                         }
                     }
                 } catch is CancellationError {

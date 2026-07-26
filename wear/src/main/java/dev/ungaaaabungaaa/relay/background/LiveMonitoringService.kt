@@ -38,18 +38,21 @@ class LiveMonitoringService : Service() {
     private val preferences by lazy { RelayPreferences(this) }
     private val identity by lazy { DeviceIdentity() }
     private val cloudStore by lazy { RelayCloudDeviceStore(this) }
+    private val cloudTransport by lazy {
+        RelayCloudTransport(preferences, cloudStore)
+    }
     private val api by lazy {
         RelayApi(
             preferences,
             identity,
-            RelayCloudTransport(preferences, cloudStore),
+            cloudTransport,
         )
     }
     private val socket by lazy {
         RelaySocket(
             preferences = preferences,
             identity = identity,
-            cloudDeviceStore = cloudStore,
+            cloudTransport = cloudTransport,
             scope = serviceScope,
             onEvent = ::handleEvent,
             onConnectionChanged = ::handleConnection,

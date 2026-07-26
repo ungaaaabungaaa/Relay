@@ -56,10 +56,14 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         agreementIdentity,
         cloudDeviceStore,
     )
+    private val cloudTransport = RelayCloudTransport(
+        preferences,
+        cloudDeviceStore,
+    )
     private val api = RelayApi(
         preferences,
         identity,
-        RelayCloudTransport(preferences, cloudDeviceStore),
+        cloudTransport,
     )
     private val pairingDiscovery = PairingDiscovery(application)
     private var pairingRecord: PairingDiscoveryRecord? = null
@@ -102,7 +106,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         RelaySocket(
             preferences = preferences,
             identity = identity,
-            cloudDeviceStore = cloudDeviceStore,
+            cloudTransport = cloudTransport,
             scope = viewModelScope,
             onEvent = ::receiveLiveEvent,
             onConnectionChanged = { connectionState ->
@@ -430,6 +434,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
         if (preferences.deviceId == null || !state.connected || state.stale) return
         preferences.liveMonitoringEnabled = true
         liveMonitoringEnabled = true
+        socket.close()
         val app = getApplication<Application>()
         app.startForegroundService(
             Intent(app, LiveMonitoringService::class.java)
@@ -446,6 +451,7 @@ class RelayViewModel(application: Application) : AndroidViewModel(application) {
                 .setAction(LiveMonitoringService.ACTION_STOP),
         )
         RelayRefreshWorker.schedule(app)
+        socket.start(preferences.lastEventId)
     }
 
     fun beginNewTask() {

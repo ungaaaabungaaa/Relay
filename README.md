@@ -70,7 +70,8 @@ Rebuild the SVG boards with `pnpm generate:readme-screens`.
 - encrypted signed requests for tasks, inbox, approvals, questions,
   instructions, workspace selection, new tasks, and reviewed voice;
 - offline, stale, revoked, reconnecting, and update-required states;
-- battery-aware periodic refresh and time-limited Live Monitoring.
+- pushed end-to-end encrypted events, battery-aware snapshot reconciliation,
+  and time-limited Live Monitoring.
 
 ### Mac
 

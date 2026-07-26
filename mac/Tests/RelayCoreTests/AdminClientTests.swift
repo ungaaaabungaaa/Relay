@@ -162,9 +162,10 @@ func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
     let transport = SequencedAdminTransport(
         responses: [
             (200, #"{"ok":true}"#),
+            (200, #"{"ok":true}"#),
             (
                 200,
-                #"{"version":1,"messageId":"response-1","accountId":"account-1","hostId":"host-1","senderId":"host-1","recipientId":"watch-1","sentAt":1000,"sequence":1,"nonce":"nonce","ciphertext":"ciphertext"}"#
+                #"{"envelopes":[{"version":1,"messageId":"event-1","accountId":"account-1","hostId":"host-1","senderId":"host-1","recipientId":"watch-1","sentAt":1001,"sequence":2,"nonce":"nonce","ciphertext":"ciphertext"}]}"#
             ),
         ]
     )
@@ -174,6 +175,7 @@ func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
     )
     try await client.registerCloudDevice(
         AdminCloudDeviceRegistration(
+            accountId: "account-1",
             hostId: "host-1",
             deviceId: "watch-1",
             name: "Watch6",
@@ -189,7 +191,7 @@ func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
             )
         )
     )
-    let outgoing = try await client.processCloudEnvelope(
+    try await client.processCloudEnvelope(
         RelayTunnelEnvelope(
             version: 1,
             messageID: "request-1",
@@ -203,11 +205,13 @@ func adminClientRegistersCloudKeyAndProcessesOpaqueEnvelope() async throws {
             ciphertext: "ciphertext"
         )
     )
+    let events = try await client.cloudEvents()
 
-    #expect(outgoing.senderID == "host-1")
+    #expect(events.map(\.messageID) == ["event-1"])
     #expect(await transport.requests.map(\.url?.path) == [
         "/v1/cloud/devices",
         "/v1/cloud/envelopes",
+        "/v1/cloud/events",
     ])
 }
 
