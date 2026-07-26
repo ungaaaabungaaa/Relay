@@ -1,116 +1,107 @@
 # Relay security model
 
-Relay gives a paired watch meaningful control over Codex. Safer behavior is the
-default, not an optional mode.
+Relay gives an approved Apple Watch narrow control over Codex on one Mac. The
+Mac remains the authorization boundary for Codex and workspace access.
 
-## Default policy
+## Default controls
 
-- The bridge and private admin API bind only to `127.0.0.1`.
-- The Mac opens an outbound Relay Cloud connection; there is no inbound public
+- The bridge and private admin API bind to `127.0.0.1`.
+- The Mac opens the outbound Relay Cloud tunnel. Relay exposes no public inbound
   Mac port.
-- The watch can browse only roots explicitly approved in the Mac app.
-- Dangerous, destructive, elevated, or uncertain approvals require a
-  press-and-hold and retain exact command/folder/consequence text.
-- Stale or offline screens are read-only and never queue actions.
-- Voice transcripts are reviewed before sending.
-- Live Monitoring is visible, opt-in, time-limited, and battery-aware.
-- API responses and pushed events share one authenticated, replay-protected
-  sequence over the watch's persistent encrypted cloud socket.
+- The Apple Watch can name paths within roots approved in the Mac app.
+- Relay shows exact command, folder, reason, and consequence details before a
+  dangerous approval.
+- Stale and offline screens block mutations. Relay Cloud does not queue actions.
+- Relay requires transcript review before sending voice-derived text to Codex.
+- Signed requests, encrypted envelopes, replay sequences, and idempotency keys
+  protect remote mutations.
 
-## Trust boundaries
+## Apple Watch identities
 
-### Watch
+The Apple Watch creates separate P-256 signing and key-agreement material.
+`RelayWatchIdentity` manages the signing key through Security framework key
+storage and Keychain access control. `RelayWatchAgreementIdentity` stores its
+CryptoKit P-256 private-key material in Keychain with
+`AfterFirstUnlockThisDeviceOnly` accessibility.
 
-- Generates separate P-256 signing and key-agreement identities.
-- Uses Android Keystore ECDH on API 31+.
-- On API 30, encrypts a software P-256 private key with a non-exportable
-  Android Keystore AES key.
-- Stores the scoped cloud credential and E2EE root key only inside
-  Keystore-protected encrypted storage.
-- Stores no Codex/OpenAI credential, Mac password, repository content, or raw
-  audio history.
+Relay does not describe both storage paths as one hardware-backed guarantee.
+The watch stores no Codex credential, Mac password, repository contents, or raw
+audio history.
 
-### Relay Cloud
+## Pairing and encryption
 
-- Stores account and device routing metadata, encrypted email, and hashed
-  refresh/host/watch credentials.
-- Routes opaque encrypted envelopes through one hibernating Durable Object per
-  account.
-- Has no Mac/watch private key or E2EE root key and cannot decrypt Codex
-  content.
-- Enforces beta account capacity plus global, HMAC-hashed network-source, and
-  per-session pairing limits. Raw source addresses are never stored in D1.
-- Returns generic authentication and pairing errors. Cloudflare edge policies
-  provide the additional production-wide endpoint limits before public beta.
-- Retains bounded operational metadata for seven days, then purges it.
-- Does not queue actions while the Mac is offline.
+1. The signed-in Mac creates a five-minute session and a six-character code.
+2. The Apple Watch sends its signing and agreement public keys with limited
+   device metadata.
+3. The Mac and watch display fingerprints for comparison.
+4. The Mac approves the pending watch request within the session limit.
+5. Mac and watch derive the same root key through P-256 ECDH and HKDF-SHA256,
+   using the pairing-session nonce.
+6. The Mac hashes the scoped watch credential for Relay Cloud and encrypts the
+   credential for the watch with AES-256-GCM.
+7. The Apple Watch stores the approved cloud configuration and root material in
+   Keychain.
 
-### Mac and bridge
-
-- Stores Mac identities, refresh token, host credential, and watch root keys in
-  macOS Keychain.
-- Authenticates and decrypts the outer envelope before applying the existing
-  signed-request contract.
-- Checks device ID, timestamp, nonce, body digest, signature, revocation, and
-  idempotency after decryption. Cloud delivery is never authorization.
-- Is the only component that talks to Codex and optional transcription.
-
-## Pairing
-
-1. The signed-in Mac creates a five-minute session and six-character code.
-2. The watch sends its signing/agreement public keys and device metadata.
-3. Both devices show fingerprints for comparison.
-4. The Mac approves within two minutes.
-5. Mac and watch derive the same root key with P-256 ECDH and HKDF-SHA256 using
-   the pairing session nonce.
-6. The Mac creates the watch credential, sends only its SHA-256 hash to D1, and
-   encrypts the real credential for the watch with AES-256-GCM.
-7. The watch polls with a separate high-entropy token and decrypts the payload.
-
-Cloud stores only the short-lived opaque completion payload. Denial, expiry, or
-cancellation creates no active watch.
+Denial, expiry, or cancellation creates no active watch.
 
 ## Encrypted requests and replay protection
 
-Outer routing fields are canonical authenticated additional data. Each peer
-persists monotonically increasing sequences, rejects replay across reconnects
-and process restarts, and rejects stale or modified envelopes.
+Relay authenticates the outer routing fields as AES-256-GCM additional data.
+Each peer persists sequence state and rejects duplicate, out-of-order, stale,
+or modified envelopes across restarts and reconnects.
 
-Inside the encrypted message, the watch retains the signed canonical request,
-timestamp, random nonce, replay protection, revocation, and idempotency key.
-A retry returns the first mutation result instead of acting twice.
+The inner request includes the device ID, timestamp, nonce, body digest, P-256
+signature, and idempotency key. The Mac checks those values after decryption
+and before it asks the bridge to act. Cloud delivery grants no authorization.
+A repeated mutation key returns the first result instead of running the action
+twice.
 
-## Workspaces and voice
+## Relay Cloud boundary
 
-Relay canonicalizes approved paths, resolves symlinks, and rejects traversal
-outside allowed roots. It does not expose repository file contents through the
-folder browser.
+Relay Cloud stores encrypted email, account and device routing metadata, and
+hashed lookup, refresh, host, and watch credentials. It has no Mac or watch
+private key and no E2EE root key. The service cannot decrypt Codex prompts,
+commands, repository paths, approvals, task output, or voice recordings.
 
-System input needs no OpenAI key. Optional recordings are split into 128 KiB
-encrypted chunks, capped at 30 seconds and 2 MiB, assembled only on the Mac,
-deleted after success/failure/timeout, and never sent to Codex without
-transcript review.
+Relay Cloud retains bounded, redacted operational metadata for seven days and
+then purges it. The service has no advertising SDK, product analytics, or
+plaintext Codex-content logging.
 
-## Account controls
+## Workspaces and reviewed voice
 
-- **Revoke** marks one device revoked in D1, closes its connected tunnel, and
-  removes its Mac root key.
-- **Emergency Stop** revokes all watches, rotates the host credential,
-  disconnects tunnels, clears watch root keys, and stops the bridge while
-  leaving Codex tasks running.
-- **Delete Relay Account** removes PII/device metadata, revokes all sessions,
-  and clears Relay Cloud credentials from the Mac.
+The bridge canonicalizes approved paths, resolves symlinks, and rejects folder
+traversal outside the selected roots. Folder browsing returns names and paths,
+not repository file contents.
 
-## Release integrity
+Optional recorded voice uses encrypted chunks with a 30-second and 2 MiB
+limit. The Mac assembles the chunks and deletes temporary audio after success,
+failure, or timeout. Relay must show editable transcript text before the user
+sends it to Codex. The unfinished Apple Watch voice destination remains a
+release gate.
 
-Protected workflows build a signed Wear package and Apple-silicon Mac app,
-verify the arm64 sidecar and package identifiers, sign the manifest and Sparkle
-feed, notarize/staple the DMG, scan for secrets, and reject modified bytes,
-wrong tags, downgrades, unsigned APK metadata, or missing license assets.
+## Revocation and deletion
 
-Published tags and assets are never silently replaced. A broken release is
-withdrawn and replaced by a higher version.
+- **Revoke** marks one Apple Watch as revoked, closes its cloud tunnel, and
+  removes its Mac root material.
+- **Emergency Stop** revokes watches, rotates the host credential, disconnects
+  tunnels, clears watch root material, and stops the bridge. Codex tasks stay on
+  the Mac.
+- **Delete Relay Account** revokes sessions, removes cloud account and device
+  metadata, and clears Relay Cloud credentials from the Mac. Local Codex tasks
+  and repositories stay in place.
 
-Report vulnerabilities privately through GitHub private vulnerability
-reporting when enabled. Never include real credentials, magic links, pairing
-codes, prompts, commands, repository paths, or task output.
+## Mac release integrity
+
+The signed schema version 2 release manifest covers the Mac release. It binds
+the arm64 `Relay.dmg`, source archive, `LICENSE`, `NOTICE`,
+`THIRD_PARTY_NOTICES.md`, and `COMPATIBILITY.md` to their SHA-256 digests. The
+GitHub workflow signs the Mac application, notarizes and staples the disk
+image, verifies the manifest, and signs the Sparkle feed before publication.
+
+Apple signs and distributes the watchOS archive through App Store Connect as a
+separate release path. The current GitHub workflow performs watchOS source and
+unsigned build checks; it does not upload a watch archive.
+
+Report vulnerabilities through GitHub private vulnerability reporting when
+the project enables it. Keep credentials, sign-in links, pairing codes,
+fingerprints, task content, commands, paths, and audio out of reports.

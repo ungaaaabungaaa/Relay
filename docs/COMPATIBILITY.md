@@ -4,42 +4,37 @@
 
 | Item | Support |
 | --- | --- |
-| Processor | Apple silicon only: M1 or newer arm64 Mac |
-| macOS | macOS 14 or newer |
-| Intel Mac | Not supported |
-| Distribution | Notarized `Relay.dmg` from GitHub Releases |
-| Codex | Existing signed-in Mac installation |
-| Network | Outbound HTTPS/WSS to `api.relayforcodex.com` |
+| Processor | Apple silicon, arm64 |
+| Operating system | macOS 14 or newer |
+| Codex | Installed, signed in, and running on the same Mac |
+| Network | Outbound HTTPS/WSS to Relay Cloud |
+| Distribution | Developer ID signed and notarized Mac disk image after release gates pass |
+| Runtime | Mac stays awake and online while the Apple Watch uses Relay |
 
-The signed release manifest is the final authority for supported Codex and
-protocol versions.
+Intel Macs are outside the release contract. The signed schema version 2
+manifest records the supported Codex version range for each Mac release.
 
-## Wear OS
+## Apple Watch
 
 | Item | Support |
 | --- | --- |
-| Operating system | Wear OS 3 or newer |
-| Android API | API 30 or newer |
-| Shapes | Round and square |
-| Input | Rotary and touch-only fallback |
-| Network | Wi-Fi and normal LTE data |
-| Distribution | Google Play Wear OS closed-test track, then production |
-| Phone after setup | Not required by Relay |
+| Operating system | watchOS 10 or newer |
+| App structure | independent watch app |
+| Network | Wi-Fi or cellular where supported |
+| Distribution | TestFlight during testing; App Store after release |
+| Mac requirement | Relay Mac 1.0.0+ and API version 1 |
+| Physical model coverage | Pending physical-device results |
 
-Relay for Wear OS does not claim support for Android phones, Apple Watch,
-Garmin, Huawei/HarmonyOS, or Amazfit/Zepp devices. Apple Watch is a separate
-watchOS 10+ Phase 2 app distributed through TestFlight and the App Store.
+The repository contains one watchOS target and no companion iPhone target.
+Apple Watch model, case-size, network-transition, accessibility, update, and
+battery coverage stays pending until maintainers record physical evidence in
+[PHYSICAL-APPLE-WATCH-TEST.md](PHYSICAL-APPLE-WATCH-TEST.md).
 
-The beta release gate requires a Galaxy Watch6 plus two additional physical
-Wear OS watches across at least two OEMs, including one Wear OS 3 device and two
-screen-size classes. Untested models remain community-supported.
+## Product constraints
 
-## Product requirements
-
-- The Mac must be awake, online, and running Relay and Codex.
 - Relay Cloud routes ciphertext and does not run Codex.
-- System keyboard/dictation requires no OpenAI key.
-- Optional reviewed voice transcription requires an OpenAI key in Mac
-  Keychain.
-- There is no Tailscale, phone companion, emulator, or cloud-hosted Mac
-  requirement.
+- The Mac must run Relay, Codex, and the loopback bridge.
+- An offline or stale Apple Watch must block mutations.
+- Optional recorded voice requires transcript review before Relay sends text to
+  Codex.
+- App Store and TestFlight availability remain external distribution gates.

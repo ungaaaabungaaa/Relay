@@ -1,65 +1,60 @@
 # Set up Relay
 
-The public-beta flow uses Codex, one Mac app, and one Wear OS app. It does not
-use Tailscale, ADB, developer mode, port forwarding, or an Android emulator.
-
-## What you need
+## Requirements
 
 - an Apple-silicon Mac running macOS 14 or newer;
-- Codex installed, signed in, and able to run a task;
-- an invite to the Relay beta;
-- a Wear OS 3/API 30 or newer watch;
-- Wi-Fi or LTE on the watch;
-- the Mac awake and online while using Relay.
+- Codex installed, signed in, and able to run a task on that Mac;
+- a Relay invite;
+- an Apple Watch running watchOS 10 or newer;
+- network access for the Mac and Apple Watch;
+- an awake, online Mac running Relay and Codex during watch use.
 
-A Samsung watch may need Galaxy Wearable on an Android phone to complete the
-manufacturer's initial setup. Relay itself has no required phone companion.
+Relay Cloud carries encrypted envelopes between the approved Apple Watch and
+Mac. It does not run Codex and cannot decrypt task content.
 
-## Beta user flow
+## User flow
 
-1. Download the notarized `Relay.dmg` from the matching GitHub Release.
-2. Drag Relay to Applications and open it.
-3. Relay verifies its embedded bridge and the local Codex installation.
-4. Enter the invited email address. Relay opens the official browser page and
-   sends a single-use magic link through Resend.
-5. Open the link. The Mac receives short-lived access and rotating refresh
-   credentials through PKCE; the refresh token stays in macOS Keychain.
-6. Install **Relay for Wear OS** from the Google Play closed-test link.
-7. On the Mac, choose **Start secure pairing**. A six-character code is valid
-   for five minutes.
-8. Enter that code on the watch. Compare the Mac fingerprint on both devices.
-9. Confirm the fingerprint on the watch, then approve the watch fingerprint on
-   the Mac within two minutes.
-10. Choose the Mac workspace folders that the watch may browse.
-11. Optionally enable **Start Relay at login**.
+The release owner will supply the Mac build and Apple Watch build through the
+invite. Apple distributes test builds through TestFlight and release builds
+through the App Store. This repository does not claim that either distribution
+channel is live.
 
-The watch then works over normal Wi-Fi or LTE. If the Mac disconnects, cached
-summaries become stale and every approval or mutation is disabled. Relay never
-queues an action to run later.
+1. Install the supplied Relay Mac build on an Apple-silicon Mac running macOS
+   14 or newer.
+2. Open Relay and confirm that it finds the local Codex installation and starts
+   the loopback bridge.
+3. Enter the invited email address. Open the single-use link in the browser to
+   finish the PKCE login.
+4. Install Relay for Codex on the Apple Watch from the TestFlight or App Store
+   link supplied with the invite.
+5. In Relay for Mac, open **Watches** and create a six-character pairing code.
+6. Enter the code on the Apple Watch.
+7. Compare the Mac fingerprint on both devices. Confirm it on the watch, then
+   approve the watch fingerprint on the Mac.
+8. Select the Mac workspace roots that the watch may use.
+9. Keep the Mac awake, online, and running Relay and Codex.
 
-## Daily use
+The current source supports pairing and the encrypted request tunnel. Apple
+Watch destination actions, pushed events, reviewed voice, and reconnect
+behavior still require implementation and physical evidence.
 
-- Keep Relay, Codex, and the Mac awake and online.
-- Use the watch for tasks, approvals, questions, instructions, and new tasks.
-- Risky approvals require a press-and-hold and show the exact command, folder,
-  reason, and consequence.
-- System keyboard/dictation needs no OpenAI key.
-- Optional hold-to-record transcription uses an OpenAI key stored only in the
-  Mac Keychain and always shows a transcript review before sending.
+## Offline, revocation, and deletion
 
-## Lost watch or suspected compromise
+Relay must block mutations when the Mac or watch is offline and must not queue
+an action for later execution.
 
-- Revoke one watch from **Watches** to close its tunnel immediately.
-- Use **Emergency Stop** to revoke all watches, rotate the Mac host credential,
-  disconnect cloud tunnels, and stop the bridge. Existing Codex tasks continue
-  on the Mac.
-- Use **Delete Relay Account** to remove the account and device metadata and
-  clear Relay Cloud keys from the Mac. Codex repositories stay untouched.
+- Revoke one Apple Watch from **Watches** if the device is lost.
+- Use **Emergency Stop** to revoke watch access, rotate the Mac host
+  credential, disconnect tunnels, and stop the bridge. Codex tasks stay on the
+  Mac.
+- Use **Delete Relay Account** to remove cloud account and device metadata and
+  clear Relay Cloud credentials from the Mac. Relay does not delete Codex tasks
+  or repositories.
 
 ## Developer setup
 
-Android Studio is needed only for Java, Android SDK tools, building, and
-installing a debug build on a physical watch. Do not install an emulator.
+Install Xcode with the watchOS 10 or newer SDK. Use a physical Apple Watch for
+signed installation and runtime testing.
 
 ```bash
 corepack enable
@@ -67,33 +62,34 @@ pnpm install --frozen-lockfile
 pnpm build:bridge-sea
 
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+xcrun swift test --package-path mac
 xcrun swift run --package-path mac RelayMac
-
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export ANDROID_HOME="$HOME/Library/Android/sdk"
-./gradlew :wear:assembleDebug
+xcrun swift test --package-path apple-watch
+scripts/check-watchos-source.sh
 ```
 
-For physical debug installation only, follow
-[PHYSICAL-WATCH-TEST.md](PHYSICAL-WATCH-TEST.md). Release builds always use
-Relay Cloud HTTPS/WSS; manual origins and the legacy loopback path are debug
-recovery features.
+For an unsigned compiler check:
+
+```bash
+xcodebuild \
+  -project apple-watch/RelayWatch.xcodeproj \
+  -scheme RelayWatch \
+  -configuration Debug \
+  -destination 'generic/platform=watchOS' \
+  -derivedDataPath /tmp/relay-watch-derived-data \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+For a device run, open `apple-watch/RelayWatch.xcodeproj` in Xcode, select the
+Apple developer team, choose the paired physical Apple Watch, and run the app.
+Record results in
+[PHYSICAL-APPLE-WATCH-TEST.md](PHYSICAL-APPLE-WATCH-TEST.md).
 
 ## Cloud maintainer setup
 
-Production launch additionally needs organization-owned Cloudflare and Resend
-accounts, the `relayforcodex.com` zone, D1 IDs, Worker secrets, protected GitHub
-environments, and verified email sending. See [RELEASE.md](RELEASE.md) and
-[TODO.md](TODO.md). Never commit credentials or paste magic links into logs.
-
-The Worker secrets are `JWT_SECRET`, `PII_ENCRYPTION_KEY`, `EMAIL_HMAC_KEY`,
-`RATE_LIMIT_HMAC_KEY`, `RESEND_API_KEY`, and `CLOUD_ADMIN_CREDENTIAL`. The first
-four are independent 32-byte base64url values. The rate-limit key hashes network
-sources before D1 sees them and must not be reused for email lookup. The
-cloud-admin credential is also stored in the
-protected GitHub `production` environment, alongside a secret
-`BETA_INVITE_EMAILS` list containing at most 25 comma- or newline-separated
-addresses. Set the non-secret `RELAY_API_ORIGIN` environment variable, require
-an environment reviewer, and manually run **Relay Cloud beta invites**. The
-workflow sends one address at a time and logs only the final count; D1 stores
-encrypted email bytes plus a separate HMAC lookup.
+Relay Cloud needs organization-owned Cloudflare and Resend accounts, D1
+identifiers, Worker secrets, DNS, a verified sending domain, and protected
+GitHub environments. Follow [CLOUD-OPERATIONS.md](CLOUD-OPERATIONS.md) and
+[RELEASE.md](RELEASE.md). Keep credentials and sign-in links out of source,
+logs, issues, and diagnostic archives.

@@ -1,128 +1,127 @@
 # Relay release guide
 
-This is the maintainer path for the Mac GitHub Release and matching Wear OS
-closed-test build. A tag must not be created until the clean-Mac and physical watch checklist in
-`docs/PHYSICAL-WATCH-TEST.md` is complete.
+Relay has two separate distribution paths. A Git tag can publish the Mac
+release and Sparkle feeds. App Store Connect handles the Apple Watch archive.
+Neither path proves the other one.
 
-## What the workflow publishes
+The project has not published a verified public Mac release, TestFlight build,
+or App Store build from this checkpoint.
 
-- notarized Apple silicon `Relay.dmg`;
-- signed `relay-wear.apk` as an advanced developer fallback;
-- source archive for the exact tag;
-- `SHA256SUMS` and Ed25519-signed `release-manifest.json`;
-- Sparkle-signed `appcast.xml` and `appcast-beta.xml` on GitHub Pages;
-- Apache 2.0 license, notice, third-party notices, and compatibility matrix;
-- generated GitHub release notes.
+## 1. GitHub and Sparkle: Mac distribution
 
-## One-time GitHub setup
+The `GitHub Release` workflow targets an arm64 Apple-silicon Mac and performs
+these steps on a protected `release` environment:
 
-Create an environment named `release`, enable required reviewers, and restrict
-deployment branches to protected tags. Add these environment secrets:
+1. verify the tag and release inputs;
+2. run JavaScript, Mac Swift, Apple Watch Swift, source, and unsigned generic
+   watchOS build checks;
+3. build the arm64 bridge and Mac app;
+4. sign the nested executables and Mac application;
+5. create, notarize, staple, and verify `Relay.dmg`;
+6. create and sign a schema version 2 release manifest;
+7. create `SHA256SUMS`;
+8. generate and verify the stable or beta Sparkle appcast;
+9. upload the verified GitHub Release assets and publish the appcast through
+   GitHub Pages.
 
-| Secret | Purpose |
+### Schema version 2 manifest
+
+The signed manifest contains six artifacts and rejects any other count:
+
+1. `Relay.dmg`, signed, arm64;
+2. `Relay-<version>.tar.gz`, source;
+3. `LICENSE`;
+4. `NOTICE`;
+5. `THIRD_PARTY_NOTICES.md`;
+6. `COMPATIBILITY.md`.
+
+`SHA256SUMS` covers those release files plus `release-manifest.json`. The
+workflow also publishes `appcast.xml` or `appcast-beta.xml`. The bridge stays
+inside the Mac app and disk image.
+
+### GitHub release secrets
+
+Configure these eight secrets in the protected `release` environment. The
+current workflow references no watch-distribution secret.
+
+| Secret | Use |
 | --- | --- |
 | `APPLE_SIGNING_IDENTITY` | Developer ID Application identity name |
 | `APPLE_CERTIFICATE_BASE64` | Base64 PKCS#12 Developer ID certificate |
 | `APPLE_CERTIFICATE_PASSWORD` | PKCS#12 password |
 | `APPLE_ID` | Notarization account |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific notarization password |
-| `APPLE_TEAM_ID` | Apple developer team |
-| `ANDROID_KEYSTORE_BASE64` | Base64 Android release keystore |
-| `ANDROID_KEYSTORE_PASSWORD` | Android keystore password |
-| `ANDROID_KEY_ALIAS` | Android signing alias |
-| `ANDROID_KEY_PASSWORD` | Android key password |
-| `RELAY_RELEASE_PRIVATE_KEY_BASE64` | Base64 PKCS#8 Ed25519 private key |
-| `SPARKLE_PRIVATE_KEY` | Sparkle Ed25519 private key from `generate_keys` |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Notarization app-specific password |
+| `APPLE_TEAM_ID` | Apple developer team identifier |
+| `RELAY_RELEASE_PRIVATE_KEY_BASE64` | PKCS#8 Ed25519 key for the release manifest |
+| `SPARKLE_PRIVATE_KEY` | Ed25519 key for Sparkle appcasts |
 
-Add these non-secret repository or environment variables:
+Keep private keys and certificate material in an organization-owned secret
+store with a recovery plan. Do not put them in source, issues, workflow logs,
+release assets, or diagnostic archives.
 
-| Variable | Example |
-| --- | --- |
-| `RELAY_RELEASE_PUBLIC_KEY_BASE64` | Raw 32-byte Ed25519 public key in base64 |
-| `RELAY_WATCH_VERSION_CODE` | `10000` |
-| `RELAY_SPARKLE_PUBLIC_KEY` | Sparkle `SUPublicEDKey` value |
-| `RELAY_SPARKLE_STABLE_FEED_URL` | `https://ungaaaabungaaa.github.io/Relay/appcast.xml` |
-| `RELAY_SPARKLE_BETA_FEED_URL` | `https://ungaaaabungaaa.github.io/Relay/appcast-beta.xml` |
-| `CODEX_MIN_VERSION` | `0.144.0` |
-| `CODEX_MAX_VERSION` | `0.144.x` |
+## 2. App Store Connect: Apple Watch distribution
 
-Keep the Android key and both update-signing private keys in an encrypted
-backup. Losing a key blocks upgrades for that channel. Never put a private key,
-certificate password, OpenAI key, device key, or admin token in a GitHub issue,
-workflow file, release asset, or diagnostic report.
+The Apple Watch release needs a separate signed watchOS archive. The release
+owner must:
 
-The consumer Mac DMG contains the Mac app and ARM64 bridge sidecar only. Relay
-for Wear OS is installed and updated through Google Play during the closed
-beta; the GitHub APK is not bundled into the DMG.
+1. select the production Apple developer team and App Store signing profile;
+2. archive `com.relayforcodex.watch` from the exact reviewed commit;
+3. validate and upload the archive to App Store Connect;
+4. wait for TestFlight processing and complete export-compliance fields;
+5. run the physical Apple Watch matrix against that processed build;
+6. supply review credentials and private links through App Store Connect;
+7. submit the build and metadata for App Store review;
+8. release the approved version under the organization-owned account.
 
-The separate protected `production` environment controls Relay Cloud. Store
-the Cloudflare credentials, all six Worker secrets listed in
-[CLOUD-OPERATIONS.md](CLOUD-OPERATIONS.md), and `BETA_INVITE_EMAILS` there, define
-`RELAY_API_ORIGIN=https://api.relayforcodex.com`, require a reviewer, and use
-the manual **Relay Cloud beta invites** workflow. The same admin credential
-must be configured as a Worker secret; never add the beta address list to a
-workflow input or repository variable.
+The current GitHub workflow validates Apple Watch Swift source and runs an
+unsigned generic watchOS build. It does not create, sign, or upload the watchOS
+archive. Signing, TestFlight processing, review, and release remain external
+gates.
 
-## Before tagging
+## Before a release tag or upload
 
-1. Start from a clean `main` commit with the quality workflow green.
-2. Update the Wear version code. It must only increase, and the signed AAB sent
-   to Google Play must be built from this exact commit.
-3. Confirm the compatibility range against the installed Codex release.
-4. Complete every physical-device row and record the evidence.
-5. Install the locally packaged app on a clean Apple silicon Mac.
-6. Confirm the update public key embedded by the build matches the configured
-   GitHub variable.
-7. Review `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`.
+- Start from a clean reviewed commit with the full suite green.
+- Complete every applicable row in
+  [PHYSICAL-APPLE-WATCH-TEST.md](PHYSICAL-APPLE-WATCH-TEST.md).
+- Confirm destination actions, pushed events, reviewed voice, and reconnect
+  behavior on the signed Apple Watch candidate.
+- Install the notarized Mac disk image on a clean Apple-silicon Mac.
+- Confirm the Codex compatibility range and permanent bundle identifiers.
+- Review `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, store copy, and policy
+  pages.
+- Confirm production account ownership and private security-review signoff.
 
-## Publish
+## Publish the Mac release
 
-The first beta uses `v0.2.0-beta.1`. Stable stays at `v1.0.0` until the wider
-physical matrix passes. Create and push one signed semantic `v*` tag:
+Create one signed semantic `v*` tag after the gates pass:
 
 ```bash
-git tag -s v0.2.0-beta.1 -m "Relay 0.2.0 beta 1"
-git push origin v0.2.0-beta.1
+git tag -s v1.0.0 -m "Relay 1.0.0"
+git push origin v1.0.0
 ```
 
-The release workflow uses the standard arm64 `macos-15` GitHub-hosted runner.
-It imports signing material into a temporary keychain, runs the full automated
-suite, signs the APK and nested Mac executables, notarizes and staples the DMG,
-creates and signs the manifest and Sparkle feed, verifies every digest and
-signature, and only then creates the GitHub Release and deploys the feed
-through GitHub Pages. The bridge remains embedded inside `Relay.dmg`; it is not
-a separate user download. The cleanup step deletes temporary signing files.
+The workflow creates no GitHub Release if a required check fails.
 
-If any check fails, no GitHub Release is created.
+## Verify published Mac assets
 
-## Verify the published result
-
-On a separate Apple silicon Mac:
+On a separate Apple-silicon Mac:
 
 ```bash
 shasum -a 256 -c SHA256SUMS
 spctl -a -vv -t install Relay.dmg
 xcrun stapler validate Relay.dmg
-apksigner verify --verbose --print-certs relay-wear.apk
-```
-
-Then run the manifest verifier for the advanced APK fallback using the trusted public key distributed
-separately from the manifest:
-
-```bash
 node scripts/verify-release.mjs \
   --manifest release-manifest.json \
   --artifacts . \
   --tag v1.0.0 \
-  --public-key-base64 "$RELAY_RELEASE_PUBLIC_KEY_BASE64" \
-  --verify-apk-signature
+  --public-key-base64 "$RELAY_RELEASE_PUBLIC_KEY_BASE64"
 ```
 
-Do not trust a public key supplied only inside the same release being checked.
+Distribute the trusted manifest public key outside the release that it
+verifies.
 
-## Rollback
+## Withdraw a broken release
 
-Do not move or replace an existing tag. Mark a broken release as withdrawn,
-explain the problem, and publish a higher version after the fix passes all
-gates. Relay rejects downgrades, invalid signatures, changed bytes, and Intel
-artifacts; a failed update preserves the previous installed app or APK.
+Do not move or replace a published tag or asset. Mark the release as withdrawn,
+describe the problem without exposing private data, fix it on a new commit, and
+publish a higher version after all gates pass again.

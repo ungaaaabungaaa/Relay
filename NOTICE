@@ -1,9 +1,9 @@
 Relay
 Copyright 2026 Relay contributors
 
-This product includes software developed by third parties. Their names,
-versions, and licenses are listed in THIRD_PARTY_NOTICES.md.
+This product includes third-party software. THIRD_PARTY_NOTICES.md lists the
+named components, versions, and license summaries.
 
-Codex, Android, Wear OS, Galaxy Watch, Apple, macOS, and Tailscale are
-trademarks of their respective owners. Relay is not endorsed by or affiliated
-with those owners.
+Codex is a third-party product name or trademark. Apple, macOS, and watchOS are
+trademarks of Apple Inc. Sparkle is the name of a third-party software project.
+The Relay project has no endorsement from or affiliation with those owners.

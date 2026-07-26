@@ -1,67 +1,67 @@
-# Relay public-beta scoreboard
+# Relay release gates
 
-## Implemented and locally verified
+## Completed source and toolchain cut
 
-- [x] Cloudflare Worker, D1 migrations, hibernating Durable Object router,
-      staging/production configuration, and deploy workflow
-- [x] Invite-only passwordless email sessions, PKCE, magic links, access
-      tokens, refresh rotation/reuse defense, logout, and account deletion
-- [x] Encrypted email storage and hashed account/device credentials
-- [x] P-256 ECDH, HKDF-SHA256, AES-256-GCM envelopes, shared Mac/Wear vectors,
-      replay state, and authenticated routing metadata
-- [x] Native Mac outbound tunnel, Keychain identities, reconnect, device
-      management, workspace policy, Emergency Stop, and Login Item
-- [x] Wear OS cloud code entry, fingerprint confirmation, approval polling,
-      API-30 secure fallback, encrypted requests, revoked/offline states, round
-      and square layouts, and reviewed voice transport
-- [x] Loopback bridge authorization, signed inner requests, idempotent
-      mutations, Codex adapter, workspace boundaries, and redacted audit data
-- [x] Google Play application ID and signed APK/AAB-capable Gradle release setup
-- [x] Sparkle 2, hardened Mac packaging, signed manifest, notarization workflow,
-      and advanced GitHub APK fallback
-- [x] Consumer Mac app no longer contains Tailscale, Funnel, Platform Tools,
-      Wireless ADB, or a bundled APK
-- [x] Native Apple Watch project foundation for Phase 2
-- [x] HTML UI preview and README screen boards
+- [x] Keep Relay Cloud, the Apple-silicon Mac app and bridge, and the independent
+      watchOS 10+ target.
+- [x] Remove the retired client source, build inputs, release artifacts, active
+      documentation, and store material.
+- [x] Use permanent Apple product identifiers and a schema version 2 Mac release
+      manifest with six artifacts.
+- [x] Run Apple Watch Swift, source, and unsigned generic watchOS build checks in
+      the GitHub release workflow.
 
-## Code work still open
+These checks establish the repository shape. They do not prove signed
+distribution or physical Apple Watch behavior.
 
-- [x] Production invite-administration command and protected operator workflow
-- [x] Persistent encrypted cloud event stream for Live Monitoring, with one
-      ordered response/event sequence and periodic snapshot reconciliation
-- [x] 128 KiB encrypted voice chunks with ordered Mac-only assembly, 2 MiB,
-      30-second, and incomplete-transfer cleanup limits
-- [x] Apple Watch Cloud code pairing, Keychain device material, E2EE request
-      tunnel, permanent bundle ID, and watchOS 10 architecture checks
-- [ ] Wire Apple Watch destination screens, live events, actions, reviewed
-      voice, reconnect callbacks, and physical TestFlight flow
-- [x] Draft Play listing, reviewer instructions, privacy/terms/support copy,
-      account-deletion instructions, and matching Worker pages
-- [x] Protected Worker-secret deployment and D1 Time Travel recovery runbook
+## Product behavior gates
 
-## Owner and external launch gates
+- [ ] Connect real Apple Watch destination actions for approvals, questions,
+      instructions, task controls, and new tasks.
+- [ ] Connect pushed encrypted events to destination state.
+- [ ] Complete reviewed voice recording, transcript edit, send, and cancel
+      behavior.
+- [ ] Prove reconnect behavior after network loss, Mac sleep, Mac wake, bridge
+      restart, and cloud tunnel replacement.
+- [ ] Prove stale and offline mutation blocking with no queued action.
+- [ ] Prove revocation, local cache removal, Emergency Stop, and account
+      deletion on the release candidate.
 
-- [ ] Acquire and verify `relayforcodex.com` and permanent store names
-- [ ] Organization-owned Cloudflare, Resend, Apple Developer, and Google Play
-      accounts
-- [ ] Configure D1 IDs, DNS, verified sending domain, protected GitHub
-      environments, and production Worker secrets
-- [ ] Obtain owner/legal approval for the beta terms, privacy policy, retention
-      language, support address, store declarations, and production URLs
-- [ ] Capture final Play screenshots and supply reviewer beta credentials only
-      through the protected Play Console
-- [ ] Store Apple, Android, Sparkle, release-manifest, JWT, PII-encryption,
-      email-HMAC, and cloud-admin signing material outside Git
-- [ ] External review of authentication, pairing, and cryptography
-- [ ] Seven-day five-user dogfood and 24-hour reconnect test
-- [ ] Google Play closed test with the required continuous testers
-- [ ] Three physical Wear OS devices across two OEMs, including Wear OS 3,
-      small/large screens, and a Wi-Fi-to-LTE transition
-- [ ] Normal and Live Monitoring battery observations
-- [ ] Account deletion, Emergency Stop, key rotation, and D1 restore drill
-- [ ] Notarized DMG installation on a clean Apple-silicon Mac
-- [ ] Publish `v0.2.0-beta.1` only after every beta gate has evidence
+## Apple distribution gates
 
-Local green tests prove the code checkpoint. They do not prove Cloudflare or
-store deployment, physical hardware behavior, notarization credentials, or
-review approval.
+- [ ] Create a signed watchOS archive from the reviewed commit.
+- [ ] Upload the archive and complete TestFlight processing.
+- [ ] Run the full signed-build test through TestFlight.
+- [ ] Complete App Store metadata, privacy declarations, reviewer access, and
+      App Store review.
+- [ ] Release an approved App Store build under the organization-owned account.
+
+## Physical evidence gates
+
+- [ ] Complete the physical-device matrix across selected Apple Watch models,
+      case sizes, watchOS versions, and Wi-Fi or cellular paths.
+- [ ] Record accessibility evidence for VoiceOver, large text, touch targets,
+      labels, and haptics.
+- [ ] Record normal-use and active-update battery observations.
+- [ ] Prove pairing and working-state preservation across a TestFlight update.
+
+## Mac and security gates
+
+- [ ] Install the signed and notarized Mac disk image on a clean Apple-silicon
+      Mac with no development checkout.
+- [ ] Complete an external review of authentication, pairing, cryptography,
+      replay handling, workspace containment, revocation, and deletion.
+- [ ] Complete a production incident drill for Emergency Stop, credential
+      rotation, account deletion, and D1 recovery.
+
+## Ownership gates
+
+- [ ] Confirm the publisher legal entity, Apple Developer account owner,
+      Cloudflare owner, Resend owner, support mailbox owner, signing-key
+      custodians, and release approvers.
+- [ ] Obtain legal approval for privacy, terms, retention, support, and App Store
+      declarations.
+- [ ] Verify production DNS, email delivery, policy URLs, cloud secrets, and
+      invite administration under organization control.
+
+The release stays closed while any required gate lacks reviewed evidence.
