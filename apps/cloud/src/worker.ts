@@ -154,23 +154,23 @@ export function createWorker(gateway: CommandGateway): {
         }
         if (url.pathname === "/terms") {
           return publicPage(
-            "Relay Beta Terms",
-            "Relay is provided as a free, invite-only beta for evaluation. It is not a hosted Codex service: the user supplies and controls the Mac, Codex installation, OpenAI access, network, repositories, and every approval.",
+            "Relay Prototype Terms",
+            "Relay is an unreleased, invite-gated prototype with zero users. Relay offers no public beta or production service. You supply and control the Mac, Codex installation, OpenAI access, network, repositories, and every approval.",
             [
               "Use Relay only with accounts, Macs, watches, repositories, and workspaces you are authorized to control. Do not bypass pairing, rate limits, revocation, store rules, or security review controls.",
-              "Beta software may disconnect, lose cached summaries, or contain defects. Keep source control and independent backups, review commands and consequences, and use Emergency Stop if a device is lost or behavior is unexpected.",
-              "Access may be withdrawn to protect users or the service. Published source is licensed under Apache License 2.0; service availability and beta invitations are separate and carry no uptime promise.",
+              "Prototype software may disconnect, lose cached summaries, or contain defects. Keep source control and independent backups, review commands and consequences, and use Emergency Stop if a device is lost or behavior is unexpected.",
+              "Relay may withdraw prototype access to protect users or the service. Apache License 2.0 covers published source code. Prototype access carries no uptime promise.",
             ],
           );
         }
         if (url.pathname === "/support") {
           return publicPage(
             "Relay Support",
-            "Email support@relayforcodex.com for beta setup, pairing, revocation, deletion, or accessibility help. Do not include credentials, magic links, pairing codes, prompts, repository paths, commands, task output, or audio.",
+            "The unreleased, invite-gated Relay prototype has zero users and offers no public beta or production service. Email support@relayforcodex.com for pairing, revocation, deletion, or accessibility help. Do not include credentials, magic links, pairing codes, prompts, repository paths, commands, task output, or audio.",
             [
-              "For connection problems, keep the Mac awake, confirm Relay Cloud is connected, and use Refresh on the watch. Offline summaries are intentionally read-only.",
+              "For connection problems, keep the Mac awake, confirm Relay Cloud is connected, and use Refresh on the watch. The watch shows offline summaries in read-only mode.",
               "For a lost watch, revoke it from Relay on the Mac. For suspected compromise, use Emergency Stop and then contact support.",
-              "Report security issues privately through GitHub private vulnerability reporting when available rather than a public issue.",
+              "Use GitHub private vulnerability reporting when available for security issues. Do not post security reports in public issues.",
             ],
           );
         }

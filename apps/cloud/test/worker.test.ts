@@ -31,27 +31,42 @@ describe("Relay Cloud Worker routes", () => {
     }
   });
 
-  it("publishes substantive privacy, retention, support, and beta terms", async () => {
+  it("publishes substantive privacy, retention, support, and prototype terms", async () => {
     const { worker } = env();
     const privacy = await worker.fetch(new Request("https://relay.test/privacy"));
     const privacyText = await privacy.text();
     assert.match(privacyText, /end-to-end encrypted/i);
+    assert.match(privacyText, /cannot decrypt/i);
     assert.match(privacyText, /seven days/i);
     assert.match(privacyText, /no product analytics/i);
     assert.match(privacyText, /delete/i);
 
     const terms = await worker.fetch(new Request("https://relay.test/terms"));
-    assert.match(await terms.text(), /invite-only beta/i);
+    const termsText = await terms.text();
+    assert.match(termsText, /unreleased/i);
+    assert.match(termsText, /invite-gated/i);
+    assert.match(termsText, /zero users/i);
+    assert.match(termsText, /no public beta or production service/i);
+    assert.match(termsText, /authorized to control/i);
+    assert.match(termsText, /revocation/i);
+    assert.match(termsText, /no uptime promise/i);
+    assert.doesNotMatch(termsText, /free, invite-only beta|Relay Beta Terms/i);
 
     const support = await worker.fetch(new Request("https://relay.test/support"));
-    assert.match(await support.text(), /support@relayforcodex\.com/i);
+    const supportText = await support.text();
+    assert.match(supportText, /support@relayforcodex\.com/i);
+    assert.match(supportText, /pairing, revocation, deletion, or accessibility help/i);
+    assert.match(supportText, /Do not include credentials/i);
+    assert.match(supportText, /lost watch/i);
+    assert.match(supportText, /Emergency Stop/i);
+    assert.doesNotMatch(supportText, /beta setup/i);
     assert.match(
       support.headers.get("content-security-policy") ?? "",
       /default-src 'none'/,
     );
   });
 
-  it("maps the beta API without exposing a public signup route", async () => {
+  it("maps the prototype API without exposing a public signup route", async () => {
     const { worker, calls } = env();
     const request = new Request("https://relay.test/cloud/v1/auth/device-sessions", {
       method: "POST",
