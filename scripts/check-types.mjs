@@ -8,7 +8,7 @@ function collect(directory) {
     const path = resolve(directory, entry.name);
     if (
       entry.isDirectory() &&
-      !["node_modules", "generated", "build", ".gradle"].includes(entry.name)
+      !["node_modules", "generated", "build"].includes(entry.name)
     ) {
       files.push(...collect(path));
     } else if (entry.isFile() && path.endsWith(".ts")) {

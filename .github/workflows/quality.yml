@@ -37,43 +37,8 @@ jobs:
       - name: Type-check
         run: pnpm typecheck
 
-  wear:
-    name: Wear OS
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Set up Java 21
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: gradle
-      - name: Set up Android command-line tools
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-      - name: Install required SDK only
-        run: sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36.1"
-      - name: Unit tests, instrumentation compile, lint, and APK
-        run: >-
-          ./gradlew
-          :wear:testDebugUnitTest
-          :wear:compileDebugAndroidTestKotlin
-          :wear:lintDebug
-          :wear:assembleDebug
-          :wear:assembleDebugAndroidTest
-      - name: Scan APK for embedded secrets
-        run: node scripts/scan-apk-secrets.mjs --apk wear/build/outputs/apk/debug/wear-debug.apk
-      - name: Upload testable APKs
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: relay-wear-debug
-          path: |
-            wear/build/outputs/apk/debug/wear-debug.apk
-            wear/build/outputs/apk/androidTest/debug/wear-debug-androidTest.apk
-          if-no-files-found: error
-
   apple-silicon:
-    name: Apple silicon Mac
+    name: Apple platforms
     runs-on: macos-15
     steps:
       - name: Check out source
@@ -97,11 +62,18 @@ jobs:
         run: |
           swift test --package-path mac
           swift build --package-path mac --configuration release --arch arm64
-      - name: Check Apple Watch phase 2 foundation
+      - name: Test and build Apple Watch
         run: |
           swift test --package-path apple-watch
           scripts/check-watchos-source.sh
-          xcodebuild -list -project apple-watch/RelayWatch.xcodeproj
+          xcodebuild \
+            -project apple-watch/RelayWatch.xcodeproj \
+            -scheme RelayWatch \
+            -configuration Release \
+            -destination 'generic/platform=watchOS' \
+            -derivedDataPath "${RUNNER_TEMP}/relay-watch-derived-data" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
       - name: Upload bridge sidecar
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

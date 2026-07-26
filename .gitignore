@@ -1,12 +1,8 @@
 .DS_Store
 .idea/
-.gradle/
 **/build/
 **/.build/
 .build-release/
-local.properties
-*.jks
-*.keystore
 .env
 .env.*
 !.env.example

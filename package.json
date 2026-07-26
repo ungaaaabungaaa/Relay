@@ -4,11 +4,9 @@
   "packageManager": "pnpm@11.16.0",
   "scripts": {
     "generate:codex": "node scripts/generate-codex-protocol.mjs",
-    "generate:readme-screens": "node scripts/generate-readme-screen-gallery.mjs",
     "build:bridge-sea": "node scripts/build-bridge-sea.mjs",
     "smoke:bridge-sea": "node scripts/smoke-bridge-sea.mjs",
-    "scan:apk": "node scripts/scan-apk-secrets.mjs",
-    "test": "node --test packages/*/test/*.test.ts apps/*/test/*.test.ts release/test/*.test.mjs preview/test/*.test.mjs apple-watch/test/*.test.mjs",
+    "test": "node --test packages/*/test/*.test.ts apps/*/test/*.test.ts release/test/*.test.mjs apple-watch/test/*.test.mjs",
     "test:protocol": "node --test packages/codex-protocol/test/*.test.ts",
     "test:release": "node --test release/test/*.test.mjs",
     "typecheck": "node scripts/check-types.mjs"
