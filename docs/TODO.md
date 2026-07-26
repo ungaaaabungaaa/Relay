@@ -11,8 +11,9 @@
 - [x] Run Apple Watch Swift, source, and unsigned generic watchOS build checks in
       the GitHub release workflow.
 
-These checks establish the repository shape. They do not prove signed
-distribution or physical Apple Watch behavior.
+Relay remains a zero-user prototype. These checks establish the repository
+shape. They do not prove archive packaging, signed distribution, or physical
+Apple Watch behavior.
 
 ## Product behavior gates
 
@@ -29,6 +30,15 @@ distribution or physical Apple Watch behavior.
 
 ## Apple distribution gates
 
+- [ ] Add or validate Apple's supported watch-only packaging structure. The
+      current project has one `RelayWatch` target with `SKIP_INSTALL = YES` and
+      has not produced an App Store-distributable archive.
+- [ ] Add or validate the non-executable iOS wrapper target if current Xcode and
+      App Store tooling require it. Keep it as a packaging stub with no iPhone
+      companion product.
+- [ ] Create a pre-signing archive and inspect the products, embedded watch app,
+      bundle identifiers, metadata, entitlements, install settings, and absence
+      of an iOS executable before TestFlight upload or App Store review.
 - [ ] Create a signed watchOS archive from the reviewed commit.
 - [ ] Upload the archive and complete TestFlight processing.
 - [ ] Run the full signed-build test through TestFlight.

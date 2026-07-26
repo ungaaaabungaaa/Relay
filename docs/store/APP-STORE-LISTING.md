@@ -7,6 +7,7 @@ actions or the physical Apple Watch matrix remain incomplete.
 ## Identity
 
 - App name: **Relay for Codex**
+- Subtitle: **Codex tasks on Apple Watch**
 - Bundle ID: `com.relayforcodex.watch`
 - Category: Productivity
 - Operating system: watchOS 10 or newer
@@ -16,9 +17,12 @@ actions or the physical Apple Watch matrix remain incomplete.
 - Privacy URL: `https://relayforcodex.com/privacy`
 - Account deletion URL: `https://relayforcodex.com/account/delete`
 
-## Short description
+## Promotional copy
 
 Review and steer Codex from Apple Watch.
+
+Use this sentence in Promotional Text or the description after the release
+owner verifies real destination actions on the submitted build.
 
 ## Full description draft
 

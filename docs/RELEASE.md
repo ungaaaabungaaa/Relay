@@ -4,8 +4,8 @@ Relay has two separate distribution paths. A Git tag can publish the Mac
 release and Sparkle feeds. App Store Connect handles the Apple Watch archive.
 Neither path proves the other one.
 
-The project has not published a verified public Mac release, TestFlight build,
-or App Store build from this checkpoint.
+Relay remains a zero-user prototype. The project has not published a verified
+public Mac release, TestFlight build, or App Store build from this checkpoint.
 
 ## 1. GitHub and Sparkle: Mac distribution
 
@@ -61,8 +61,31 @@ release assets, or diagnostic archives.
 
 ## 2. App Store Connect: Apple Watch distribution
 
-The Apple Watch release needs a separate signed watchOS archive. The release
-owner must:
+The Apple Watch release needs an App Store-distributable archive and a separate
+signing path.
+
+### Pre-signing packaging gate
+
+The current Xcode project contains one `RelayWatch` application target. Debug
+and Release both set `SKIP_INSTALL = YES`. That project can compile source, but
+it has not produced an archive that proves App Store distribution readiness.
+
+Before using production signing assets, maintainers must:
+
+1. create or validate Apple's supported watch-only packaging structure with the
+   current Xcode and App Store Connect toolchain;
+2. add or validate the non-executable iOS wrapper target if the current tools
+   require it for watch-only App Store packaging;
+3. keep the wrapper as a packaging stub with no iOS executable or iPhone user
+   experience, and ship no iPhone companion product;
+4. confirm the root and watch bundle identifiers, target dependencies, archive
+   scheme, and install settings against an Xcode-created watch-only template;
+5. create an archive without production credentials and inspect its products,
+   embedded watch app, metadata, entitlements, and absence of an iOS executable;
+6. record the archive contents and resolve every Organizer validation error
+   before signing, TestFlight upload, or App Store review.
+
+After this gate passes, the release owner must:
 
 1. select the production Apple developer team and App Store signing profile;
 2. archive `com.relayforcodex.watch` from the exact reviewed commit;
@@ -74,13 +97,15 @@ owner must:
 8. release the approved version under the organization-owned account.
 
 The current GitHub workflow validates Apple Watch Swift source and runs an
-unsigned generic watchOS build. It does not create, sign, or upload the watchOS
-archive. Signing, TestFlight processing, review, and release remain external
-gates.
+unsigned generic watchOS build. It does not create, inspect, sign, or upload an
+App Store-distributable archive. Packaging, signing, TestFlight processing,
+review, and release remain external gates.
 
 ## Before a release tag or upload
 
 - Start from a clean reviewed commit with the full suite green.
+- Complete the pre-signing packaging gate and retain the archive-content
+  record.
 - Complete every applicable row in
   [PHYSICAL-APPLE-WATCH-TEST.md](PHYSICAL-APPLE-WATCH-TEST.md).
 - Confirm destination actions, pushed events, reviewed voice, and reconnect
