@@ -7,6 +7,21 @@ export type RelayTask = {
   status: "idle" | "running" | "error" | "offline";
 };
 
+export type RelayActivityEntry = {
+  id: string;
+  turnId: string;
+  kind: "user" | "assistant" | "command" | "file" | "tool" | "status";
+  title: string;
+  detail: string | null;
+  status: "pending" | "running" | "succeeded" | "failed" | "unknown";
+  occurredAt: number | null;
+};
+
+export type RelayTaskDetail = RelayTask & {
+  activeTurnId: string | null;
+  activity: RelayActivityEntry[];
+};
+
 export type RelayApproval = {
   id: string;
   threadId: string;

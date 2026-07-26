@@ -1,4 +1,11 @@
-import type { RelayApproval, RelayModel, RelayQuestion, RelayTask } from "../domain.ts";
+import type {
+  RelayActivityEntry,
+  RelayApproval,
+  RelayModel,
+  RelayQuestion,
+  RelayTask,
+  RelayTaskDetail,
+} from "../domain.ts";
 import { classifyApprovalRisk } from "../security/approval-risk.ts";
 
 type ProtocolThread = {
@@ -25,6 +32,148 @@ export function mapThread(thread: ProtocolThread): RelayTask {
     updatedAt: thread.updatedAt,
     status,
   };
+}
+
+type ProtocolThreadItem = {
+  id?: unknown;
+  type?: unknown;
+  [key: string]: unknown;
+};
+
+type ProtocolTurn = {
+  id: string;
+  status: string;
+  startedAt: number | null;
+  completedAt: number | null;
+  items: ProtocolThreadItem[];
+};
+
+type ProtocolThreadDetail = {
+  thread: ProtocolThread & { turns: ProtocolTurn[] };
+};
+
+export function mapThreadDetail(response: ProtocolThreadDetail): RelayTaskDetail {
+  const { thread } = response;
+  const activity = thread.turns
+    .flatMap((turn) => turn.items.flatMap((item) => mapActivityEntry(turn, item)))
+    .slice(-50);
+  const activeTurn = thread.turns.findLast((turn) => turn.status === "inProgress");
+  return {
+    ...mapThread(thread),
+    activeTurnId: activeTurn?.id ?? null,
+    activity,
+  };
+}
+
+function mapActivityEntry(
+  turn: ProtocolTurn,
+  item: ProtocolThreadItem,
+): RelayActivityEntry[] {
+  if (typeof item.id !== "string" || typeof item.type !== "string") return [];
+  const base = {
+    id: item.id,
+    turnId: turn.id,
+    status: activityStatus(item.status ?? turn.status),
+    occurredAt: turn.startedAt,
+  };
+  switch (item.type) {
+    case "userMessage": {
+      const content = Array.isArray(item.content)
+        ? item.content
+            .filter(
+              (entry): entry is { type: "text"; text: string } =>
+                isRecord(entry) && entry.type === "text" && typeof entry.text === "string",
+            )
+            .map((entry) => entry.text)
+            .join("\n")
+        : "";
+      return [{ ...base, kind: "user", title: "You", detail: content || null }];
+    }
+    case "agentMessage":
+      return [
+        {
+          ...base,
+          kind: "assistant",
+          title: "Assistant",
+          detail: typeof item.text === "string" && item.text ? item.text : null,
+        },
+      ];
+    case "commandExecution":
+      return [
+        {
+          ...base,
+          kind: "command",
+          title: typeof item.command === "string" ? item.command : "Command",
+          detail: null,
+        },
+      ];
+    case "fileChange": {
+      const paths = Array.isArray(item.changes)
+        ? item.changes
+            .filter((change): change is { path: string } => isRecord(change) && typeof change.path === "string")
+            .map((change) => change.path)
+            .join("\n")
+        : "";
+      return [{ ...base, kind: "file", title: "File changes", detail: paths || null }];
+    }
+    case "mcpToolCall":
+      return [
+        {
+          ...base,
+          kind: "tool",
+          title: toolTitle(item.server, item.tool),
+          detail: null,
+        },
+      ];
+    case "dynamicToolCall":
+      return [
+        {
+          ...base,
+          kind: "tool",
+          title: toolTitle(item.namespace, item.tool),
+          detail: null,
+        },
+      ];
+    case "collabAgentToolCall":
+      return [
+        {
+          ...base,
+          kind: "tool",
+          title: typeof item.tool === "string" ? item.tool : "Agent tool",
+          detail: null,
+        },
+      ];
+    default:
+      return [{ ...base, kind: "status", title: statusTitle(item.type), detail: null }];
+  }
+}
+
+function activityStatus(value: unknown): RelayActivityEntry["status"] {
+  switch (value) {
+    case "inProgress":
+      return "running";
+    case "completed":
+      return "succeeded";
+    case "failed":
+    case "declined":
+      return "failed";
+    default:
+      return "unknown";
+  }
+}
+
+function toolTitle(namespace: unknown, tool: unknown): string {
+  if (typeof namespace === "string" && typeof tool === "string") return `${namespace}/${tool}`;
+  if (typeof tool === "string") return tool;
+  return "Tool";
+}
+
+function statusTitle(type: string): string {
+  return type === "plan" ? "Plan updated" : type === "reasoning" ? "Reasoning updated" : "Status update";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 type ApprovalRequest = {

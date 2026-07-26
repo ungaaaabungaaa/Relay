@@ -18,6 +18,14 @@ import {
 } from "./workspaces/workspace-policy.ts";
 import type { Transcriber } from "./transcription/transcriber.ts";
 import { transcribeAudio } from "./transcription/transcriber.ts";
+import {
+  validateApprovalDecision,
+  validateInstructionInput,
+  validateNewTaskInput,
+  validateQuestionAnswers,
+  validateSteerInput,
+  validateStopInput,
+} from "./watch-request-validation.ts";
 
 type Adapter = Pick<
   CodexAdapter,
@@ -219,10 +227,12 @@ export function createRequestHandler(options: HandlerOptions) {
         const body = await parseJson(request);
         const approval = url.pathname.match(/^\/v1\/approvals\/([^/]+)$/);
         if (approval?.[1] && options.adapter.answerApproval) {
-          const approve = body.decision === "approve";
           const pending = options.adapter
             .approvals()
             .find((item) => item.id === approval[1]);
+          if (!pending) throw new Error("expired approval");
+          const decision = validateApprovalDecision(pending, body);
+          const approve = decision.decision === "approve";
           return json(
             await actions.run(
               {
@@ -240,6 +250,11 @@ export function createRequestHandler(options: HandlerOptions) {
         }
         const question = url.pathname.match(/^\/v1\/questions\/([^/]+)$/);
         if (question?.[1] && options.adapter.answerQuestion) {
+          const pending = options.adapter
+            .questions()
+            .find((item) => item.id === question[1]);
+          if (!pending) throw new Error("expired question");
+          const answers = validateQuestionAnswers(pending, body);
           return json(
             await actions.run(
               {
@@ -251,7 +266,7 @@ export function createRequestHandler(options: HandlerOptions) {
               () => {
                 options.adapter.answerQuestion?.(
                   question[1],
-                  (body.answers ?? {}) as Record<string, string[]>,
+                  answers,
                 );
                 return { ok: true };
               },
@@ -259,7 +274,11 @@ export function createRequestHandler(options: HandlerOptions) {
           );
         }
         if (url.pathname === "/v1/tasks" && options.adapter.startTask) {
-          const cwd = await options.workspacePolicy.assertAllowed(String(body.cwd));
+          const input = validateNewTaskInput(
+            body,
+            await options.adapter.listModels(),
+          );
+          const cwd = await options.workspacePolicy.assertAllowed(input.cwd);
           return json(
             await actions.run(
               {
@@ -268,19 +287,22 @@ export function createRequestHandler(options: HandlerOptions) {
                 action: "task.start",
                 target: "new-task",
               },
-              () =>
-                options.adapter.startTask?.({
+              async () => {
+                const started = await options.adapter.startTask?.({
                   cwd,
-                  model: String(body.model),
-                  effort: String(body.effort),
-                  prompt: String(body.prompt),
-                }),
+                  model: input.model,
+                  effort: input.effort,
+                  prompt: input.prompt,
+                });
+                return { taskId: (started as { thread: { id: string } }).thread.id };
+              },
             ),
             201,
           );
         }
         const instruction = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/instructions$/);
         if (instruction?.[1] && options.adapter.sendInstruction) {
+          const input = validateInstructionInput(body);
           return json(
             await actions.run(
               {
@@ -289,16 +311,19 @@ export function createRequestHandler(options: HandlerOptions) {
                 action: "task.instruction",
                 target: instruction[1],
               },
-              () =>
-                options.adapter.sendInstruction?.(
+              async () => {
+                const started = await options.adapter.sendInstruction?.(
                   instruction[1],
-                  String(body.text),
-                ),
+                  input.text,
+                );
+                return { turnId: (started as { turn: { id: string } }).turn.id };
+              },
             ),
           );
         }
         const steer = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/steer$/);
         if (steer?.[1] && options.adapter.steerTask) {
+          const input = validateSteerInput(body);
           return json(
             await actions.run(
               {
@@ -307,17 +332,20 @@ export function createRequestHandler(options: HandlerOptions) {
                 action: "task.steer",
                 target: steer[1],
               },
-              () =>
-                options.adapter.steerTask?.(
+              async () => {
+                const steered = await options.adapter.steerTask?.(
                   steer[1],
-                  String(body.turnId),
-                  String(body.text),
-                ),
+                  input.turnId,
+                  input.text,
+                );
+                return { turnId: (steered as { turnId: string }).turnId };
+              },
             ),
           );
         }
         const stop = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/stop$/);
         if (stop?.[1] && options.adapter.stopTask) {
+          const input = validateStopInput(body);
           return json(
             await actions.run(
               {
@@ -326,8 +354,10 @@ export function createRequestHandler(options: HandlerOptions) {
                 action: "task.stop",
                 target: stop[1],
               },
-              () =>
-                options.adapter.stopTask?.(stop[1], String(body.turnId)),
+              async () => {
+                await options.adapter.stopTask?.(stop[1], input.turnId);
+                return { ok: true };
+              },
             ),
           );
         }

@@ -1,7 +1,19 @@
-import type { RelayApproval, RelayModel, RelayQuestion, RelayTask } from "../domain.ts";
+import type {
+  RelayApproval,
+  RelayModel,
+  RelayQuestion,
+  RelayTask,
+  RelayTaskDetail,
+} from "../domain.ts";
 import { EventHub } from "../events/event-hub.ts";
 import { CodexRpcClient, type RpcServerRequest } from "./client.ts";
-import { mapApproval, mapModel, mapQuestion, mapThread } from "./mappers.ts";
+import {
+  mapApproval,
+  mapModel,
+  mapQuestion,
+  mapThread,
+  mapThreadDetail,
+} from "./mappers.ts";
 
 type PendingAction =
   | { request: RpcServerRequest; value: RelayApproval }
@@ -45,8 +57,12 @@ export class CodexAdapter {
     return { data: response.data.map(mapThread), nextCursor: response.nextCursor };
   }
 
-  async readTask(threadId: string) {
-    return this.client.request("thread/read", { threadId, includeTurns: true });
+  async readTask(threadId: string): Promise<RelayTaskDetail> {
+    const response = (await this.client.request("thread/read", {
+      threadId,
+      includeTurns: true,
+    })) as Parameters<typeof mapThreadDetail>[0];
+    return mapThreadDetail(response);
   }
 
   async listModels(): Promise<RelayModel[]> {
