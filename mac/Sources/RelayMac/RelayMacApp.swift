@@ -13,11 +13,5 @@ struct RelayMacApp: App {
                 .accessibilityLabel("Relay")
         }
         .menuBarExtraStyle(.menu)
-
-        Window("Relay", id: "dashboard") {
-            DashboardView(model: model)
-        }
-        .defaultSize(width: 1_020, height: 680)
-        .windowResizability(.contentMinSize)
     }
 }
