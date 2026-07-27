@@ -257,7 +257,10 @@ func voiceKeyReconfigurationShutsDownBeforeBuildingAFreshSupervisor() throws {
         source.range(of: "let replacement = makeSupervisor", range: stop.upperBound..<source.endIndex)
     )
     let restore = try #require(
-        source.range(of: "await restoreRelayCloudSession()", range: replacement.upperBound..<source.endIndex)
+        source.range(
+            of: "try await restoreRelayCloudSessionForBridgeRebuild()",
+            range: replacement.upperBound..<source.endIndex
+        )
     )
 
     #expect(shutdown.lowerBound < stop.lowerBound)

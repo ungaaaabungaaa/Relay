@@ -59,15 +59,24 @@ export class BridgeCloudRuntime {
       ) {
         throw new Error("Invalid Relay cloud root key");
       }
+      const existing = this.#options.store.getDevice(input.deviceId);
+      if (existing && existing.revokedAt !== null) {
+        throw new Error("Cannot restore a revoked Relay cloud device");
+      }
+      if (existing && existing.publicKey !== input.signingPublicKey) {
+        throw new Error("Relay cloud device signing key mismatch");
+      }
       this.#rootKeys.set(input.deviceId, rootKey);
       this.#registrations.set(input.deviceId, structuredClone(input));
-      this.#options.store.addDevice(
-        input.deviceId,
-        input.signingPublicKey,
-        input.name,
-        Date.now(),
-        input.metadata,
-      );
+      if (!existing) {
+        this.#options.store.addDevice(
+          input.deviceId,
+          input.signingPublicKey,
+          input.name,
+          Date.now(),
+          input.metadata,
+        );
+      }
       if (!this.#adapters.has(input.hostId)) {
         this.#adapters.set(
           input.hostId,

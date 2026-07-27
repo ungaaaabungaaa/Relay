@@ -5,6 +5,7 @@ import ServiceManagement
 
 private enum RelayReconnectError: Error {
     case bridgeUnavailable
+    case cloudSessionUnavailable
 }
 
 @MainActor
@@ -546,7 +547,7 @@ final class RelayAppModel: ObservableObject {
         guard bridgeState == .running else {
             throw RelayReconnectError.bridgeUnavailable
         }
-        await restoreRelayCloudSession()
+        try await restoreRelayCloudSessionForBridgeRebuild()
         updateSetupState(bridgeReady: true)
     }
 
@@ -575,34 +576,50 @@ final class RelayAppModel: ObservableObject {
     }
 
     private func restoreRelayCloudSession() async {
+        do {
+            try await restoreRelayCloudSessionOrThrow(requireSession: false)
+        } catch {
+            try? secrets.remove(.cloudRefreshToken)
+            cloudAccessToken = nil
+            cloudSignedIn = false
+            cloudConnected = false
+            cloudTunnelPhase = .signedOut
+            lastError = "Relay Cloud needs you to sign in again."
+        }
+    }
+
+    private func restoreRelayCloudSessionForBridgeRebuild() async throws {
+        try await restoreRelayCloudSessionOrThrow(requireSession: cloudSignedIn)
+    }
+
+    private func restoreRelayCloudSessionOrThrow(requireSession: Bool) async throws {
+        guard cloudConfigurationValid else {
+            if requireSession { throw RelayReconnectError.cloudSessionUnavailable }
+            return
+        }
+        let refreshToken = try secrets.value(for: .cloudRefreshToken)
+        let hostID = try secrets.value(for: .cloudHostID)
+        let hostCredential = try secrets.value(for: .cloudHostCredential)
         guard
-            cloudConfigurationValid,
-            let refreshToken = try? secrets.value(for: .cloudRefreshToken),
-            let hostID = try? secrets.value(for: .cloudHostID),
-            let hostCredential = try? secrets.value(for: .cloudHostCredential),
+            let refreshToken,
+            let hostID,
+            let hostCredential,
             !refreshToken.isEmpty,
             !hostID.isEmpty,
             !hostCredential.isEmpty
         else {
+            if requireSession { throw RelayReconnectError.cloudSessionUnavailable }
             return
         }
-        do {
-            let tokens = try await cloudClient.refresh(
-                refreshToken: refreshToken
-            )
-            try secrets.set(tokens.refreshToken, for: .cloudRefreshToken)
-            cloudAccessToken = tokens.accessToken
-            cloudSignedIn = true
-            for registration in try RelayCloudDeviceVault.devices(in: secrets) {
-                try await adminClient.registerCloudDevice(registration)
-            }
-            startCloudTunnel()
-        } catch {
-            try? secrets.remove(.cloudRefreshToken)
-            cloudSignedIn = false
-            cloudConnected = false
-            lastError = "Relay Cloud needs you to sign in again."
+
+        let tokens = try await cloudClient.refresh(refreshToken: refreshToken)
+        try secrets.set(tokens.refreshToken, for: .cloudRefreshToken)
+        cloudAccessToken = tokens.accessToken
+        cloudSignedIn = true
+        for registration in try RelayCloudDeviceVault.devices(in: secrets) {
+            try await adminClient.registerCloudDevice(registration)
         }
+        startCloudTunnel()
     }
 
     private func startCloudTunnel() {

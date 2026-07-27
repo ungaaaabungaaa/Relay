@@ -11,6 +11,179 @@ import { canonicalRequest } from "../src/security/authentication.ts";
 import { InMemorySecurityStore } from "../src/security/store.ts";
 
 describe("bridge cloud runtime", () => {
+  it("restores an existing active cloud device with the same signing key", async () => {
+    const signing = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const signingPublicKey = signing.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const store = new InMemorySecurityStore();
+    store.addDevice("watch-existing", signingPublicKey, "Original Watch", 123, {
+      platform: "watch-os",
+      manufacturer: "Apple",
+      model: "Apple Watch",
+      osVersion: "10",
+      appVersion: "0.1.0",
+      screenShape: "rounded-rect",
+    });
+    const runtime = new BridgeCloudRuntime({
+      store,
+      eventHub: new EventHub(),
+      handler: async () => Response.json({ ok: true }),
+    });
+
+    await runtime.registerDevice({
+      accountId: "account-1",
+      hostId: "host-1",
+      deviceId: "watch-existing",
+      name: "Restored Watch",
+      signingPublicKey,
+      rootKey: Buffer.alloc(32, 1).toString("base64url"),
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch Ultra",
+        osVersion: "11",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
+    });
+
+    assert.equal(store.getDevice("watch-existing")?.createdAt, 123);
+    assert.equal(store.getDevice("watch-existing")?.publicKey, signingPublicKey);
+    assert.equal(store.getDevice("watch-existing")?.revokedAt, null);
+    await runtime.close();
+  });
+
+  it("rejects restoration of a revoked cloud device ID", async () => {
+    const signing = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const signingPublicKey = signing.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const store = new InMemorySecurityStore();
+    store.addDevice("watch-revoked", signingPublicKey, "Apple Watch", 123);
+    store.revokeDevice("watch-revoked", 456);
+    const runtime = new BridgeCloudRuntime({
+      store,
+      eventHub: new EventHub(),
+      handler: async () => Response.json({ ok: true }),
+    });
+
+    await assert.rejects(
+      runtime.registerDevice({
+        accountId: "account-1",
+        hostId: "host-1",
+        deviceId: "watch-revoked",
+        name: "Apple Watch",
+        signingPublicKey,
+        rootKey: Buffer.alloc(32, 2).toString("base64url"),
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
+      }),
+      /revoked/i,
+    );
+    assert.equal(store.getDevice("watch-revoked")?.revokedAt, 456);
+    await runtime.close();
+  });
+
+  it("rejects a cloud device revoked while root-key import is in flight", async () => {
+    const signing = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const signingPublicKey = signing.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const rootKey = await crypto.subtle.importKey(
+      "raw",
+      new Uint8Array(32).fill(7),
+      "AES-GCM",
+      false,
+      ["encrypt", "decrypt"],
+    );
+    let releaseImport!: () => void;
+    const importGate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    const store = new InMemorySecurityStore();
+    store.addDevice("watch-revoked-during-import", signingPublicKey, "Apple Watch", 123);
+    const runtime = new BridgeCloudRuntime({
+      store,
+      eventHub: new EventHub(),
+      handler: async () => Response.json({ ok: true }),
+      importRootKey: async () => {
+        await importGate;
+        return rootKey;
+      },
+    });
+
+    const restoring = runtime.registerDevice({
+      accountId: "account-1",
+      hostId: "host-1",
+      deviceId: "watch-revoked-during-import",
+      name: "Apple Watch",
+      signingPublicKey,
+      rootKey: Buffer.alloc(32, 7).toString("base64url"),
+      metadata: {
+        platform: "watch-os",
+        manufacturer: "Apple",
+        model: "Apple Watch",
+        osVersion: "10",
+        appVersion: "0.2.0",
+        screenShape: "rounded-rect",
+      },
+    });
+    await Promise.resolve();
+    store.revokeDevice("watch-revoked-during-import", 789);
+    releaseImport();
+
+    await assert.rejects(restoring, /revoked/i);
+    assert.equal(store.getDevice("watch-revoked-during-import")?.revokedAt, 789);
+    await runtime.close();
+  });
+
+  it("rejects restoration when a cloud device signing key changes", async () => {
+    const original = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const replacement = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const originalPublicKey = original.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const replacementPublicKey = replacement.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const store = new InMemorySecurityStore();
+    store.addDevice("watch-mismatch", originalPublicKey, "Apple Watch", 123);
+    const runtime = new BridgeCloudRuntime({
+      store,
+      eventHub: new EventHub(),
+      handler: async () => Response.json({ ok: true }),
+    });
+
+    await assert.rejects(
+      runtime.registerDevice({
+        accountId: "account-1",
+        hostId: "host-1",
+        deviceId: "watch-mismatch",
+        name: "Apple Watch",
+        signingPublicKey: replacementPublicKey,
+        rootKey: Buffer.alloc(32, 3).toString("base64url"),
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
+      }),
+      /signing key/i,
+    );
+    assert.equal(store.getDevice("watch-mismatch")?.publicKey, originalPublicKey);
+    await runtime.close();
+  });
+
   it("cannot resurrect a registration while close is waiting on key import", async () => {
     const rootKey = await crypto.subtle.importKey(
       "raw",
