@@ -115,6 +115,7 @@ func cachedTaskSummaryRemainsReviewableWithoutDetail() {
     #expect(summary.workspaceName == "workspace")
     #expect(summary.latestActivityTitle == "Cached preview")
     #expect(!summary.canStop)
+    #expect(!summary.canViewActivity)
 }
 
 private func taskFixture(id: String, status: RelayTask.Status) -> RelayTask {

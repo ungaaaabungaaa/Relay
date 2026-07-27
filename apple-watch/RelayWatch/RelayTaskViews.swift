@@ -81,7 +81,9 @@ struct RelayTaskSummaryView: View {
                         Button("Cancel", role: .cancel) {}
                     }
             }
-            Button("View full activity") { model.navigate(to: .activity(taskID)) }
+            if summary.canViewActivity {
+                Button("View full activity") { model.navigate(to: .activity(taskID)) }
+            }
         }
     }
 

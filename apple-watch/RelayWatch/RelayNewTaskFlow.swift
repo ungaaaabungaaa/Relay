@@ -47,6 +47,7 @@ struct RelayTaskSummary: Equatable, Sendable {
     let workspaceName: String
     let latestActivityTitle: String
     let canStop: Bool
+    let canViewActivity: Bool
 }
 
 enum RelayTaskPresentation {
@@ -74,7 +75,8 @@ enum RelayTaskPresentation {
             statusTitle: detail.status.rawValue.capitalized,
             workspaceName: URL(fileURLWithPath: detail.cwd).lastPathComponent,
             latestActivityTitle: latestActivity?.title ?? detail.preview,
-            canStop: detail.activeTurnId != nil
+            canStop: detail.activeTurnId != nil,
+            canViewActivity: true
         )
     }
 
@@ -83,7 +85,8 @@ enum RelayTaskPresentation {
             statusTitle: task.status.rawValue.capitalized,
             workspaceName: URL(fileURLWithPath: task.cwd).lastPathComponent,
             latestActivityTitle: task.preview,
-            canStop: false
+            canStop: false,
+            canViewActivity: false
         )
     }
 }
