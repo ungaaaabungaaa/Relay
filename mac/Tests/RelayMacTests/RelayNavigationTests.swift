@@ -114,3 +114,30 @@ func relayMenuPresentationProtectsPairingAndReconnectSafety() {
     #expect(RelayReconnectPlan.forSupervisor(state: .emergencyStopped) == .restart)
     #expect(RelayReconnectPlan.forSupervisor(state: nil) == .create)
 }
+
+@Test
+func reconnectFailureStopsCloudWithoutReplacingTheRefreshError() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let modelURL = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac/RelayAppModel.swift")
+    let source = try String(contentsOf: modelURL, encoding: .utf8)
+
+    #expect(
+        source.contains(
+            "cloudConnected = false\n        cloudTunnelPhase = .stopped\n\n        do {"
+        )
+    )
+    #expect(
+        source.contains(
+            "guard bridgeState == .running else {\n                cloudTunnelPhase = .stopped\n                return"
+        )
+    )
+    #expect(
+        !source.contains(
+            "guard bridgeState == .running else {\n                lastError ="
+        )
+    )
+}

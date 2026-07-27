@@ -150,6 +150,7 @@ final class RelayAppModel: ObservableObject {
         cloudTunnelTask = nil
         await cloudTunnel.disconnect()
         cloudConnected = false
+        cloudTunnelPhase = .stopped
 
         do {
             let currentState = await supervisor?.snapshot().state
@@ -169,7 +170,10 @@ final class RelayAppModel: ObservableObject {
 
             try? await Task.sleep(for: .milliseconds(250))
             await refresh()
-            guard bridgeState == .running else { return }
+            guard bridgeState == .running else {
+                cloudTunnelPhase = .stopped
+                return
+            }
             await restoreRelayCloudSession()
             updateSetupState(bridgeReady: true)
         } catch {
