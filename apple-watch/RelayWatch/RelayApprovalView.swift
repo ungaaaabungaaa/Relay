@@ -44,15 +44,14 @@ struct RelayApprovalView: View {
             )
             .font(.headline)
 
-            if approval.risk == .dangerous {
-                Label("Dangerous action", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.red)
-            } else {
-                Label("Review before approving", systemImage: "checkmark.shield")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
+            Label(
+                "Risk: \(approval.risk.rawValue.capitalized)",
+                systemImage: approval.risk == .dangerous
+                    ? "exclamationmark.triangle.fill"
+                    : "checkmark.shield"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(approval.risk == .dangerous ? .orange : .secondary)
 
             if let command = approval.command {
                 Text("Command")
@@ -85,7 +84,7 @@ struct RelayApprovalView: View {
                         : "exclamationmark.triangle"
                 )
                 .font(.caption2)
-                .foregroundStyle(approval.risk == .dangerous ? .red : .primary)
+                .foregroundStyle(approval.risk == .dangerous ? .orange : .primary)
             }
         }
     }

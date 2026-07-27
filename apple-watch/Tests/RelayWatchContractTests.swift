@@ -139,12 +139,25 @@ func questionProgressRequiresEveryAnswerBeforeSend() throws {
 }
 
 @Test
-func approvalSourceKeepsExactContentAndBothConfirmations() throws {
+func approvalSourceRendersReviewDataAndDangerousSafeguards() throws {
     let source = try relayWatchSource(named: "RelayApprovalView.swift")
 
     #expect(source.contains("RelayAdaptiveContainer"))
+    #expect(source.contains("Risk: \\(approval.risk.rawValue.capitalized)"))
+    #expect(source.contains(".foregroundStyle(approval.risk == .dangerous ? .orange : .primary)"))
+    #expect(!source.contains(".foregroundStyle(.red)"))
+    #expect(source.contains("Text(\"Command\")"))
+    #expect(source.contains("Text(command)"))
+    #expect(source.contains("Text(\"Reason\")"))
+    #expect(source.contains("Text(reason)"))
+    #expect(source.contains("Text(\"Working directory\")"))
+    #expect(source.contains("Label(cwd, systemImage: \"folder\")"))
+    #expect(source.contains("ForEach(consequences(for: approval), id: \\.self)"))
+    #expect(source.contains("WKInterfaceDevice.current().play(.notification)"))
     #expect(source.contains("confirmNormal"))
     #expect(source.contains("confirmDangerous"))
+    #expect(source.contains("Button(\"Deny\", role: .destructive)"))
+    #expect(source.contains("Button(\"Approve dangerous action\", role: .destructive)"))
     #expect(!source.contains("lineLimit"))
 }
 
