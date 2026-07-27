@@ -78,7 +78,7 @@ struct RelayConnectionBanner: View {
                     .foregroundStyle(.secondary)
             } else {
                 Label("Relay live", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.mint)
+                    .foregroundStyle(RelayWatchStyle.foreground)
             }
             if let error = model.error {
                 Text(error).font(.caption2).foregroundStyle(.orange)

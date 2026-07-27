@@ -173,11 +173,12 @@ test("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
   assert.doesNotMatch(macApp, /systemImage:\s*model\.menuBarSymbol/);
 });
 
-test.skip("Task 4 uses RelayWatchMark in the Watch root", () => {
+test("Task 4 uses RelayWatchMark in the Watch root", () => {
   assert.match(rootView, /RelayWatchMark/);
+  assert.match(rootView, /\.tint\(RelayWatchStyle\.accent\)/);
 });
 
-test.skip("Task 4 removes mint styling from Watch production sources", async () => {
+test("Task 4 removes mint styling from Watch production sources", async () => {
   const sources = await Promise.all([
     "RelayWatchRootView.swift",
     "RelayInboxViews.swift",
@@ -189,4 +190,8 @@ test.skip("Task 4 removes mint styling from Watch production sources", async () 
   ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
 
   assert.doesNotMatch(sources.join("\n"), /\.mint/);
+});
+
+test("Task 4 compiles RelayWatchStyle in the Watch target", () => {
+  expectTargetSources(["RelayWatchStyle.swift"]);
 });

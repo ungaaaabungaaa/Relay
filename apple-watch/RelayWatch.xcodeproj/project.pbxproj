@@ -30,6 +30,7 @@
 		A00000000000000000000016 /* RelayVoiceLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* RelayVoiceLifecycle.swift */; };
 		A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* RelayAudioRecorder.swift */; };
 		A00000000000000000000018 /* RelayVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* RelayVoiceView.swift */; };
+		A00000000000000000000019 /* RelayWatchStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001A /* RelayWatchStyle.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +58,7 @@
 		B00000000000000000000017 /* RelayVoiceLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayVoiceLifecycle.swift; sourceTree = "<group>"; };
 		B00000000000000000000018 /* RelayAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayAudioRecorder.swift; sourceTree = "<group>"; };
 		B00000000000000000000019 /* RelayVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayVoiceView.swift; sourceTree = "<group>"; };
+		B0000000000000000000001A /* RelayWatchStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchStyle.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 				B00000000000000000000017 /* RelayVoiceLifecycle.swift */,
 				B00000000000000000000018 /* RelayAudioRecorder.swift */,
 				B00000000000000000000019 /* RelayVoiceView.swift */,
+				B0000000000000000000001A /* RelayWatchStyle.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
 			);
 			path = RelayWatch;
@@ -211,6 +214,7 @@
 				A00000000000000000000016 /* RelayVoiceLifecycle.swift in Sources */,
 				A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */,
 				A00000000000000000000018 /* RelayVoiceView.swift in Sources */,
+				A00000000000000000000019 /* RelayWatchStyle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

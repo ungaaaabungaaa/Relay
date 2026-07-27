@@ -26,7 +26,7 @@ struct RelayWatchRootView: View {
                 destination
             }
         }
-        .tint(.mint)
+        .tint(RelayWatchStyle.accent)
     }
 
     @ViewBuilder
@@ -39,7 +39,9 @@ struct RelayWatchRootView: View {
         case let .confirmMac(name, fingerprint, _):
             ScrollView {
                 VStack(spacing: 10) {
-                    Image(systemName: "checkmark.shield").font(.title).foregroundStyle(.mint)
+                    Image(systemName: "checkmark.shield")
+                        .font(.title)
+                        .foregroundStyle(RelayWatchStyle.accent)
                     Text(name).font(.headline)
                     Text("Mac \(fingerprint)").font(.caption2.monospaced())
                     Text("Watch \(model.watchFingerprint)").font(.caption2.monospaced())
@@ -67,10 +69,11 @@ struct RelayWatchRootView: View {
     private var pairingCodeEntry: some View {
         ScrollView {
             VStack(spacing: 10) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.title).foregroundStyle(.mint).accessibilityHidden(true)
-                Text("Pair Relay Mac").font(.headline)
-                Text("Start secure pairing on the Mac, then enter its six-character code.")
+                RelayWatchMark()
+                    .frame(width: 44, height: 32)
+                    .accessibilityHidden(true)
+                Text("Pair with Mac").font(.headline)
+                Text("Enter the six-character code from Relay on your Mac.")
                     .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 TextField("6-character code", text: $model.pairingCode)
                     .textInputAutocapitalization(.characters)
