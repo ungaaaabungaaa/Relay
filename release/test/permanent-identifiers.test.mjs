@@ -17,6 +17,10 @@ test("consumer builds use permanent Apple product identifiers", async () => {
   assert.match(macPackaging, /CFBundleIconFile string AppIcon/);
   assert.match(macPackaging, /LSUIElement bool false/);
   assert.doesNotMatch(macPackaging, /LSUIElement bool true/);
+  assert.match(
+    macPackaging,
+    /install_name_tool -add_rpath[\s\\]+"@executable_path\/\.\.\/Frameworks"/,
+  );
   assert.doesNotMatch(macPackaging, /NSBonjourServices/);
   assert.doesNotMatch(macPackaging, /NSLocalNetworkUsageDescription/);
 });

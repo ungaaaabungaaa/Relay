@@ -64,6 +64,9 @@ swift_binary_path=$(swift build \
 
 cp "${swift_binary_path}/RelayMac" "${macos_path}/Relay"
 cp -R "${swift_binary_path}/Sparkle.framework" "${frameworks_path}/Sparkle.framework"
+/usr/bin/install_name_tool -add_rpath \
+  "@executable_path/../Frameworks" \
+  "${macos_path}/Relay"
 cp "${repository_root}/dist/relay-bridge-arm64" "${resources_path}/relay-bridge-arm64"
 cp "${repository_root}/LICENSE" "${resources_path}/LICENSE"
 cp "${repository_root}/NOTICE" "${resources_path}/NOTICE"
