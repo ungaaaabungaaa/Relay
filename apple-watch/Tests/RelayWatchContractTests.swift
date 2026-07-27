@@ -80,6 +80,54 @@ func activeTaskSummaryUsesOnlyTheLatestActivity() {
     #expect(summary.canStop)
 }
 
+@Test
+func instructionTargetFallsBackToTheRunningCurrentTask() {
+    let idle = taskFixture(id: "idle", status: .idle)
+    let running = taskFixture(id: "running", status: .running)
+
+    let target = RelayTaskPresentation.instructionTask(
+        routeTaskID: nil,
+        selectedTaskID: nil,
+        tasks: [idle, running]
+    )
+
+    #expect(target?.id == "running")
+}
+
+@Test
+func instructionTargetRejectsAStaleSelectionWithoutRunningFallback() {
+    let idle = taskFixture(id: "idle", status: .idle)
+
+    let target = RelayTaskPresentation.instructionTask(
+        routeTaskID: nil,
+        selectedTaskID: "stale-task",
+        tasks: [idle]
+    )
+
+    #expect(target == nil)
+}
+
+@Test
+func cachedTaskSummaryRemainsReviewableWithoutDetail() {
+    let summary = RelayTaskPresentation.summary(taskFixture(id: "cached", status: .offline))
+
+    #expect(summary.statusTitle == "Offline")
+    #expect(summary.workspaceName == "workspace")
+    #expect(summary.latestActivityTitle == "Cached preview")
+    #expect(!summary.canStop)
+}
+
+private func taskFixture(id: String, status: RelayTask.Status) -> RelayTask {
+    RelayTask(
+        id: id,
+        title: "Task \(id)",
+        preview: "Cached preview",
+        cwd: "/workspace",
+        updatedAt: 1,
+        status: status
+    )
+}
+
 private func approvalFixture(_ id: String) -> RelayApproval {
     RelayApproval(
         id: id, threadId: "task", turnId: "turn", itemId: "item-\(id)",

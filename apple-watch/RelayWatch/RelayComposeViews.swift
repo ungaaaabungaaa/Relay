@@ -22,14 +22,18 @@ struct RelayInstructionView: View {
 
     private var canSend: Bool {
         model.actionsEnabled && !model.mutationPending
-            && selectedTaskID != nil
+            && selectedTask != nil
             && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var selectedTaskID: String? { taskID ?? model.selectedTaskID }
     private var selectedTask: RelayTask? {
-        selectedTaskID.flatMap { id in model.tasks.first { $0.id == id } }
+        RelayTaskPresentation.instructionTask(
+            routeTaskID: taskID,
+            selectedTaskID: model.selectedTaskID,
+            tasks: model.tasks
+        )
     }
+    private var selectedTaskID: String? { selectedTask?.id }
 
     private func send() {
         guard let taskID = selectedTaskID else { return }

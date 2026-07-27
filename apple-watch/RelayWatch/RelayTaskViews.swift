@@ -30,12 +30,20 @@ struct RelayTaskSummaryView: View {
 
     var body: some View {
         Group {
-            if let task {
-                let summary = RelayTaskPresentation.summary(task)
+            if let detail {
+                let summary = RelayTaskPresentation.summary(detail)
                 RelayAdaptiveContainer {
-                    summaryContent(task: task, summary: summary)
+                    summaryContent(title: detail.title, taskID: detail.id, summary: summary)
                 } scrolling: {
-                    summaryContent(task: task, summary: summary)
+                    summaryContent(title: detail.title, taskID: detail.id, summary: summary)
+                        .padding(.horizontal, 4)
+                }
+            } else if let fallbackTask {
+                let summary = RelayTaskPresentation.summary(fallbackTask)
+                RelayAdaptiveContainer {
+                    summaryContent(title: fallbackTask.title, taskID: fallbackTask.id, summary: summary)
+                } scrolling: {
+                    summaryContent(title: fallbackTask.title, taskID: fallbackTask.id, summary: summary)
                         .padding(.horizontal, 4)
                 }
             } else {
@@ -47,11 +55,11 @@ struct RelayTaskSummaryView: View {
     }
 
     @ViewBuilder
-    private func summaryContent(task: RelayTaskDetail, summary: RelayTaskSummary) -> some View {
+    private func summaryContent(title: String, taskID: String, summary: RelayTaskSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             Text(summary.statusTitle).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Text(task.title).font(.headline)
+            Text(title).font(.headline)
             Label(summary.workspaceName, systemImage: "folder")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -59,7 +67,7 @@ struct RelayTaskSummaryView: View {
                 Text("Latest activity").font(.caption2).foregroundStyle(.secondary)
                 Text(summary.latestActivityTitle).font(.caption)
             }
-            Button("Instruct") { model.navigate(to: .instruction(task.id)) }
+            Button("Instruct") { model.navigate(to: .instruction(taskID)) }
                 .disabled(!canMutate)
             if summary.canStop {
                 Button("Stop", role: .destructive) { confirmStop = true }
@@ -69,16 +77,17 @@ struct RelayTaskSummaryView: View {
                         isPresented: $confirmStop,
                         titleVisibility: .visible
                     ) {
-                        Button("Stop turn", role: .destructive) { stop(task.id) }
+                        Button("Stop turn", role: .destructive) { stop(taskID) }
                         Button("Cancel", role: .cancel) {}
                     }
             }
-            Button("View full activity") { model.navigate(to: .activity(task.id)) }
+            Button("View full activity") { model.navigate(to: .activity(taskID)) }
         }
     }
 
     private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
-    private var task: RelayTaskDetail? { model.taskDetails[taskID] }
+    private var detail: RelayTaskDetail? { model.taskDetails[taskID] }
+    private var fallbackTask: RelayTask? { model.tasks.first { $0.id == taskID } }
 
     private func stop(_ taskID: String) {
         Task {

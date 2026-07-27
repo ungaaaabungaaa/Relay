@@ -50,6 +50,20 @@ struct RelayTaskSummary: Equatable, Sendable {
 }
 
 enum RelayTaskPresentation {
+    static func instructionTask(
+        routeTaskID: String?,
+        selectedTaskID: String?,
+        tasks: [RelayTask]
+    ) -> RelayTask? {
+        if let routeTaskID, let task = tasks.first(where: { $0.id == routeTaskID }) {
+            return task
+        }
+        if let selectedTaskID, let task = tasks.first(where: { $0.id == selectedTaskID }) {
+            return task
+        }
+        return tasks.first(where: { $0.status == .running })
+    }
+
     static func summary(_ detail: RelayTaskDetail) -> RelayTaskSummary {
         let latestActivity = detail.activity.enumerated().max { lhs, rhs in
             let lhsDate = lhs.element.occurredAt ?? detail.updatedAt
@@ -61,6 +75,15 @@ enum RelayTaskPresentation {
             workspaceName: URL(fileURLWithPath: detail.cwd).lastPathComponent,
             latestActivityTitle: latestActivity?.title ?? detail.preview,
             canStop: detail.activeTurnId != nil
+        )
+    }
+
+    static func summary(_ task: RelayTask) -> RelayTaskSummary {
+        RelayTaskSummary(
+            statusTitle: task.status.rawValue.capitalized,
+            workspaceName: URL(fileURLWithPath: task.cwd).lastPathComponent,
+            latestActivityTitle: task.preview,
+            canStop: false
         )
     }
 }
