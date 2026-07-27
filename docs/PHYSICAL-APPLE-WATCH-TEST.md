@@ -21,16 +21,19 @@ audio in the evidence.
 | --- | --- | --- |
 | Xcode install to a paired physical Apple Watch | Pending | |
 | Signed TestFlight install on the same release candidate | Pending | |
-| Six-character code pairing and matching Mac fingerprint on both devices | Pending | |
+| Mac menu: white UFO, Diagnostics → Refresh, Relay Cloud sign-in, then Apple Watch → Start Secure Pairing | Pending | |
+| Six-character code pairing: Pair with Mac → Find Mac → matching Mac fingerprint → Fingerprints match | Pending | |
 | Watch fingerprint approval on the Mac and scoped credential receipt | Pending | |
 | Wi-Fi connection and transition to cellular where the model supports it | Pending | |
 | Recovery after Mac sleep, wake, network loss, and Relay restart | Pending | |
+| All clear home: Tasks, New task, Voice, and More tiles | Pending | |
+| Needs you pending queue: first two items and remaining-count copy | Pending | |
 | Normal approval and dangerous approval confirmation | Pending | |
 | Question response from the Apple Watch | Pending | |
-| Instruction sent to an existing task | Pending | |
-| Existing-task list, detail, and stop controls | Pending | |
-| New task in an approved temporary workspace | Pending | |
+| Existing-task list, summary, activity, instruction, and stop controls | Pending | |
+| New task workspace, model, prompt, review, and submit steps in an approved temporary workspace | Pending | |
 | Recorded voice, transcript review, edit, send, and cancel paths | Pending | |
+| More: Voice, Refresh, History, and Settings, including Watch identity and About Relay | Pending | |
 | Watch revocation closes access and removes cached credentials | Pending | |
 | Stale and offline states block each mutation and queue no action | Pending | |
 | Accessibility labels, large text, VoiceOver, touch targets, and haptics | Pending | |
@@ -46,6 +49,9 @@ Record the Apple Watch model, case size, watchOS version, Mac model, macOS
 version, Relay versions, network path, result, and evidence location. Add a
 model to [COMPATIBILITY.md](COMPATIBILITY.md) after a maintainer reviews the
 evidence.
+
+No simulator or physical-device visual result is recorded by this checklist.
+Source contracts and unsigned compilation do not replace this evidence.
 
 The release remains blocked while any row is pending or failed. A source test,
 Swift package test, unsigned generic build, or preview screen cannot replace a

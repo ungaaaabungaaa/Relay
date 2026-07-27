@@ -168,10 +168,12 @@ private func questionFixture(_ id: String) -> RelayQuestion {
 @Test
 func watchSourcesUseNativeNavigationAndNoCustomBackButton() throws {
     let sources = try relayWatchSources()
-    #expect(sources["RelayWatchRootView.swift"]?.contains("NavigationStack(path:") == true)
+    let allSources = sources.values.joined(separator: "\n")
+    #expect(!allSources.contains("RelayWatchScreen"))
+    #expect(!allSources.contains("RelayBackButton"))
+    #expect(allSources.contains("NavigationStack(path:"))
+    #expect(allSources.contains("Image(systemName:"))
     #expect(sources["RelayWatchNavigation.swift"]?.contains("enum RelayWatchRoute") == true)
-    #expect(sources.values.joined().contains("RelayBackButton") == false)
-    #expect(sources.values.joined().contains("RelayWatchScreen") == false)
     #expect(sources["RelayWatchModel.swift"]?.contains("func show(") == false)
 }
 

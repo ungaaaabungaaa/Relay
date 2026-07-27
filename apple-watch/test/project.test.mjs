@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -37,7 +37,8 @@ const haptics = await readFile(
 );
 const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
 const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
-const macComponentsURL = new URL("../../mac/Sources/RelayMac/Components.swift", import.meta.url);
+const macMenuContentURL = new URL("../../mac/Sources/RelayMac/MenuContent.swift", import.meta.url);
+const watchSourceDirectoryURL = new URL("../RelayWatch/", import.meta.url);
 const watchStyleURL = new URL("../RelayWatch/RelayWatchStyle.swift", import.meta.url);
 const sourceCheckURL = new URL("../../scripts/check-watchos-source.sh", import.meta.url);
 const watchAccentURL = new URL("../RelayWatch/Assets.xcassets/AccentColor.colorset/Contents.json", import.meta.url);
@@ -248,26 +249,34 @@ test("Task 4 compiles RelayWatchStyle in the Watch target", () => {
   expectTargetSources(["RelayWatchStyle.swift"]);
 });
 
-test("final Watch source check includes the presentation style", async () => {
-  const sourceCheck = await readFile(sourceCheckURL, "utf8");
+test("final Watch source check includes every Watch source", async () => {
+  const [sourceCheck, sourceNames] = await Promise.all([
+    readFile(sourceCheckURL, "utf8"),
+    readdir(watchSourceDirectoryURL),
+  ]);
+  const sourceFiles = sourceNames.filter((name) => name.endsWith(".swift"));
 
-  assert.match(sourceCheck, /RelayWatchStyle\.swift/);
-  assert.match(sourceCheck, /RelayHaptics\.swift/);
-  assert.match(sourceCheck, /RelayMoreViews\.swift/);
+  for (const sourceFile of sourceFiles) {
+    assert.match(
+      sourceCheck,
+      new RegExp(`RelayWatch/${sourceFile.replace(".", "\\.")}`),
+      `watchOS source checker must include ${sourceFile}`,
+    );
+  }
 });
 
-test("final Apple visual styles use system blue and semantic surfaces", async () => {
-  const [components, accentAsset] = await Promise.all([
-    readFile(macComponentsURL, "utf8"),
+test("final Mac contract retains the reviewed native menu architecture", async () => {
+  const [macApp, menuContent, accentAsset] = await Promise.all([
+    readFile(macAppURL, "utf8"),
+    readFile(macMenuContentURL, "utf8"),
     readFile(watchAccentURL, "utf8"),
   ]);
 
-  assert.match(components, /static let accent = Color\.blue/);
-  assert.doesNotMatch(components, /Color\.accentColor/);
-  assert.doesNotMatch(components, /eyebrow\.uppercased\(\)/);
-  assert.doesNotMatch(components, /\.white\.opacity/);
-  assert.match(components, /Color\(nsColor: \.separatorColor\)/);
-  assert.match(components, /Color\(nsColor: \.controlBackgroundColor\)/);
+  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?MenuContent\(model: model\)/);
+  assert.match(macApp, /\.menuBarExtraStyle\(\.menu\)/);
+  assert.match(menuContent, /Menu\("Apple Watch"\)/);
+  assert.match(menuContent, /Menu\("Relay Cloud"\)/);
+  assert.match(menuContent, /Menu\("Diagnostics"\)[\s\S]*?Button\("Refresh"\)/);
   assert.match(accentAsset, /"red" : "0\.000"/);
   assert.match(accentAsset, /"green" : "0\.478"/);
   assert.match(accentAsset, /"blue" : "1\.000"/);

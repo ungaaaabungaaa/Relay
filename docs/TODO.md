@@ -5,24 +5,35 @@ distribution proof.
 
 ## Automated local checks
 
-- [x] `pnpm test` — every Node package test passes, including bridge/cloud
-      integration, encrypted Apple journeys, replay, voice, and lifecycle cases.
-- [x] `pnpm typecheck` — all TypeScript workspaces typecheck.
-- [x] `pnpm build:bridge-sea` — the arm64 bridge single-executable artifact builds.
-- [x] `pnpm smoke:bridge-sea` — the built bridge passes its launch smoke check.
-- [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --disable-sandbox --package-path mac`
-      — every RelayCore and RelayMac test passes.
+The following native-Watch checks were recorded from the `watch-native-ui`
+release worktree on 2026-07-27. They are local source/build evidence, not a
+device or distribution result.
+
+- [ ] `pnpm --filter @relay/bridge test`, `pnpm test`, and `pnpm typecheck`
+      — not re-run here: the isolated worktree has no installed Node packages,
+      and package-registry egress was unavailable. Re-run after restoring the
+      locked dependency cache or granting approved registry access.
+- [ ] `pnpm build:bridge-sea` and `pnpm smoke:bridge-sea` — require the same
+      Node dependency gate before they can be re-verified from this worktree.
+- [ ] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --disable-sandbox --package-path mac`
+      and `xcrun swift build --disable-sandbox --package-path mac` — pending:
+      the pinned Sparkle package is not cached in this worktree and GitHub
+      access was unavailable. Re-run after resolving that dependency.
+- [x] `node --test apple-watch/test/project.test.mjs` — 17 project/source
+      contracts pass, including the native menu contract and complete source-
+      checker coverage.
 - [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --disable-sandbox --package-path apple-watch`
-      — every Watch transport, pairing, feature, and voice lifecycle test passes.
+      — 62 Watch transport, pairing, feature, voice-lifecycle, and source
+      contract tests pass.
 - [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/check-watchos-source.sh`
       — the app sources typecheck for both supported watchOS architectures.
-- [x] Unsigned generic watchOS build — Xcode completed the `RelayWatch` Debug
-      build with `CODE_SIGNING_ALLOWED=NO` for `generic/platform=watchOS` and
-      produced the app binary and compiled asset catalog.
-- [x] Unsigned Watch simulator build — Xcode completed the `RelayWatch` Debug
-      build with `CODE_SIGNING_ALLOWED=NO` for Series 11 (46mm), watchOS 26.0,
-      destination `18534BA8-F531-45AF-AE90-B2407C119455`, using fresh derived
-      data at `/private/tmp/relay-watch-ufo-series11`.
+- [ ] Unsigned generic watchOS build — attempted with fresh derived data at
+      `/private/tmp/relay-watch-native-generic`; Swift sources compiled, but
+      `actool` could not complete because this Xcode installation has no
+      available watch simulator runtime. Re-run after installing a runtime.
+- [ ] Unsigned Watch simulator builds and inspection — `-showdestinations`
+      reported only generic placeholders because CoreSimulatorService was
+      unavailable. No 40 mm, 44 mm, or 46 mm result is recorded.
 
 ## Solo private-beta visual checklist
 
@@ -36,8 +47,9 @@ distribution proof.
       instruction, six-character field, Find Mac button, fingerprints, and
       errors must remain readable and tappable without clipping.
 - [ ] Check the Watch screens at the largest supported Dynamic Type size;
-      navigate pairing, inbox, approvals, questions, tasks, compose, and voice
-      to confirm scrolling and controls do not overlap or clip.
+      navigate Pair with Mac, the pending `Needs you` queue, All clear,
+      approvals, questions, tasks, instruction, New task, Voice, and More to
+      confirm scrolling and controls do not overlap or clip.
 - [ ] Enable VoiceOver and confirm meaningful labels and order for the UFO mark,
       pairing actions, status, warnings, destructive actions, and voice controls.
 - [ ] Record screenshots or observations for any clipping, contrast, truncation,

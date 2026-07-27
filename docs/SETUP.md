@@ -20,22 +20,24 @@ through the App Store. This repository does not claim that either distribution
 channel is live.
 
 1. Install the supplied Relay Mac build on an Apple-silicon Mac running macOS
-   14 or newer.
-2. Open Relay and confirm that the UFO appears beside the other menu-bar items,
-   then confirm it finds the local Codex installation and starts the loopback
-   bridge. No dashboard window is expected; exercise every root item, submenu,
-   and confirmation dialog from the native menu.
-3. Enter the invited email address. Open the single-use link in the browser to
-   finish the PKCE login.
-4. Install Relay for Codex on the Apple Watch from the TestFlight or App Store
-   link supplied with the invite.
-5. In Relay for Mac, open **Apple Watch** from the native menu and create a
-   six-character pairing code.
-6. Enter the code on the Apple Watch.
-7. Compare the Mac fingerprint on both devices. Confirm it on the watch, then
-   approve the watch fingerprint on the Mac.
-8. Select the Mac workspace roots that the watch may use.
-9. Keep the Mac awake, online, and running Relay and Codex.
+   14 or newer. Find the white UFO beside the other menu-bar items; no
+   dashboard window is expected.
+2. Open **Diagnostics → Refresh** and confirm the bridge and Codex status.
+3. Open **Relay Cloud → Sign In…** and complete the invite/PKCE link in the
+   browser when credentials are available.
+4. Only after both bridge and Relay Cloud are ready, open **Apple Watch → Start
+   Secure Pairing** to create the six-character code. The command remains
+   disabled until those prerequisites are met.
+5. Install Relay for Codex on the Apple Watch from the TestFlight or App Store
+   link supplied with the invite. On the Watch, enter the code in **Pair with
+   Mac**, tap **Find Mac**, compare fingerprints, then tap **Fingerprints
+   match**.
+6. Approve the watch fingerprint on the Mac, then select the Mac workspace
+   roots that the watch may use.
+7. Keep the Mac awake, online, and running Relay and Codex. Once paired, the
+   Watch home shows either **Needs you** (up to two pending actions) or **All
+   clear** with **Tasks**, **New task**, **Voice**, and **More**. **More**
+   contains **Voice**, **Refresh**, **History**, and **Settings**.
 
 The current source implements pairing, live destinations, pushed-event refresh,
 reviewed voice, reconnect refresh, and stale mutation blocking. These paths
@@ -70,9 +72,10 @@ pnpm install --frozen-lockfile
 pnpm build:bridge-sea
 
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
-xcrun swift test --package-path mac
+xcrun swift test --disable-sandbox --package-path mac
+xcrun swift build --disable-sandbox --package-path mac
 xcrun swift run --package-path mac RelayMac
-xcrun swift test --package-path apple-watch
+xcrun swift test --disable-sandbox --package-path apple-watch
 scripts/check-watchos-source.sh
 ```
 
@@ -84,7 +87,7 @@ xcodebuild \
   -scheme RelayWatch \
   -configuration Debug \
   -destination 'generic/platform=watchOS' \
-  -derivedDataPath /tmp/relay-watch-derived-data \
+  -derivedDataPath /private/tmp/relay-watch-derived-data \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
