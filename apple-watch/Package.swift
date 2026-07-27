@@ -19,6 +19,11 @@ let package = Package(
                 "RelayWatchApp.swift",
                 "RelayWatchModel.swift",
                 "RelayWatchRootView.swift",
+                "RelayApprovalView.swift",
+                "RelayComposeViews.swift",
+                "RelayInboxViews.swift",
+                "RelayQuestionView.swift",
+                "RelayTaskViews.swift",
             ],
             sources: [
                 "RelayAPIClient.swift",

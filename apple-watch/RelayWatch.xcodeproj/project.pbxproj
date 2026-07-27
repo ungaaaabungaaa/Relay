@@ -22,6 +22,11 @@
 		A0000000000000000000000E /* RelayPairingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000F /* RelayPairingState.swift */; };
 		A0000000000000000000000F /* RelayWatchFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* RelayWatchFeature.swift */; };
 		A00000000000000000000010 /* RelayWatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* RelayWatchService.swift */; };
+		A00000000000000000000011 /* RelayInboxViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* RelayInboxViews.swift */; };
+		A00000000000000000000012 /* RelayApprovalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* RelayApprovalView.swift */; };
+		A00000000000000000000013 /* RelayQuestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* RelayQuestionView.swift */; };
+		A00000000000000000000014 /* RelayTaskViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* RelayTaskViews.swift */; };
+		A00000000000000000000015 /* RelayComposeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* RelayComposeViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +46,11 @@
 		B0000000000000000000000F /* RelayPairingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayPairingState.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* RelayWatchFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchFeature.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* RelayWatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchService.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* RelayInboxViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayInboxViews.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* RelayApprovalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayApprovalView.swift; sourceTree = "<group>"; };
+		B00000000000000000000014 /* RelayQuestionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayQuestionView.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 /* RelayTaskViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayTaskViews.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 /* RelayComposeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayComposeViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +89,11 @@
 				B0000000000000000000000F /* RelayPairingState.swift */,
 				B00000000000000000000010 /* RelayWatchFeature.swift */,
 				B00000000000000000000011 /* RelayWatchService.swift */,
+				B00000000000000000000012 /* RelayInboxViews.swift */,
+				B00000000000000000000013 /* RelayApprovalView.swift */,
+				B00000000000000000000014 /* RelayQuestionView.swift */,
+				B00000000000000000000015 /* RelayTaskViews.swift */,
+				B00000000000000000000016 /* RelayComposeViews.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
 			);
 			path = RelayWatch;
@@ -179,6 +194,11 @@
 				A0000000000000000000000E /* RelayPairingState.swift in Sources */,
 				A0000000000000000000000F /* RelayWatchFeature.swift in Sources */,
 				A00000000000000000000010 /* RelayWatchService.swift in Sources */,
+				A00000000000000000000011 /* RelayInboxViews.swift in Sources */,
+				A00000000000000000000012 /* RelayApprovalView.swift in Sources */,
+				A00000000000000000000013 /* RelayQuestionView.swift in Sources */,
+				A00000000000000000000014 /* RelayTaskViews.swift in Sources */,
+				A00000000000000000000015 /* RelayComposeViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

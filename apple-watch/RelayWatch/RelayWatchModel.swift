@@ -17,6 +17,9 @@ final class RelayWatchModel: ObservableObject {
     @Published var folders: [RelayFolder] = []
     @Published var mutationAttempts: [RelayMutationAttempt] = []
     @Published var cacheIsStale = true
+    @Published var selectedApprovalID: String?
+    @Published var selectedQuestionID: String?
+    @Published var selectedTaskID: String?
 
     private let identity = RelayWatchIdentity()
     private let agreementIdentity = RelayWatchAgreementIdentity()
@@ -43,6 +46,19 @@ final class RelayWatchModel: ObservableObject {
     var cachedInboxCount: Int { inbox.approvals.count + inbox.questions.count }
     var watchFingerprint: String { (try? identity.fingerprint()) ?? "Unavailable" }
     var actionsEnabled: Bool { connection == .live && !cacheIsStale }
+    var mutationPending: Bool { mutationAttempts.contains { $0.status == .pending } }
+    var selectedApproval: RelayApproval? {
+        inbox.approvals.first { $0.id == selectedApprovalID }
+    }
+    var selectedQuestion: RelayQuestion? {
+        inbox.questions.first { $0.id == selectedQuestionID }
+    }
+    var selectedTask: RelayTask? {
+        tasks.first { $0.id == selectedTaskID }
+    }
+    var selectedTaskDetail: RelayTaskDetail? {
+        selectedTaskID.flatMap { taskDetails[$0] }
+    }
 
     func beginPairing() {
         pairingPhase = .codeEntry
@@ -196,6 +212,34 @@ final class RelayWatchModel: ObservableObject {
     }
 
     func show(_ destination: RelayWatchScreen) { screen = destination }
+
+    func showApproval(_ id: String) {
+        selectedApprovalID = id
+        screen = .approval
+    }
+
+    func showQuestion(_ id: String) {
+        selectedQuestionID = id
+        screen = .question
+    }
+
+    func showTask(_ id: String, destination: RelayWatchScreen = .activity) {
+        selectedTaskID = id
+        screen = destination
+        Task { await loadTask(id) }
+    }
+
+    func reportActionFailure(_ error: Error) {
+        self.error = error is RelayUserError
+            ? "That action is unavailable. Refresh and try again."
+            : "The Mac did not complete that action. Try again."
+        WKInterfaceDevice.current().play(.failure)
+    }
+
+    func reportActionSuccess() {
+        error = nil
+        WKInterfaceDevice.current().play(.success)
+    }
 
     func revokeLocally() {
         pairingTask?.cancel()

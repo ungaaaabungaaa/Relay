@@ -14,6 +14,10 @@ const relaySocket = await readFile(
   new URL("../RelayWatch/RelaySocket.swift", import.meta.url),
   "utf8",
 );
+const rootView = await readFile(
+  new URL("../RelayWatch/RelayWatchRootView.swift", import.meta.url),
+  "utf8",
+);
 
 function expectTargetSources(names, contents = project) {
   const sourceMembership = targetSourceMembership(contents);
@@ -92,6 +96,37 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayWatchFeature.swift",
     "RelayWatchService.swift",
     "RelayWatchTypes.swift",
+  ]);
+});
+
+test("Watch destinations use bridge data instead of preview fixtures", async () => {
+  const viewSources = await Promise.all([
+    "RelayWatchRootView.swift",
+    "RelayInboxViews.swift",
+    "RelayApprovalView.swift",
+    "RelayQuestionView.swift",
+    "RelayTaskViews.swift",
+    "RelayComposeViews.swift",
+  ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
+  const runtimeUI = viewSources.join("\n");
+
+  assert.doesNotMatch(runtimeUI, /git push origin main/);
+  assert.doesNotMatch(runtimeUI, /Which release channel should Relay use\?/);
+  assert.doesNotMatch(runtimeUI, /Relay launch readiness/);
+  assert.match(runtimeUI, /approval\.command/);
+  assert.match(runtimeUI, /item\.options/);
+  assert.match(runtimeUI, /model\.tasks/);
+  assert.match(runtimeUI, /accessibilityHint\(/);
+  assert.doesNotMatch(rootView, /RelayWatchDestinationView/);
+});
+
+test("Watch destination view sources belong to the app target", () => {
+  expectTargetSources([
+    "RelayInboxViews.swift",
+    "RelayApprovalView.swift",
+    "RelayQuestionView.swift",
+    "RelayTaskViews.swift",
+    "RelayComposeViews.swift",
   ]);
 });
 
