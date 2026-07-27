@@ -129,6 +129,26 @@ func questionAnswersRejectOptionsNotAdvertisedByTheBridge() throws {
 }
 
 @Test
+func questionProgressRequiresEveryAnswerBeforeSend() throws {
+    let progress = RelayQuestionProgress(questionCount: 2)
+
+    #expect(progress.title(at: 0) == "Question 1 of 2")
+    #expect(progress.actionTitle(at: 0) == "Next question")
+    #expect(progress.actionTitle(at: 1) == "Send answer")
+    #expect(!progress.canSubmit(answeredQuestionIDs: ["one"], requiredIDs: ["one", "two"]))
+}
+
+@Test
+func approvalSourceKeepsExactContentAndBothConfirmations() throws {
+    let source = try relayWatchSource(named: "RelayApprovalView.swift")
+
+    #expect(source.contains("RelayAdaptiveContainer"))
+    #expect(source.contains("confirmNormal"))
+    #expect(source.contains("confirmDangerous"))
+    #expect(!source.contains("lineLimit"))
+}
+
+@Test
 func mutationEndpointsAreMarkedAndEncodeTheirLiteralBody() throws {
     let endpoint = try RelayEndpoint<RelayMutationAcknowledgement>.approve(
         approvalID: "approval-1",

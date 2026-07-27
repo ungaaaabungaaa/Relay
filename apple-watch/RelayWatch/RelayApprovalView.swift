@@ -8,59 +8,147 @@ struct RelayApprovalView: View {
     @State private var confirmDangerous = false
 
     var body: some View {
-        List {
-            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
-            if let approval {
-                Section(approval.kind.rawValue.capitalized) {
-                    if let command = approval.command {
-                        Text(command).font(.caption.monospaced())
-                    }
-                    if let cwd = approval.cwd {
-                        Label(cwd, systemImage: "folder").font(.caption2)
-                    }
-                    if let reason = approval.reason { Text(reason).font(.caption2) }
+        RelayAdaptiveContainer {
+            VStack(alignment: .leading, spacing: 10) {
+                RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
+                if let approval {
+                    approvalContent(approval)
+                    compactActions(for: approval)
+                } else {
+                    Text("This approval is no longer pending.")
                 }
-                Section(approval.risk == .dangerous ? "Dangerous action" : "Consequence") {
-                    ForEach(consequences(for: approval), id: \.self) { reason in
-                        Label(reason, systemImage: "exclamationmark.triangle")
-                            .font(.caption2)
-                    }
-                }
-                Button("Deny", role: .destructive) { deny(approval) }
-                    .disabled(!canMutate)
-                    .accessibilityHint("Rejects this exact Mac action without running it")
-                Button("Approve this action") {
-                    if approval.risk == .dangerous {
-                        WKInterfaceDevice.current().play(.notification)
-                        confirmDangerous = true
-                    } else {
-                        confirmNormal = true
-                    }
-                }
-                .disabled(!canMutate)
-                .accessibilityHint("Allows the displayed action and its listed consequences")
-                .confirmationDialog(
-                    "Approve the displayed action?",
-                    isPresented: $confirmNormal,
-                    titleVisibility: .visible
-                ) {
-                    Button("Approve") { approve(approval, dangerous: false) }
-                    Button("Cancel", role: .cancel) {}
-                }
-                .confirmationDialog(
-                    "This dangerous action can change external state. Approve it?",
-                    isPresented: $confirmDangerous,
-                    titleVisibility: .visible
-                ) {
-                    Button("Approve dangerous action", role: .destructive) {
-                        approve(approval, dangerous: true)
-                    }
-                    Button("Cancel", role: .cancel) {}
-                }
-            } else {
-                Text("This approval is no longer pending.")
+                RelayBackButton(model: model)
             }
-            RelayBackButton(model: model)
+        } scrolling: {
+            VStack(alignment: .leading, spacing: 12) {
+                RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
+                if let approval {
+                    approvalContent(approval)
+                    scrollingActions(for: approval)
+                } else {
+                    Text("This approval is no longer pending.")
+                }
+                RelayBackButton(model: model)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private func approvalContent(_ approval: RelayApproval) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                "\(approval.kind.rawValue.capitalized) review",
+                systemImage: approval.kind == .command ? "terminal" : "checklist"
+            )
+            .font(.headline)
+
+            if approval.risk == .dangerous {
+                Label("Dangerous action", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.red)
+            } else {
+                Label("Review before approving", systemImage: "checkmark.shield")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let command = approval.command {
+                Text("Command")
+                    .font(.caption.weight(.semibold))
+                Text(command)
+                    .font(.caption.monospaced())
+            }
+
+            if let reason = approval.reason {
+                Text("Reason")
+                    .font(.caption.weight(.semibold))
+                Text(reason)
+                    .font(.body)
+            }
+
+            if let cwd = approval.cwd {
+                Text("Working directory")
+                    .font(.caption.weight(.semibold))
+                Label(cwd, systemImage: "folder")
+                    .font(.caption2)
+            }
+
+            Text(approval.risk == .dangerous ? "Dangerous consequences" : "Consequences")
+                .font(.caption.weight(.semibold))
+            ForEach(consequences(for: approval), id: \.self) { consequence in
+                Label(
+                    consequence,
+                    systemImage: approval.risk == .dangerous
+                        ? "exclamationmark.triangle.fill"
+                        : "exclamationmark.triangle"
+                )
+                .font(.caption2)
+                .foregroundStyle(approval.risk == .dangerous ? .red : .primary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func compactActions(for approval: RelayApproval) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                denyButton(for: approval)
+                approveButton(for: approval)
+            }
+            VStack(spacing: 8) {
+                denyButton(for: approval)
+                    .frame(maxWidth: .infinity)
+                approveButton(for: approval)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func scrollingActions(for approval: RelayApproval) -> some View {
+        VStack(spacing: 8) {
+            denyButton(for: approval)
+                .frame(maxWidth: .infinity)
+            approveButton(for: approval)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func denyButton(for approval: RelayApproval) -> some View {
+        Button("Deny", role: .destructive) { deny(approval) }
+            .disabled(!canMutate)
+            .accessibilityHint("Rejects this exact Mac action without running it")
+    }
+
+    private func approveButton(for approval: RelayApproval) -> some View {
+        Button("Approve this action") {
+            if approval.risk == .dangerous {
+                WKInterfaceDevice.current().play(.notification)
+                confirmDangerous = true
+            } else {
+                confirmNormal = true
+            }
+        }
+        .disabled(!canMutate)
+        .accessibilityHint("Allows the displayed action and its listed consequences")
+        .confirmationDialog(
+            "Approve the displayed action?",
+            isPresented: $confirmNormal,
+            titleVisibility: .visible
+        ) {
+            Button("Approve") { approve(approval, dangerous: false) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "This dangerous action can change external state. Approve it?",
+            isPresented: $confirmDangerous,
+            titleVisibility: .visible
+        ) {
+            Button("Approve dangerous action", role: .destructive) {
+                approve(approval, dangerous: true)
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -81,6 +169,7 @@ struct RelayApprovalView: View {
     }
 
     private func deny(_ approval: RelayApproval) {
+        guard canMutate else { return }
         Task {
             do {
                 try await model.deny(approval.id)
@@ -91,6 +180,7 @@ struct RelayApprovalView: View {
     }
 
     private func approve(_ approval: RelayApproval, dangerous: Bool) {
+        guard canMutate else { return }
         Task {
             do {
                 try await model.approve(approval.id, dangerousConfirmation: dangerous)

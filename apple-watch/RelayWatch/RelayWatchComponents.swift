@@ -18,6 +18,7 @@ struct RelayAdaptiveContainer<Compact: View, Scrolling: View>: View {
             ScrollView(.vertical) {
                 scrolling
             }
+            .scrollIndicators(.hidden)
         }
     }
 }

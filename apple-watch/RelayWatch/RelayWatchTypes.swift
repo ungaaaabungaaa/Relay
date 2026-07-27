@@ -122,6 +122,26 @@ enum RelayQuestionAnswerError: Error, Equatable, Sendable {
     case incompleteAnswers, unknownQuestion, invalidOption
 }
 
+struct RelayQuestionProgress: Equatable, Sendable {
+    let questionCount: Int
+
+    init(questionCount: Int) {
+        self.questionCount = questionCount
+    }
+
+    func title(at index: Int) -> String {
+        "Question \(index + 1) of \(questionCount)"
+    }
+
+    func actionTitle(at index: Int) -> String {
+        index == questionCount - 1 ? "Send answer" : "Next question"
+    }
+
+    func canSubmit(answeredQuestionIDs: [String], requiredIDs: [String]) -> Bool {
+        Set(requiredIDs).isSubset(of: Set(answeredQuestionIDs))
+    }
+}
+
 struct RelayModel: Codable, Equatable, Sendable, Identifiable {
     let id: String
     let name: String
