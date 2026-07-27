@@ -2,6 +2,10 @@ import CryptoKit
 import Foundation
 
 let relayCloudAPIOrigin = URL(string: "https://api.relayforcodex.com")!
+let relayVoiceChunkBytes = 128 * 1024
+let relayVoiceMaximumBytes = 2 * 1024 * 1024
+let relayVoiceMaximumDurationMs = 30_000
+let relayVoiceMaximumChunks = 16
 
 enum RelayWatchScreen: String, CaseIterable, Identifiable {
     case onboarding, pairing, inbox, approval, question, tasks, activity

@@ -8,6 +8,30 @@ enum RelayWatchIdentityError: Error {
     case signingFailed
 }
 
+protocol RelayWatchSigningIdentity: Sendable {
+    func publicKeyPEM() throws -> String
+    func fingerprint() throws -> String
+    func sign(_ canonical: Data) throws -> String
+    func delete()
+}
+
+protocol RelayWatchAgreementIdentityProtocol: Sendable {
+    func publicKeyBase64URL() throws -> String
+    func deriveRootKey(
+        peerPublicKey: String,
+        pairingSessionNonce: String
+    ) throws -> SymmetricKey
+    func delete()
+}
+
+protocol RelayWatchCloudStoring: Sendable {
+    func load() -> RelayCloudDeviceConfig?
+    func save(_ config: RelayCloudDeviceConfig) throws
+    var outgoingSequence: Int64 { get set }
+    var hostSequence: Int64 { get set }
+    func delete()
+}
+
 func relaySubjectPublicKeyInfo(_ rawPoint: Data) throws -> Data {
     guard rawPoint.count == 65, rawPoint.first == 0x04 else {
         throw RelayWatchIdentityError.publicKeyUnavailable
@@ -22,7 +46,7 @@ func relaySubjectPublicKeyInfo(_ rawPoint: Data) throws -> Data {
     return p256SubjectPublicKeyInfoPrefix + rawPoint
 }
 
-final class RelayWatchIdentity: @unchecked Sendable {
+final class RelayWatchIdentity: RelayWatchSigningIdentity, @unchecked Sendable {
     private let tag = Data("com.relayforcodex.watch.signing".utf8)
 
     func publicKeyPEM() throws -> String {
@@ -115,7 +139,7 @@ final class RelayWatchIdentity: @unchecked Sendable {
     }
 }
 
-final class RelayWatchAgreementIdentity: @unchecked Sendable {
+final class RelayWatchAgreementIdentity: RelayWatchAgreementIdentityProtocol, @unchecked Sendable {
     private let keychain = RelayWatchKeychain()
     private let account = "agreement-private-key"
 
@@ -156,7 +180,7 @@ final class RelayWatchAgreementIdentity: @unchecked Sendable {
     }
 }
 
-final class RelayWatchCloudStore: @unchecked Sendable {
+final class RelayWatchCloudStore: RelayWatchCloudStoring, @unchecked Sendable {
     private let keychain = RelayWatchKeychain()
     private let account = "cloud-device-config"
     private let preferences = UserDefaults.standard

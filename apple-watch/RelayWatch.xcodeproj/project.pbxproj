@@ -17,6 +17,8 @@
 		A00000000000000000000009 /* RelayEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000A /* RelayEndpoint.swift */; };
 		A0000000000000000000000A /* RelayEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000B /* RelayEnvironment.swift */; };
 		A0000000000000000000000B /* RelayWatchTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000C /* RelayWatchTypes.swift */; };
+		A0000000000000000000000C /* RelaySocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000D /* RelaySocket.swift */; };
+		A0000000000000000000000D /* RelayReconnectPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* RelayReconnectPolicy.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +33,8 @@
 		B0000000000000000000000A /* RelayEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayEndpoint.swift; sourceTree = "<group>"; };
 		B0000000000000000000000B /* RelayEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayEnvironment.swift; sourceTree = "<group>"; };
 		B0000000000000000000000C /* RelayWatchTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchTypes.swift; sourceTree = "<group>"; };
+		B0000000000000000000000D /* RelaySocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaySocket.swift; sourceTree = "<group>"; };
+		B0000000000000000000000E /* RelayReconnectPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayReconnectPolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +68,8 @@
 				B0000000000000000000000A /* RelayEndpoint.swift */,
 				B0000000000000000000000B /* RelayEnvironment.swift */,
 				B0000000000000000000000C /* RelayWatchTypes.swift */,
+				B0000000000000000000000D /* RelaySocket.swift */,
+				B0000000000000000000000E /* RelayReconnectPolicy.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
 			);
 			path = RelayWatch;
@@ -159,6 +165,8 @@
 				A00000000000000000000009 /* RelayEndpoint.swift in Sources */,
 				A0000000000000000000000A /* RelayEnvironment.swift in Sources */,
 				A0000000000000000000000B /* RelayWatchTypes.swift in Sources */,
+				A0000000000000000000000C /* RelaySocket.swift in Sources */,
+				A0000000000000000000000D /* RelayReconnectPolicy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

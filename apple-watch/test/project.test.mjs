@@ -10,6 +10,10 @@ const apiClient = await readFile(
   new URL("../RelayWatch/RelayAPIClient.swift", import.meta.url),
   "utf8",
 );
+const relaySocket = await readFile(
+  new URL("../RelayWatch/RelaySocket.swift", import.meta.url),
+  "utf8",
+);
 
 function expectTargetSources(names, contents = project) {
   const sourceMembership = targetSourceMembership(contents);
@@ -72,14 +76,17 @@ test("watchOS target remains independent and watch-only", () => {
 });
 
 test("Apple Watch sends Cloud envelopes as supported WebSocket text frames", () => {
-  assert.match(apiClient, /activeSocket\.send\([\s\S]*?\.string\(/);
-  assert.doesNotMatch(apiClient, /activeSocket\.send\(\s*\.data\(/);
+  assert.match(relaySocket, /task\.send\(\.string\(/);
+  assert.doesNotMatch(relaySocket, /task\.send\(\s*\.data\(/);
+  assert.match(apiClient, /private var pending: \[String: CheckedContinuation/);
 });
 
 test("Watch runtime contract sources belong to the app target", () => {
   expectTargetSources([
     "RelayEndpoint.swift",
     "RelayEnvironment.swift",
+    "RelayReconnectPolicy.swift",
+    "RelaySocket.swift",
     "RelayWatchTypes.swift",
   ]);
 });

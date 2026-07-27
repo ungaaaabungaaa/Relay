@@ -23,6 +23,8 @@ source_files=(
   "${relay_root}/apple-watch/RelayWatch/RelayEndpoint.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayEnvironment.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayProtocol.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayReconnectPolicy.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelaySocket.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchApp.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchModel.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchRootView.swift"
