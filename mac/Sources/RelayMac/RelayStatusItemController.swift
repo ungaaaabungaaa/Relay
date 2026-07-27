@@ -38,7 +38,7 @@ final class RelayStatusItemController: NSObject, NSMenuDelegate {
         else { return }
 
         image.isTemplate = true
-        image.size = NSSize(width: 18, height: 18)
+        image.size = NSSize(width: 24, height: 24)
         button.image = image
         button.imagePosition = .imageOnly
         button.setAccessibilityTitle("Relay")

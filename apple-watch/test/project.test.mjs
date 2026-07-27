@@ -306,7 +306,7 @@ test("final Mac menu icon is an adaptive AppKit template image", async () => {
 
   assert.match(menuIcon, /stroke="black"/);
   assert.match(menuIcon, /fill="black"/);
-  assert.match(statusController, /image\.size = NSSize\(width: 18, height: 18\)/);
+  assert.match(statusController, /image\.size = NSSize\(width: 24, height: 24\)/);
   assert.doesNotMatch(macApp, /MenuBarExtra/);
 });
 
