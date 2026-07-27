@@ -14,7 +14,6 @@ final class RelayAppModel: ObservableObject {
     @Published var pendingPairings: [AdminPendingPairing] = []
     @Published var hostFingerprint = "Loading…"
     @Published var pendingActionCount = 0
-    @Published var updateAvailable = false
     @Published var lastError: String?
     @Published var diagnostic = "Relay is starting…"
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
@@ -23,6 +22,7 @@ final class RelayAppModel: ObservableObject {
     @Published var cloudLoginInProgress = false
     @Published var cloudPairingSession: RelayCloudPairingSession?
     @Published var cloudEnvironmentName = "production"
+    @Published var cloudTunnelPhase: RelayCloudTunnelPhase = .signedOut
 
     private let secrets: KeychainStore
     private let adminClient: AdminClient
@@ -74,6 +74,11 @@ final class RelayAppModel: ObservableObject {
 
     var activeDeviceCount: Int {
         devices.filter { $0.revokedAt == nil }.count
+    }
+
+    var updateAvailable: Bool {
+        if case .available = updateController.state { return true }
+        return false
     }
 
     var setupJourney: SetupJourney {
@@ -251,6 +256,7 @@ final class RelayAppModel: ObservableObject {
         await supervisor?.emergencyStop()
         bridgeState = .emergencyStopped
         cloudConnected = false
+        cloudTunnelPhase = .stopped
         diagnostic = "Emergency Stop closed Relay watch access. Codex tasks were left running."
         updateSetupState(bridgeReady: false)
     }
@@ -334,6 +340,7 @@ final class RelayAppModel: ObservableObject {
         cloudAccessToken = nil
         cloudSignedIn = false
         cloudConnected = false
+        cloudTunnelPhase = .signedOut
         updateSetupState(bridgeReady: bridgeState == .running)
     }
 
@@ -362,6 +369,7 @@ final class RelayAppModel: ObservableObject {
             cloudAccessToken = nil
             cloudSignedIn = false
             cloudConnected = false
+            cloudTunnelPhase = .signedOut
             cloudPairingSession = nil
             cloudPairingRequests = [:]
             pendingPairings = []
@@ -481,11 +489,14 @@ final class RelayAppModel: ObservableObject {
             !credential.isEmpty
         else {
             cloudConnected = false
+            cloudTunnelPhase = .signedOut
             return
         }
         cloudTunnelTask = Task {
-            var retrySeconds = 1
+            var tunnelState = RelayCloudTunnelState()
             while !Task.isCancelled {
+                tunnelState.begin()
+                cloudTunnelPhase = tunnelState.phase
                 do {
                     let events = await cloudTunnel.events(
                         hostID: hostID,
@@ -511,8 +522,9 @@ final class RelayAppModel: ObservableObject {
                         try Task.checkCancellation()
                         switch event {
                         case .connected:
+                            tunnelState.opened()
+                            cloudTunnelPhase = tunnelState.phase
                             cloudConnected = true
-                            retrySeconds = 1
                             diagnostic = "Relay Cloud is connected with end-to-end encryption."
                             await recoverPendingCloudPairings()
                         case .pairingRequest(let request):
@@ -527,12 +539,34 @@ final class RelayAppModel: ObservableObject {
                     break
                 } catch {
                     cloudConnected = false
+                    let failure: RelayCloudTunnelFailure
+                    if case let RelayCloudHandshakeError.rejected(status) = error,
+                       status == 401 || status == 403 {
+                        failure = .authentication
+                    } else if case RelayCloudHandshakeError.rejected(status: 426) = error {
+                        failure = .incompatible
+                    } else {
+                        failure = .recoverable
+                    }
+                    guard let delay = tunnelState.failed(failure) else {
+                        cloudTunnelPhase = tunnelState.phase
+                        if failure == .authentication { cloudSignedIn = false }
+                        break
+                    }
+                    cloudTunnelPhase = tunnelState.phase
+                    try? await Task.sleep(for: .seconds(delay))
+                    continue
                 }
                 guard !Task.isCancelled else { break }
-                try? await Task.sleep(for: .seconds(retrySeconds))
-                retrySeconds = min(retrySeconds * 2, 30)
+                let delay = tunnelState.failed(.recoverable) ?? 1
+                cloudTunnelPhase = tunnelState.phase
+                try? await Task.sleep(for: .seconds(delay))
             }
             cloudConnected = false
+            if Task.isCancelled {
+                tunnelState.stop()
+                cloudTunnelPhase = tunnelState.phase
+            }
         }
     }
 

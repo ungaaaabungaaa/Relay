@@ -62,6 +62,17 @@ func cloudHostTunnelAuthenticatesInHeadersAndDecodesControlAndEnvelope() async t
     )
 }
 
+@Test
+func cloudHostTunnelPublishesNoConnectedEventBeforeSocketOpen() async {
+    let tunnel = RelayCloudHostTunnel { _ in RejectedRelayCloudSocket() }
+    let stream = await tunnel.events(hostID: "host-1", credential: "credential")
+    var iterator = stream.makeAsyncIterator()
+
+    await #expect(throws: RelayCloudHandshakeError.rejected(status: 401)) {
+        try await iterator.next()
+    }
+}
+
 private final class TunnelConnectorRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private let messages: [Data]
@@ -116,5 +127,14 @@ private final class RecordedRelayCloudSocket: RelayCloudSocket, @unchecked Senda
         onSend(data)
     }
 
+    func open() async throws {}
+
+    func cancel() {}
+}
+
+private final class RejectedRelayCloudSocket: RelayCloudSocket, @unchecked Sendable {
+    let messages = AsyncThrowingStream<Data, Error> { $0.finish() }
+    func open() async throws { throw RelayCloudHandshakeError.rejected(status: 401) }
+    func send(_ data: Data) async throws {}
     func cancel() {}
 }

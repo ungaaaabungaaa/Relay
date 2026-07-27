@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WatchesView: View {
     @ObservedObject var model: RelayAppModel
+    @State private var pendingAction: DestructiveRelayAction?
 
     var body: some View {
         ScrollView {
@@ -79,11 +80,13 @@ struct WatchesView: View {
                                 Button("Deny", role: .destructive) {
                                     Task { await model.denyPairing(pairing) }
                                 }
+                                .disabled(!pairingActionsEnabled)
                                 Button("Approve watch") {
                                     Task { await model.approvePairing(pairing) }
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(RelayPalette.accent)
+                                .disabled(!pairingActionsEnabled)
                             }
                         }
                     }
@@ -114,7 +117,7 @@ struct WatchesView: View {
                                 )
                                 if device.revokedAt == nil {
                                     Button("Revoke", role: .destructive) {
-                                        Task { await model.revoke(device) }
+                                        pendingAction = .revokeWatch(device)
                                     }
                                 }
                             }
@@ -138,5 +141,28 @@ struct WatchesView: View {
                 }
             }
         }
+        .confirmationDialog(
+            pendingAction?.title ?? "Confirm watch revocation",
+            isPresented: Binding(
+                get: { pendingAction != nil },
+                set: { if !$0 { pendingAction = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            Button(action.confirmationLabel, role: .destructive) {
+                pendingAction = nil
+                if case let .revokeWatch(device) = action {
+                    Task { await model.revoke(device) }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingAction = nil }
+        } message: { action in
+            Text(action.consequence)
+        }
+    }
+
+    private var pairingActionsEnabled: Bool {
+        model.cloudTunnelPhase == .connected && model.bridgeState == .running
     }
 }

@@ -4,7 +4,14 @@ import RelayCore
 
 struct MenuContent: View {
     @ObservedObject var model: RelayAppModel
+    @ObservedObject private var updater: RelayUpdateController
     @Environment(\.openWindow) private var openWindow
+    @State private var pendingAction: DestructiveRelayAction?
+
+    init(model: RelayAppModel) {
+        self.model = model
+        updater = model.updateController
+    }
 
     var body: some View {
         Group {
@@ -14,7 +21,7 @@ struct MenuContent: View {
             )
             Label("Codex \(model.codexStatus.lowercased())", systemImage: "terminal")
             Label(
-                model.cloudConnected ? "Relay Cloud connected" : "Relay Cloud offline",
+                cloudLabel,
                 systemImage: model.cloudConnected ? "lock.shield.fill" : "network.slash"
             )
             Label(
@@ -25,7 +32,7 @@ struct MenuContent: View {
                 "\(model.pendingActionCount) waiting actions",
                 systemImage: "tray.full"
             )
-            if model.updateAvailable {
+            if case .available = updater.state {
                 Label("Update available", systemImage: "arrow.down.circle.fill")
             }
             Divider()
@@ -38,7 +45,7 @@ struct MenuContent: View {
             }
             Divider()
             Button("Emergency Stop", role: .destructive) {
-                Task { await model.emergencyStop() }
+                pendingAction = .emergencyStop
             }
             Button("Quit Relay") {
                 Task {
@@ -46,6 +53,35 @@ struct MenuContent: View {
                     NSApplication.shared.terminate(nil)
                 }
             }
+        }
+        .confirmationDialog(
+            pendingAction?.title ?? "Confirm Relay action",
+            isPresented: Binding(
+                get: { pendingAction != nil },
+                set: { if !$0 { pendingAction = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            Button(action.confirmationLabel, role: .destructive) {
+                pendingAction = nil
+                if action == .emergencyStop {
+                    Task { await model.emergencyStop() }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingAction = nil }
+        } message: { action in
+            Text(action.consequence)
+        }
+    }
+
+    private var cloudLabel: String {
+        switch model.cloudTunnelPhase {
+        case .signedOut: "Relay Cloud signed out"
+        case .connecting: "Relay Cloud connecting"
+        case .connected: "Relay Cloud connected"
+        case .retrying: "Relay Cloud retrying"
+        case .stopped: "Relay Cloud stopped"
         }
     }
 }

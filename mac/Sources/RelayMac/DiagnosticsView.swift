@@ -19,6 +19,7 @@ struct DiagnosticsView: View {
                         diagnosticRow("Workspace roots", "\(model.workspaces.count)")
                         diagnosticRow("Voice", model.voiceConfigured ? "Configured" : "Off")
                         diagnosticRow("Cloud environment", model.cloudEnvironmentName)
+                        diagnosticRow("Cloud tunnel", tunnelStatus)
                     }
                 }
                 RelayPanel {
@@ -47,6 +48,16 @@ struct DiagnosticsView: View {
         GridRow {
             Text(label).foregroundStyle(.secondary)
             Text(value).fontWeight(.medium)
+        }
+    }
+
+    private var tunnelStatus: String {
+        switch model.cloudTunnelPhase {
+        case .signedOut: "Signed out"
+        case let .connecting(attempt): "Connecting attempt \(attempt)"
+        case .connected: "Connected"
+        case let .retrying(attempt, delay): "Retry \(attempt) in \(delay)s"
+        case .stopped: "Stopped"
         }
     }
 }

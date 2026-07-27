@@ -2,6 +2,12 @@ import SwiftUI
 
 struct UpdatesView: View {
     @ObservedObject var model: RelayAppModel
+    @ObservedObject private var updater: RelayUpdateController
+
+    init(model: RelayAppModel) {
+        self.model = model
+        updater = model.updateController
+    }
 
     var body: some View {
         ScrollView {
@@ -21,8 +27,8 @@ struct UpdatesView: View {
                         }
                         Spacer()
                         StatusPill(
-                            text: model.updateAvailable ? "Update ready" : "Up to date",
-                            ready: !model.updateAvailable
+                            text: statusText,
+                            ready: isCurrent
                         )
                     }
                 }
@@ -39,7 +45,7 @@ struct UpdatesView: View {
                     }
                 }
                 Button("Check for Mac update") {
-                    model.updateController.checkForUpdates()
+                    updater.checkForUpdates()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(RelayPalette.accent)
@@ -53,6 +59,21 @@ struct UpdatesView: View {
                         .padding(.top, 5)
                 }
             }
+        }
+    }
+
+    private var isCurrent: Bool {
+        if case .current = updater.state { return true }
+        return false
+    }
+
+    private var statusText: String {
+        switch updater.state {
+        case .unknown: "Not checked"
+        case .checking: "Checking…"
+        case .current: "Up to date"
+        case let .available(version): "Version \(version) available"
+        case .failed: "Check unavailable"
         }
     }
 }

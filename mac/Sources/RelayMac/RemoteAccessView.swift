@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RemoteAccessView: View {
     @ObservedObject var model: RelayAppModel
+    @State private var pendingAction: DestructiveRelayAction?
 
     var body: some View {
         ScrollView {
@@ -15,7 +16,7 @@ struct RemoteAccessView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             Label(
-                                model.cloudConnected ? "Encrypted tunnel connected" : "Cloud disconnected",
+                                tunnelTitle,
                                 systemImage: model.cloudConnected
                                     ? "lock.shield.fill"
                                     : "network.slash"
@@ -23,7 +24,7 @@ struct RemoteAccessView: View {
                             .font(.headline)
                             Spacer()
                             StatusPill(
-                                text: model.cloudConnected ? "Online" : "Offline",
+                                text: tunnelStatus,
                                 ready: model.cloudConnected
                             )
                         }
@@ -55,7 +56,7 @@ struct RemoteAccessView: View {
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                             Button("Delete account", role: .destructive) {
-                                Task { await model.deleteRelayAccount() }
+                                pendingAction = .deleteAccount
                             }
                         }
                     }
@@ -69,11 +70,58 @@ struct RemoteAccessView: View {
                             .font(.callout)
                             .foregroundStyle(.secondary)
                         Button("Stop Relay access", role: .destructive) {
-                            Task { await model.emergencyStop() }
+                            pendingAction = .emergencyStop
                         }
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            pendingAction?.title ?? "Confirm Relay action",
+            isPresented: Binding(
+                get: { pendingAction != nil },
+                set: { if !$0 { pendingAction = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            Button(action.confirmationLabel, role: .destructive) {
+                execute(action)
+            }
+            Button("Cancel", role: .cancel) { pendingAction = nil }
+        } message: { action in
+            Text(action.consequence)
+        }
+    }
+
+    private func execute(_ action: DestructiveRelayAction) {
+        pendingAction = nil
+        Task {
+            switch action {
+            case .emergencyStop: await model.emergencyStop()
+            case .deleteAccount: await model.deleteRelayAccount()
+            case .revokeWatch: break
+            }
+        }
+    }
+
+    private var tunnelTitle: String {
+        switch model.cloudTunnelPhase {
+        case .signedOut: "Relay Cloud signed out"
+        case let .connecting(attempt): "Connecting encrypted tunnel · attempt \(attempt)"
+        case .connected: "Encrypted tunnel connected"
+        case let .retrying(_, delay): "Tunnel retrying in \(delay) seconds"
+        case .stopped: "Relay Cloud tunnel stopped"
+        }
+    }
+
+    private var tunnelStatus: String {
+        switch model.cloudTunnelPhase {
+        case .signedOut: "Signed out"
+        case .connecting: "Connecting"
+        case .connected: "Online"
+        case .retrying: "Retrying"
+        case .stopped: "Stopped"
         }
     }
 }

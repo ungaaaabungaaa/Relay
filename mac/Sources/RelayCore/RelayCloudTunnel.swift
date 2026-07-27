@@ -40,6 +40,7 @@ public enum RelayCloudTunnelError: Error, Equatable, Sendable {
 
 public protocol RelayCloudSocket: Sendable {
     var messages: AsyncThrowingStream<Data, Error> { get }
+    func open() async throws
     func send(_ data: Data) async throws
     func cancel()
 }
@@ -86,8 +87,9 @@ public actor RelayCloudHostTunnel {
         socket = connectedSocket
         return AsyncThrowingStream { continuation in
             let task = Task {
-                continuation.yield(.connected)
                 do {
+                    try await connectedSocket.open()
+                    continuation.yield(.connected)
                     for try await data in connectedSocket.messages {
                         continuation.yield(try Self.decode(data))
                     }
@@ -149,10 +151,20 @@ public actor RelayCloudHostTunnel {
 private final class LiveRelayCloudSocket: RelayCloudSocket, @unchecked Sendable {
     let messages: AsyncThrowingStream<Data, Error>
     private let socket: URLSessionWebSocketTask
+    private let session: URLSession
+    private let openDelegate: RelayWebSocketOpenDelegate
 
     init(request: URLRequest) {
-        let socket = URLSession.shared.webSocketTask(with: request)
+        let openDelegate = RelayWebSocketOpenDelegate()
+        let session = URLSession(
+            configuration: .ephemeral,
+            delegate: openDelegate,
+            delegateQueue: nil
+        )
+        let socket = session.webSocketTask(with: request)
         self.socket = socket
+        self.session = session
+        self.openDelegate = openDelegate
         self.messages = AsyncThrowingStream { continuation in
             let receiveTask = Task {
                 do {
@@ -195,12 +207,17 @@ private final class LiveRelayCloudSocket: RelayCloudSocket, @unchecked Sendable 
         }
     }
 
+    func open() async throws {
+        try await openDelegate.waitUntilOpen()
+    }
+
     func send(_ data: Data) async throws {
         try await socket.send(.data(data))
     }
 
     func cancel() {
         socket.cancel(with: .goingAway, reason: nil)
+        session.invalidateAndCancel()
     }
 
     private static func ping(
@@ -216,5 +233,63 @@ private final class LiveRelayCloudSocket: RelayCloudSocket, @unchecked Sendable 
                 }
             }
         }
+    }
+}
+
+private final class RelayWebSocketOpenDelegate: NSObject,
+    URLSessionWebSocketDelegate, URLSessionTaskDelegate, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var result: Result<Void, Error>?
+    private var waiters: [CheckedContinuation<Void, Error>] = []
+
+    func waitUntilOpen() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let stored = lock.withLock { () -> Result<Void, Error>? in
+                if let result { return result }
+                waiters.append(continuation)
+                return nil
+            }
+            if let stored { continuation.resume(with: stored) }
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        resolve(.success(()))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        let status = (webSocketTask.response as? HTTPURLResponse)?.statusCode
+        resolve(.failure(status.map(RelayCloudHandshakeError.rejected)
+            ?? RelayCloudTunnelError.disconnected))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let error else { return }
+        let status = (task.response as? HTTPURLResponse)?.statusCode
+        resolve(.failure(status.map(RelayCloudHandshakeError.rejected) ?? error))
+    }
+
+    private func resolve(_ result: Result<Void, Error>) {
+        let continuations = lock.withLock { () -> [CheckedContinuation<Void, Error>] in
+            guard self.result == nil else { return [] }
+            self.result = result
+            defer { waiters.removeAll() }
+            return waiters
+        }
+        continuations.forEach { $0.resume(with: result) }
     }
 }
