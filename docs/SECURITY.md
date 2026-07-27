@@ -74,10 +74,16 @@ traversal outside the selected roots. Folder browsing returns names and paths,
 not repository file contents.
 
 Optional recorded voice uses encrypted chunks with a 30-second and 2 MiB
-limit. The Mac assembles the chunks and deletes temporary audio after success,
-failure, or timeout. Relay must show editable transcript text before the user
-sends it to Codex. The unfinished Apple Watch voice destination remains a
-release gate.
+limit. The Watch and Mac delete temporary audio after success, failure,
+timeout, cancellation, inactivity, or disconnect. The Watch keeps the
+transcript editable and sends text to Codex only after an explicit Send.
+Physical-device privacy and lifecycle evidence remains a release gate.
+
+Pending pairing recovery is authenticated with the Mac access token and active
+pairing token. The query is scoped to the account, host, unconsumed session,
+pending status, and expiry. It returns public keys and limited metadata only;
+the Mac derives the displayed Watch fingerprint rather than accepting display
+text from the recovery response.
 
 ## Revocation and deletion
 

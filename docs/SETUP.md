@@ -34,9 +34,9 @@ channel is live.
 8. Select the Mac workspace roots that the watch may use.
 9. Keep the Mac awake, online, and running Relay and Codex.
 
-The current source supports pairing and the encrypted request tunnel. Apple
-Watch destination actions, pushed events, reviewed voice, and reconnect
-behavior still require implementation and physical evidence.
+The current source implements pairing, live destinations, pushed-event refresh,
+reviewed voice, reconnect refresh, and stale mutation blocking. These paths
+still require interactive staging and physical-device evidence.
 
 ## Offline, revocation, and deletion
 
@@ -85,6 +85,18 @@ For a device run, open `apple-watch/RelayWatch.xcodeproj` in Xcode, select the
 Apple developer team, choose the paired physical Apple Watch, and run the app.
 Record results in
 [PHYSICAL-APPLE-WATCH-TEST.md](PHYSICAL-APPLE-WATCH-TEST.md).
+
+### Debug cloud origin
+
+`RELAY_CLOUD_ORIGIN` is a debug-build-only override shared by the Mac HTTP and
+WebSocket clients and the Watch environment. It accepts the TLS staging origin
+or plaintext loopback such as `http://127.0.0.1:8787`. Invalid values fail
+closed; release builds reject every override instead of falling back silently.
+
+Loopback is suitable only when the client runs on the same Mac. A physical
+Apple Watch cannot reach the Mac through `localhost`, and plaintext remote
+origins are rejected. Physical testing therefore needs a reachable TLS staging
+deployment and its matching `wss://` tunnel.
 
 ## Cloud maintainer setup
 

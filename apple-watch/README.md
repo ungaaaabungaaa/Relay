@@ -1,31 +1,35 @@
 # Relay for Apple Watch
 
-Relay for Apple Watch is the project's independent watchOS 10+ client. It pairs
-directly with Relay Cloud and a Relay Mac; Relay has no separate iPhone
-companion target in this repository.
+Relay is an independent watchOS 10+ client with no iPhone companion target. It
+pairs through Relay Cloud with Relay on an Apple-silicon Mac.
 
-The source now contains:
+The source implements:
 
-- six-character Relay Cloud pairing and Mac/watch fingerprint comparison;
-- separate Keychain-backed P-256 signing and agreement identities;
-- ECDH/HKDF root-key derivation and authenticated AES-GCM tunnel envelopes;
-- scoped cloud credentials, root keys, and replay sequences stored on-watch;
-- canonical signed inner requests over an authenticated WSS device tunnel;
-- offline stale-state behavior and local cache wipe on revocation;
-- native routes for inbox, approvals, questions, tasks, activity,
-  instructions, voice, new tasks, history, and settings.
+- six-character pairing with explicit Mac and Watch fingerprint comparison;
+- separate P-256 signing and agreement identities plus ECDH/HKDF and AES-GCM;
+- one encrypted WebSocket response/event router with replay and reconnect safety;
+- live inbox, approval, question, task, activity, instruction, new-task,
+  history, settings, revocation, and offline/stale views;
+- bridge-provided folder/model/effort selection, validated answers, dangerous
+  approval confirmation, and idempotent mutation retry;
+- explicit microphone recording, 30-second/2 MiB bounds, Mac-configured
+  transcription, editable transcript review, explicit Send, and deterministic
+  audio cleanup.
 
-The destination screens still use preview content. Developers must connect them
-to response and event models, actions, reviewed voice capture, and reconnect
-callbacks. The team has not verified physical Wi-Fi or cellular transitions,
-battery behavior, revocation, signing, or TestFlight updates.
+Run the package tests and architecture source check:
 
-Run `../scripts/check-watchos-source.sh` for a watchOS 10+ compiler check, then
-open `RelayWatch.xcodeproj` in Xcode. Set your Apple team and signing assets,
-then use a physical Apple Watch for pairing, Wi-Fi or cellular transitions,
-approvals, voice, battery, revocation, and TestFlight update tests.
+```bash
+export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+xcrun swift test --disable-sandbox --package-path apple-watch
+../scripts/check-watchos-source.sh
+```
 
-The watch client requires Relay Mac `1.0.0+` and API version `1`. Apple
-distributes watchOS apps through TestFlight and the App Store. This repository
-does not include a signed TestFlight or App Store build. A DMG cannot install an
-Apple Watch app.
+Then open `RelayWatch.xcodeproj`, choose the organization-owned team and a
+paired physical Watch, and follow `../docs/PHYSICAL-APPLE-WATCH-TEST.md`.
+Compiler checks do not prove microphone permission, Wi-Fi/cellular transitions,
+battery, accessibility, signing, TestFlight, App Store review, or update
+preservation.
+
+The Watch requires Relay Mac `1.0.0+` and API version `1`. Apple distributes the
+Watch app through TestFlight and the App Store; a Mac disk image cannot install
+it. This repository does not contain or claim a signed public build.

@@ -35,6 +35,17 @@ inside the ephemeral runner, applies migrations, deploys with
 5. Deploy staging first and complete sign-in, host registration, pairing,
    encrypted request, revocation, and account-deletion smoke tests.
 
+Use a reachable TLS staging origin for physical Apple Watch tests. The Mac and
+Watch derive matching `https://` and `wss://` endpoints from the same debug-only
+origin. Plaintext is accepted only on loopback and cannot be used from a
+physical Watch. Release builds reject origin overrides.
+
+During pairing, disconnect and reconnect the Mac tunnel once. Confirm the Mac
+recovers only pending, unexpired requests for its authenticated account, host,
+and active unconsumed session. The recovery response must contain public keys,
+limited device metadata, request ID, and expiry only—never a pairing code, poll
+token, watch credential, approved payload, or E2EE root key.
+
 The timestamp above is an example; use the actual UTC instant immediately
 before the change. Cloudflare documents the current commands in its
 [Wrangler D1 reference](https://developers.cloudflare.com/d1/wrangler-commands/).

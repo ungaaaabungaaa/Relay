@@ -6,16 +6,15 @@ the approved watch and Mac; it cannot decrypt task content.
 
 ## Current checkpoint
 
-The repository contains six-character cloud pairing, fingerprint comparison,
-Keychain identities, and an encrypted Apple Watch request tunnel. The Mac app,
-loopback bridge, and Relay Cloud provide the supporting account, workspace,
-device, and ciphertext-routing controls.
+The Apple Watch and Mac apps are source-complete for local and staging testing.
+The Watch uses live bridge data for pairing, approvals, questions, task control,
+new tasks, reviewed voice, reconnects, revocation, and stale-state blocking. The
+Mac owns cloud sign-in, endpoint selection, pairing recovery, tunnel state,
+workspace policy, destructive confirmations, and updates.
 
-Apple Watch destination screens still use preview content. Real destination
-actions, pushed events, reviewed voice, reconnect behavior, signed watchOS
-archives, TestFlight processing, App Store review, and physical-device evidence
-remain release gates. The repository does not provide a live TestFlight or App
-Store build.
+This is still a zero-user prototype. No physical-device run, signed watchOS
+archive, TestFlight build, App Store review, notarized release candidate,
+production incident drill, or external security review is claimed here.
 
 ## What is implemented
 
@@ -28,10 +27,11 @@ Store build.
 - ECDH/HKDF root-key derivation and AES-256-GCM tunnel envelopes;
 - scoped cloud credentials, replay sequences, and canonical signed requests;
 - offline, incompatible, and revoked states with local credential removal;
-- native route shells for inbox, approvals, questions, tasks, instructions,
-  voice, new tasks, history, and settings.
-
-The route shells do not yet complete destination actions against Codex.
+- live inbox, approval, question, task, activity, instruction, new-task,
+  history, settings, and reviewed-voice controls;
+- one response/event router with reconnect refresh and stale mutation blocking;
+- explicit Mac fingerprint confirmation, dangerous-action confirmation,
+  idempotent mutation retry, and temporary-audio cleanup.
 
 ### Mac
 
@@ -39,13 +39,15 @@ The route shells do not yet complete destination actions against Codex.
 - embedded arm64 bridge with a loopback-bound admin API and Codex adapter;
 - passwordless invite login, PKCE, rotating refresh tokens, and Keychain
   storage;
-- outbound Relay Cloud tunnel and encrypted pairing approval;
+- outbound Relay Cloud tunnel with open/retry state and encrypted pairing
+  approval recovery;
 - approved-workspace containment, watch revocation, Emergency Stop, account
   deletion, and redacted diagnostics;
 - Sparkle update support and a Developer ID packaging workflow for a notarized
   Mac disk image.
 
-Signing credentials and notarization results remain external release gates.
+Signing credentials, notarization, and a clean-Mac install remain external
+release gates.
 
 ### Relay Cloud
 

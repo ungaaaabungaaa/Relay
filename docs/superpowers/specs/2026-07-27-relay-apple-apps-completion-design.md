@@ -34,10 +34,11 @@ and exposes Emergency Stop and account deletion. The bridge already provides
 authenticated routes for task reads, task creation and control, approvals,
 questions, transcription, models, folders, and live events.
 
-The Watch already creates device identities, completes six-character cloud
-pairing, derives the envelope key, signs inner requests, encrypts tunnel
-messages, and stores scoped credentials. Its destination screens still show
-preview data and do not invoke the bridge actions.
+At the start of this implementation, the Watch already created device
+identities, completed six-character cloud pairing, derived the envelope key,
+signed inner requests, encrypted tunnel messages, and stored scoped
+credentials. Its UI only demonstrated destination layouts and did not yet
+invoke bridge actions.
 
 ## Architecture
 
@@ -265,4 +266,3 @@ The source-complete milestone requires all of the following:
 - automated tests cover the Apple-client state and encrypted integration path;
 - documentation gives the developer exact local checks and labels external
   evidence as pending.
-
