@@ -18,6 +18,9 @@ const rootView = await readFile(
   new URL("../RelayWatch/RelayWatchRootView.swift", import.meta.url),
   "utf8",
 );
+const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
+const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
+const watchStyleURL = new URL("../RelayWatch/RelayWatchStyle.swift", import.meta.url);
 
 function expectTargetSources(names, contents = project) {
   const sourceMembership = targetSourceMembership(contents);
@@ -143,4 +146,44 @@ test("Watch runtime contract sources must be connected to the Sources build phas
   assert.throws(() => {
     expectTargetSources(["RelayEndpoint.swift"], missingEndpointMembership);
   }, /RelayWatch target must include RelayEndpoint.swift/);
+});
+
+test("Task 1 brand primitives define semantic Apple styling", async () => {
+  const [macBrand, watchStyle] = await Promise.all([
+    readFile(macBrandURL, "utf8"),
+    readFile(watchStyleURL, "utf8"),
+  ]);
+
+  assert.match(macBrand, /struct RelayUFOGlyph: View/);
+  assert.match(macBrand, /struct RelayBrandMark: View/);
+  assert.match(macBrand, /\.accessibilityLabel\("Relay"\)/);
+  assert.match(macBrand, /\.foregroundStyle\(\.primary\)/);
+  assert.match(macBrand, /\.fill\(\.primary\)/);
+  assert.match(watchStyle, /struct RelayWatchMark: View/);
+  assert.match(watchStyle, /enum RelayWatchStyle/);
+  assert.match(watchStyle, /static let accent = Color\.accentColor/);
+  assert.doesNotMatch(watchStyle, /\.mint/);
+});
+
+test.skip("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
+  const macApp = await readFile(macAppURL, "utf8");
+  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*RelayUFOGlyph/);
+});
+
+test.skip("Task 4 uses RelayWatchMark in the Watch root", () => {
+  assert.match(rootView, /RelayWatchMark/);
+});
+
+test.skip("Task 4 removes mint styling from Watch production sources", async () => {
+  const sources = await Promise.all([
+    "RelayWatchRootView.swift",
+    "RelayInboxViews.swift",
+    "RelayApprovalView.swift",
+    "RelayQuestionView.swift",
+    "RelayTaskViews.swift",
+    "RelayComposeViews.swift",
+    "RelayVoiceView.swift",
+  ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
+
+  assert.doesNotMatch(sources.join("\n"), /\.mint/);
 });

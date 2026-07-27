@@ -2,10 +2,10 @@ import SwiftUI
 import RelayCore
 
 enum RelayPalette {
-    static let accent = Color(red: 0.25, green: 0.92, blue: 0.76)
-    static let amber = Color(red: 1.0, green: 0.70, blue: 0.24)
-    static let danger = Color(red: 1.0, green: 0.34, blue: 0.38)
-    static let panel = Color.white.opacity(0.065)
+    static let accent = Color.accentColor
+    static let amber = Color.orange
+    static let danger = Color.red
+    static let panel = Material.thin
 }
 
 struct DashboardHeader: View {
@@ -36,7 +36,7 @@ struct RelayPanel<Content: View>: View {
         content
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RelayPalette.panel, in: RoundedRectangle(cornerRadius: 16))
+            .background(RelayPalette.panel, in: RoundedRectangle(cornerRadius: 12))
             .overlay {
                 RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(.white.opacity(0.08))
