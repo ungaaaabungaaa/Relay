@@ -301,8 +301,8 @@ final class RelayWatchModel: ObservableObject {
 
     func showTask(_ id: String, destination: RelayWatchScreen = .activity) {
         switch destination {
-        case .activity: navigate(to: .activity(id))
-        default: navigate(to: .activity(id))
+        case .activity: navigate(to: .task(id))
+        default: navigate(to: .task(id))
         }
         Task { await loadTask(id) }
     }

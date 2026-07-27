@@ -39,6 +39,7 @@ let package = Package(
                 "RelaySocket.swift",
                 "RelayWatchFeature.swift",
                 "RelayWatchNavigation.swift",
+                "RelayNewTaskFlow.swift",
                 "RelayWatchService.swift",
                 "RelayWatchStyle.swift",
                 "RelayWatchTypes.swift",

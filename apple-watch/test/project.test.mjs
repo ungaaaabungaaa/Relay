@@ -114,6 +114,7 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayWatchService.swift",
     "RelayWatchTypes.swift",
     "RelayWatchNavigation.swift",
+    "RelayNewTaskFlow.swift",
     "RelayWatchComponents.swift",
     "RelayPairingViews.swift",
     "RelayWatchHomeView.swift",
@@ -133,6 +134,7 @@ test("Watch destinations use bridge data instead of preview fixtures", async () 
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
     "RelayComposeViews.swift",
+    "RelayNewTaskFlow.swift",
     "RelayVoiceView.swift",
   ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
   const runtimeUI = viewSources.join("\n");

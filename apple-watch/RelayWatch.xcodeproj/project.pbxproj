@@ -15,6 +15,7 @@
 		A00000000000000000000007 /* RelayWatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* RelayWatchRootView.swift */; };
 		A0000000000000000000001C /* RelayWatchNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001D /* RelayWatchNavigation.swift */; };
 		A0000000000000000000001D /* RelayWatchComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001E /* RelayWatchComponents.swift */; };
+		A0000000000000000000001E /* RelayNewTaskFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001F /* RelayNewTaskFlow.swift */; };
 		A00000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Assets.xcassets */; };
 		A00000000000000000000009 /* RelayEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000A /* RelayEndpoint.swift */; };
 		A0000000000000000000000A /* RelayEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000B /* RelayEnvironment.swift */; };
@@ -45,6 +46,7 @@
 		B00000000000000000000007 /* RelayWatchRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchRootView.swift; sourceTree = "<group>"; };
 		B0000000000000000000001D /* RelayWatchNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchNavigation.swift; sourceTree = "<group>"; };
 		B0000000000000000000001E /* RelayWatchComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchComponents.swift; sourceTree = "<group>"; };
+		B0000000000000000000001F /* RelayNewTaskFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayNewTaskFlow.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B00000000000000000000009 /* RelayWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RelayWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0000000000000000000000A /* RelayEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayEndpoint.swift; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@
 				B00000000000000000000007 /* RelayWatchRootView.swift */,
 				B0000000000000000000001D /* RelayWatchNavigation.swift */,
 				B0000000000000000000001E /* RelayWatchComponents.swift */,
+				B0000000000000000000001F /* RelayNewTaskFlow.swift */,
 				B0000000000000000000000A /* RelayEndpoint.swift */,
 				B0000000000000000000000B /* RelayEnvironment.swift */,
 				B0000000000000000000000C /* RelayWatchTypes.swift */,
@@ -209,6 +212,7 @@
 				A00000000000000000000007 /* RelayWatchRootView.swift in Sources */,
 				A0000000000000000000001C /* RelayWatchNavigation.swift in Sources */,
 				A0000000000000000000001D /* RelayWatchComponents.swift in Sources */,
+				A0000000000000000000001E /* RelayNewTaskFlow.swift in Sources */,
 				A00000000000000000000009 /* RelayEndpoint.swift in Sources */,
 				A0000000000000000000000A /* RelayEnvironment.swift in Sources */,
 				A0000000000000000000000B /* RelayWatchTypes.swift in Sources */,

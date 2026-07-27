@@ -46,6 +46,40 @@ func allClearHomeUsesTheApprovedFourActions() {
     ])
 }
 
+@Test
+func newTaskFlowAdvancesOnlyWithValidStepData() {
+    var draft = RelayNewTaskDraft()
+    #expect(!draft.canAdvance(from: .workspace, models: []))
+    draft.cwd = "/workspace"
+    #expect(draft.canAdvance(from: .workspace, models: []))
+    #expect(draft.next(after: .workspace) == .model)
+    #expect(draft.next(after: .model) == .prompt)
+}
+
+@Test
+func activeTaskSummaryUsesOnlyTheLatestActivity() {
+    let detail = RelayTaskDetail(
+        id: "task", title: "Build Watch UI", preview: "Working",
+        cwd: "/workspace", updatedAt: 2, status: .running,
+        activeTurnId: "turn",
+        activity: [
+            RelayActivity(
+                id: "one", turnId: "turn", kind: .status,
+                title: "First activity", detail: nil, status: .succeeded,
+                occurredAt: 1
+            ),
+            RelayActivity(
+                id: "two", turnId: "turn", kind: .status,
+                title: "Second activity", detail: nil, status: .running,
+                occurredAt: 2
+            ),
+        ]
+    )
+    let summary = RelayTaskPresentation.summary(detail)
+    #expect(summary.latestActivityTitle == "Second activity")
+    #expect(summary.canStop)
+}
+
 private func approvalFixture(_ id: String) -> RelayApproval {
     RelayApproval(
         id: id, threadId: "task", turnId: "turn", itemId: "item-\(id)",
@@ -92,10 +126,28 @@ func routeDestinationsUseTheirStableIdentityInsteadOfMutableSelection() throws {
 
     #expect(root.contains("case let .approval(id): RelayApprovalView(model: model, approvalID: id)"))
     #expect(root.contains("case let .question(id): RelayQuestionView(model: model, questionID: id)"))
-    #expect(root.contains("case let .task(id), let .activity(id): RelayTaskActivityView(model: model, taskID: id)"))
+    #expect(root.contains("case let .task(id): RelayTaskSummaryView(model: model, taskID: id)"))
+    #expect(root.contains("case let .activity(id): RelayTaskActivityView(model: model, taskID: id)"))
     #expect(approval.contains("model.inbox.approvals.first { $0.id == approvalID }"))
     #expect(question.contains("model.inbox.questions.first { $0.id == questionID }"))
     #expect(task.contains("model.taskDetails[taskID]"))
+}
+
+@Test
+func taskSourcesKeepSummaryControlsSeparateFromTheActivityList() throws {
+    let task = try relayWatchSource(named: "RelayTaskViews.swift")
+    let compose = try relayWatchSource(named: "RelayComposeViews.swift")
+
+    #expect(task.contains("NavigationLink(value: RelayWatchRoute.task(task.id))"))
+    #expect(task.contains("struct RelayTaskSummaryView"))
+    #expect(task.contains("Button(\"Instruct\")"))
+    #expect(task.contains("Button(\"View full activity\")"))
+    #expect(task.contains("struct RelayTaskActivityView"))
+    #expect(compose.contains("@State private var step = RelayNewTaskStep.workspace"))
+    #expect(compose.contains("Button(\"Send\")"))
+    #expect(compose.contains("Section(\"1 of 3 · Workspace\")"))
+    #expect(compose.contains("Section(\"2 of 3 · Model\")"))
+    #expect(compose.contains("Section(\"3 of 3 · Review\")"))
 }
 
 @Test

@@ -7,9 +7,7 @@ struct RelayTasksView: View {
         List {
             RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             ForEach(model.tasks) { task in
-                Button {
-                    model.showTask(task.id)
-                } label: {
+                NavigationLink(value: RelayWatchRoute.task(task.id)) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(task.title)
                         Text(task.preview).font(.caption2).lineLimit(2)
@@ -21,23 +19,85 @@ struct RelayTasksView: View {
             }
             RelayBackButton(model: model)
         }
+        .navigationTitle("Tasks")
+    }
+}
+
+struct RelayTaskSummaryView: View {
+    @ObservedObject var model: RelayWatchModel
+    let taskID: String
+    @State private var confirmStop = false
+
+    var body: some View {
+        Group {
+            if let task {
+                let summary = RelayTaskPresentation.summary(task)
+                RelayAdaptiveContainer {
+                    summaryContent(task: task, summary: summary)
+                } scrolling: {
+                    summaryContent(task: task, summary: summary)
+                        .padding(.horizontal, 4)
+                }
+            } else {
+                ProgressView("Loading task…")
+            }
+        }
+        .navigationTitle("Task")
+        .task { await model.loadTask(taskID) }
+    }
+
+    @ViewBuilder
+    private func summaryContent(task: RelayTaskDetail, summary: RelayTaskSummary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
+            Text(summary.statusTitle).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(task.title).font(.headline)
+            Label(summary.workspaceName, systemImage: "folder")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Latest activity").font(.caption2).foregroundStyle(.secondary)
+                Text(summary.latestActivityTitle).font(.caption)
+            }
+            Button("Instruct") { model.navigate(to: .instruction(task.id)) }
+                .disabled(!canMutate)
+            if summary.canStop {
+                Button("Stop", role: .destructive) { confirmStop = true }
+                    .disabled(!canMutate)
+                    .confirmationDialog(
+                        "Stop the active Codex turn?",
+                        isPresented: $confirmStop,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Stop turn", role: .destructive) { stop(task.id) }
+                        Button("Cancel", role: .cancel) {}
+                    }
+            }
+            Button("View full activity") { model.navigate(to: .activity(task.id)) }
+        }
+    }
+
+    private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
+    private var task: RelayTaskDetail? { model.taskDetails[taskID] }
+
+    private func stop(_ taskID: String) {
+        Task {
+            do {
+                try await model.stop(taskID)
+                model.reportActionSuccess()
+            } catch { model.reportActionFailure(error) }
+        }
     }
 }
 
 struct RelayTaskActivityView: View {
     @ObservedObject var model: RelayWatchModel
     let taskID: String?
-    @State private var confirmStop = false
 
     var body: some View {
         List {
             RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             if let task {
-                Section {
-                    Text(task.title).font(.headline)
-                    Text("\(task.status.rawValue.capitalized) · \(task.cwd)")
-                        .font(.caption2.monospaced())
-                }
                 Section("Activity") {
                     if task.activity.isEmpty {
                         Text(task.preview).foregroundStyle(.secondary)
@@ -52,44 +112,20 @@ struct RelayTaskActivityView: View {
                         }
                     }
                 }
-                if task.activeTurnId != nil {
-                    Button("Stop active turn", role: .destructive) { confirmStop = true }
-                        .disabled(!canMutate)
-                        .accessibilityHint("Stops the currently active Codex turn on the Mac")
-                        .confirmationDialog(
-                            "Stop the active Codex turn?",
-                            isPresented: $confirmStop,
-                            titleVisibility: .visible
-                        ) {
-                            Button("Stop turn", role: .destructive) { stop(task.id) }
-                            Button("Cancel", role: .cancel) {}
-                        }
-                }
-                Button("Send instruction") { model.navigate(to: .instruction(task.id)) }
             } else {
                 ProgressView("Loading task…")
             }
             RelayBackButton(model: model, destination: .tasks)
         }
+        .navigationTitle("Activity")
         .task {
             if let id = taskID ?? model.selectedTaskID { await model.loadTask(id) }
         }
     }
 
-    private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
-
     private var task: RelayTaskDetail? {
         guard let taskID else { return model.selectedTaskDetail }
         return model.taskDetails[taskID]
-    }
-
-    private func stop(_ taskID: String) {
-        Task {
-            do {
-                try await model.stop(taskID)
-                model.reportActionSuccess()
-            } catch { model.reportActionFailure(error) }
-        }
     }
 }
 
