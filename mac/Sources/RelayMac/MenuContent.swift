@@ -27,7 +27,7 @@ struct MenuContent: View {
             ))
             Divider()
             diagnosticsMenu
-            Button("Check for Updates…") { updater.checkForUpdates() }
+            updatesMenu
             aboutMenu
             Divider()
             Button("Emergency Stop…", role: .destructive) {
@@ -143,6 +143,7 @@ struct MenuContent: View {
                             guard RelayMenuDialogs.confirm(.revokeWatch(device)) else { return }
                             Task { await model.revoke(device) }
                         }
+                        .disabled(model.revocationDecision(for: device) == .blocked)
                     }
                 }
             }
@@ -231,6 +232,10 @@ struct MenuContent: View {
                     : "OpenAI key not configured"
             ).disabled(true)
             if model.voiceConfigured {
+                Button("Replace OpenAI API Key…") {
+                    guard let key = RelayMenuDialogs.requestOpenAIKey() else { return }
+                    Task { await model.saveOpenAIKey(key) }
+                }
                 Button("Remove OpenAI API Key", role: .destructive) {
                     guard RelayMenuDialogs.confirm(
                         title: "Remove OpenAI API key?",
@@ -250,27 +255,48 @@ struct MenuContent: View {
 
     private var diagnosticsMenu: some View {
         Menu("Diagnostics") {
-            Text("Only redacted operational status is copied.").disabled(true)
-            Button("Refresh") { Task { await model.refresh() } }
+            Text("Only allowlisted operational status is copied.").disabled(true)
+            Button("Refresh") {
+                Task {
+                    await model.updateSupervisorSnapshot()
+                    await model.refresh()
+                }
+            }
             Button("Copy Safe Diagnostics") {
                 RelayMenuDialogs.copyText(
                     RelayMenuPresentation.safeDiagnostic(
                         bridgeState: model.bridgeState,
                         cloudPhase: model.cloudTunnelPhase,
-                        diagnostic: model.diagnostic
+                        activeDeviceCount: model.activeDeviceCount,
+                        voiceConfigured: model.voiceConfigured
                     )
                 )
             }
         }
     }
 
+    private var updatesMenu: some View {
+        Menu("Updates") {
+            Text(RelayMenuPresentation.updateLabel(updater.state)).disabled(true)
+            Button("Check Again…") { updater.checkForUpdates() }
+        }
+    }
+
     private var aboutMenu: some View {
         Menu("About") {
             Text("Relay for Apple Watch").disabled(true)
-            Text("Relay Mac 1.0.0").disabled(true)
-            Text("Watch client requires Relay Mac 1.0.0+").disabled(true)
+            Text("Relay Mac \(RelayMenuPresentation.appVersion())").disabled(true)
             Button("Open Relay Website") {
                 RelayMenuDialogs.openURL(URL(string: "https://relayforcodex.com")!)
+            }
+            Button("Privacy Policy") {
+                RelayMenuDialogs.openURL(RelayMenuPresentation.privacyPolicyURL)
+            }
+            Button("Support") {
+                RelayMenuDialogs.openURL(RelayMenuPresentation.supportURL)
+            }
+            Button("Licenses") {
+                RelayMenuDialogs.openURL(RelayMenuPresentation.licensesURL)
             }
         }
     }

@@ -3,6 +3,10 @@ import Foundation
 import RelayCore
 
 enum RelayMenuPresentation {
+    static let privacyPolicyURL = URL(string: "https://relayforcodex.com/privacy")!
+    static let supportURL = URL(string: "https://relayforcodex.com/support")!
+    static let licensesURL = URL(string: "https://relayforcodex.com/licenses")!
+
     static func pairingMacFingerprint(
         sessionFingerprint: String?,
         hostFingerprint: String
@@ -56,19 +60,35 @@ enum RelayMenuPresentation {
     static func safeDiagnostic(
         bridgeState: BridgeSupervisorState,
         cloudPhase: RelayCloudTunnelPhase,
-        diagnostic: String
+        activeDeviceCount: Int,
+        voiceConfigured: Bool
     ) -> String {
-        let pattern = #"(?i)\b(?:token|secret|password|api[ _-]?key|authorization)\s*[:=]\s*[^\s;]+"#
-        let redacted = diagnostic.replacingOccurrences(
-            of: pattern,
-            with: "[redacted]",
-            options: .regularExpression
-        )
         return [
             "Bridge: \(bridgeLabel(bridgeState))",
             "Relay Cloud: \(cloudStatus(cloudPhase))",
-            redacted,
+            "Paired watches: \(max(0, activeDeviceCount))",
+            "Voice configured: \(voiceConfigured ? "yes" : "no")",
         ].joined(separator: "\n")
+    }
+
+    static func updateLabel(_ state: RelayUpdateState) -> String {
+        switch state {
+        case .unknown: "Update status unknown"
+        case .checking: "Checking for updates…"
+        case .current: "Relay is up to date"
+        case let .available(version): "Version \(version) is available"
+        case .failed: "Update check unavailable"
+        }
+    }
+
+    static func appVersion(infoDictionary: [String: Any]? = Bundle.main.infoDictionary) -> String {
+        guard
+            let version = infoDictionary?["CFBundleShortVersionString"] as? String,
+            !version.isEmpty
+        else {
+            return "Unknown"
+        }
+        return version
     }
 
     static func cloudLabel(_ phase: RelayCloudTunnelPhase) -> String {
@@ -94,6 +114,31 @@ enum RelayMenuPresentation {
         case let .retrying(_, delaySeconds): "retrying in \(delaySeconds)s"
         case .stopped: "stopped"
         }
+    }
+}
+
+enum RelayDeviceRevocationDecision: Equatable {
+    case blocked
+    case localOnly
+    case cloudAndLocal
+
+    static func evaluate(
+        vaultReadSucceeded: Bool,
+        isCloudManaged: Bool,
+        hasCloudAccess: Bool
+    ) -> Self {
+        guard vaultReadSucceeded else { return .blocked }
+        guard isCloudManaged else { return .localOnly }
+        return hasCloudAccess ? .cloudAndLocal : .blocked
+    }
+}
+
+enum RelayVoiceKeyReconfigurationPlan: Equatable {
+    case keep
+    case rebuild
+
+    static func forChange(previousKey: String?, nextKey: String?) -> Self {
+        previousKey == nextKey ? .keep : .rebuild
     }
 }
 

@@ -103,11 +103,13 @@ func relayMenuPresentationFormatsOnlySafeOperationalText() {
     let diagnostic = RelayMenuPresentation.safeDiagnostic(
         bridgeState: .running,
         cloudPhase: .connected,
-        diagnostic: "token=private-value; local security self-test passed"
+        activeDeviceCount: 2,
+        voiceConfigured: true
     )
     #expect(diagnostic.contains("Bridge: running"))
     #expect(diagnostic.contains("Relay Cloud: connected"))
-    #expect(diagnostic.contains("[redacted]"))
+    #expect(diagnostic.contains("Paired watches: 2"))
+    #expect(diagnostic.contains("Voice configured: yes"))
     #expect(!diagnostic.contains("private-value"))
 }
 
@@ -179,4 +181,159 @@ func reconnectFailureStopsCloudWithoutReplacingTheRefreshError() throws {
             "guard bridgeState == .running else {\n                lastError ="
         )
     )
+}
+
+@Test
+func cloudWatchRevocationFailsClosedWithoutUsableCloudAccess() {
+    #expect(
+        RelayDeviceRevocationDecision.evaluate(
+            vaultReadSucceeded: false,
+            isCloudManaged: false,
+            hasCloudAccess: false
+        ) == .blocked
+    )
+    #expect(
+        RelayDeviceRevocationDecision.evaluate(
+            vaultReadSucceeded: true,
+            isCloudManaged: true,
+            hasCloudAccess: false
+        ) == .blocked
+    )
+    #expect(
+        RelayDeviceRevocationDecision.evaluate(
+            vaultReadSucceeded: true,
+            isCloudManaged: true,
+            hasCloudAccess: true
+        ) == .cloudAndLocal
+    )
+    #expect(
+        RelayDeviceRevocationDecision.evaluate(
+            vaultReadSucceeded: true,
+            isCloudManaged: false,
+            hasCloudAccess: false
+        ) == .localOnly
+    )
+}
+
+@Test
+func voiceKeyChangesRequireAFreshBridgeConfiguration() {
+    #expect(
+        RelayVoiceKeyReconfigurationPlan.forChange(previousKey: nil, nextKey: "key-a")
+            == .rebuild
+    )
+    #expect(
+        RelayVoiceKeyReconfigurationPlan.forChange(previousKey: "key-a", nextKey: "key-b")
+            == .rebuild
+    )
+    #expect(
+        RelayVoiceKeyReconfigurationPlan.forChange(previousKey: "key-a", nextKey: nil)
+            == .rebuild
+    )
+    #expect(
+        RelayVoiceKeyReconfigurationPlan.forChange(previousKey: "key-a", nextKey: "key-a")
+            == .keep
+    )
+}
+
+@Test
+func voiceKeyReconfigurationShutsDownBeforeBuildingAFreshSupervisor() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let modelURL = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac/RelayAppModel.swift")
+    let source = try String(contentsOf: modelURL, encoding: .utf8)
+    let rebuild = try #require(
+        source.range(of: "private func rebuildBridgeWithCurrentConfiguration() async throws")
+    )
+    let shutdown = try #require(
+        source.range(of: "_ = try? await adminClient.shutdown()", range: rebuild.upperBound..<source.endIndex)
+    )
+    let stop = try #require(
+        source.range(of: "await supervisor?.stop()", range: shutdown.upperBound..<source.endIndex)
+    )
+    let replacement = try #require(
+        source.range(of: "let replacement = makeSupervisor", range: stop.upperBound..<source.endIndex)
+    )
+    let restore = try #require(
+        source.range(of: "await restoreRelayCloudSession()", range: replacement.upperBound..<source.endIndex)
+    )
+
+    #expect(shutdown.lowerBound < stop.lowerBound)
+    #expect(stop.lowerBound < replacement.lowerBound)
+    #expect(replacement.lowerBound < restore.lowerBound)
+}
+
+@Test
+func copiedDiagnosticsExcludeTheArbitraryDiagnosticBody() {
+    let hostile = "Bearer secret-token /Users/alice/private task=delete-everything id=device-123"
+    let copied = RelayMenuPresentation.safeDiagnostic(
+        bridgeState: .running,
+        cloudPhase: .connected,
+        activeDeviceCount: 1,
+        voiceConfigured: true
+    )
+
+    #expect(copied == [
+        "Bridge: running",
+        "Relay Cloud: connected",
+        "Paired watches: 1",
+        "Voice configured: yes",
+    ].joined(separator: "\n"))
+    #expect(!copied.contains(hostile))
+    #expect(!copied.contains("secret-token"))
+    #expect(!copied.contains("/Users/"))
+    #expect(!copied.contains("device-123"))
+}
+
+@Test
+func diagnosticsRefreshReadsSupervisorBeforeAdminStatus() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let menuURL = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac/MenuContent.swift")
+    let source = try String(contentsOf: menuURL, encoding: .utf8)
+
+    let snapshot = try #require(source.range(of: "await model.updateSupervisorSnapshot()"))
+    let refresh = try #require(source.range(of: "await model.refresh()", range: snapshot.upperBound..<source.endIndex))
+    #expect(snapshot.lowerBound < refresh.lowerBound)
+}
+
+@Test
+func updatesAndAboutUseOperationalPresentationValues() {
+    #expect(RelayMenuPresentation.updateLabel(.unknown) == "Update status unknown")
+    #expect(RelayMenuPresentation.updateLabel(.checking) == "Checking for updates…")
+    #expect(RelayMenuPresentation.updateLabel(.current) == "Relay is up to date")
+    #expect(
+        RelayMenuPresentation.updateLabel(.available(version: "2.3.4"))
+            == "Version 2.3.4 is available"
+    )
+    #expect(
+        RelayMenuPresentation.appVersion(
+            infoDictionary: ["CFBundleShortVersionString": "1.4.2"]
+        ) == "1.4.2"
+    )
+    #expect(RelayMenuPresentation.privacyPolicyURL.absoluteString == "https://relayforcodex.com/privacy")
+    #expect(RelayMenuPresentation.supportURL.absoluteString == "https://relayforcodex.com/support")
+    #expect(RelayMenuPresentation.licensesURL.absoluteString == "https://relayforcodex.com/licenses")
+}
+
+@Test
+func voiceAndMaintenanceMenusExposeReplacementAndRequiredLinks() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let menuURL = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac/MenuContent.swift")
+    let source = try String(contentsOf: menuURL, encoding: .utf8)
+
+    #expect(source.contains("Replace OpenAI API Key…"))
+    #expect(source.contains("Privacy Policy"))
+    #expect(source.contains("Support"))
+    #expect(source.contains("Licenses"))
+    #expect(source.contains("RelayMenuPresentation.updateLabel(updater.state)"))
 }

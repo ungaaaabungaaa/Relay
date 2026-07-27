@@ -234,14 +234,32 @@ final class RelayAppModel: ObservableObject {
         await denyCloudPairing(pairing.id)
     }
 
-    func revoke(_ device: AdminDevice) async {
+    func revocationDecision(for device: AdminDevice) -> RelayDeviceRevocationDecision {
         do {
-            if
-                try RelayCloudDeviceVault.devices(in: secrets).contains(
-                    where: { $0.deviceId == device.id }
-                ),
-                let accessToken = cloudAccessToken
-            {
+            let isCloudManaged = try RelayCloudDeviceVault.devices(in: secrets)
+                .contains { $0.deviceId == device.id }
+            return RelayDeviceRevocationDecision.evaluate(
+                vaultReadSucceeded: true,
+                isCloudManaged: isCloudManaged,
+                hasCloudAccess: cloudSignedIn && !(cloudAccessToken?.isEmpty ?? true)
+            )
+        } catch {
+            return .blocked
+        }
+    }
+
+    func revoke(_ device: AdminDevice) async {
+        let decision = revocationDecision(for: device)
+        guard decision != .blocked else {
+            lastError = "Reconnect Relay Cloud before revoking this watch."
+            return
+        }
+        do {
+            if decision == .cloudAndLocal {
+                guard let accessToken = cloudAccessToken, !accessToken.isEmpty else {
+                    lastError = "Reconnect Relay Cloud before revoking this watch."
+                    return
+                }
                 try await cloudClient.revokeDevice(
                     accessToken: accessToken,
                     deviceID: device.id
@@ -269,15 +287,43 @@ final class RelayAppModel: ObservableObject {
 
     func saveOpenAIKey(_ key: String) async {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextKey = trimmed.isEmpty ? nil : trimmed
         do {
-            if trimmed.isEmpty {
-                try secrets.remove(.openAIAPIKey)
-            } else {
-                try secrets.set(trimmed, for: .openAIAPIKey)
+            let previousKey = try secrets.value(for: .openAIAPIKey)
+            guard RelayVoiceKeyReconfigurationPlan.forChange(
+                previousKey: previousKey,
+                nextKey: nextKey
+            ) == .rebuild else {
+                voiceConfigured = nextKey != nil
+                lastError = nil
+                return
             }
-            voiceConfigured = !trimmed.isEmpty
+
+            try storeOpenAIKey(nextKey)
             lastError = nil
-            diagnostic = "Voice configuration was saved in macOS Keychain."
+            do {
+                try await rebuildBridgeWithCurrentConfiguration()
+                voiceConfigured = nextKey != nil
+                diagnostic = "Voice configuration was applied to the local bridge."
+            } catch {
+                await supervisor?.stop()
+                var rollbackSucceeded = false
+                do {
+                    try storeOpenAIKey(previousKey)
+                    try await rebuildBridgeWithCurrentConfiguration()
+                    rollbackSucceeded = true
+                } catch {
+                    bridgeState = .failed
+                    cloudConnected = false
+                    cloudTunnelPhase = .stopped
+                    updateSetupState(bridgeReady: false)
+                }
+                voiceConfigured = previousKey != nil
+                lastError = rollbackSucceeded
+                    ? "Relay could not apply the voice key. The previous configuration was restored."
+                    : "Relay could not apply the voice key or restart its local bridge."
+                diagnostic = "Voice configuration failed without exposing secret values."
+            }
         } catch {
             lastError = "Relay could not save the voice key in Keychain."
         }
@@ -468,6 +514,40 @@ final class RelayAppModel: ObservableObject {
         let token = Data(bytes).base64EncodedString()
         try secrets.set(token, for: .adminToken)
         return token
+    }
+
+    private func storeOpenAIKey(_ key: String?) throws {
+        if let key {
+            try secrets.set(key, for: .openAIAPIKey)
+        } else {
+            try secrets.remove(.openAIAPIKey)
+        }
+    }
+
+    private func rebuildBridgeWithCurrentConfiguration() async throws {
+        cloudTunnelTask?.cancel()
+        cloudTunnelTask = nil
+        await cloudTunnel.disconnect()
+        cloudConnected = false
+        cloudTunnelPhase = cloudSignedIn ? .stopped : .signedOut
+
+        _ = try? await adminClient.shutdown()
+        await supervisor?.stop()
+        try? await Task.sleep(for: .milliseconds(250))
+        guard let executableURL = locateBridgeExecutable() else {
+            throw RelayReconnectError.bridgeUnavailable
+        }
+        let token = try ensureAdminToken()
+        let replacement = makeSupervisor(executableURL: executableURL, token: token)
+        supervisor = replacement
+        try await replacement.start()
+        try? await Task.sleep(for: .milliseconds(250))
+        await refresh()
+        guard bridgeState == .running else {
+            throw RelayReconnectError.bridgeUnavailable
+        }
+        await restoreRelayCloudSession()
+        updateSetupState(bridgeReady: true)
     }
 
     private var cloudPendingPairings: [AdminPendingPairing] {
