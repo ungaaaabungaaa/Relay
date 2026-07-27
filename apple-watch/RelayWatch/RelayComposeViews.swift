@@ -2,43 +2,49 @@ import SwiftUI
 
 struct RelayInstructionView: View {
     @ObservedObject var model: RelayWatchModel
+    let taskID: String?
     @State private var text = ""
 
     var body: some View {
         List {
             RelayConnectionBanner(model: model)
-            if model.selectedTaskID == nil {
+            if selectedTaskID == nil {
                 Section("Task") {
                     ForEach(model.tasks) { task in
                         Button(task.title) { model.selectedTaskID = task.id }
                     }
                 }
-            } else if let task = model.selectedTask {
+            } else if let task = selectedTask {
                 Label(task.title, systemImage: "terminal")
             }
             TextField("Tell Codex what to do", text: $text)
             Button("Send instruction") { send() }
                 .disabled(!canSend)
                 .accessibilityHint("Sends the reviewed text to the selected Codex task")
-            RelayBackButton(model: model, destination: model.selectedTaskID == nil ? .inbox : .activity)
+            RelayBackButton(model: model, destination: selectedTaskID == nil ? .inbox : .activity)
         }
     }
 
     private var canSend: Bool {
         model.actionsEnabled && !model.mutationPending
-            && model.selectedTaskID != nil
+            && selectedTaskID != nil
             && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var selectedTaskID: String? { taskID ?? model.selectedTaskID }
+    private var selectedTask: RelayTask? {
+        selectedTaskID.flatMap { id in model.tasks.first { $0.id == id } }
+    }
+
     private func send() {
-        guard let taskID = model.selectedTaskID else { return }
+        guard let taskID = selectedTaskID else { return }
         let reviewedText = text
         Task {
             do {
                 try await model.sendText(taskID: taskID, text: reviewedText)
                 text = ""
                 model.reportActionSuccess()
-                model.show(.activity)
+                model.navigate(to: .activity(taskID))
             } catch { model.reportActionFailure(error) }
         }
     }

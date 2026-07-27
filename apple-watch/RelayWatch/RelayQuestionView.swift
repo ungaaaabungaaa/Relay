@@ -2,12 +2,13 @@ import SwiftUI
 
 struct RelayQuestionView: View {
     @ObservedObject var model: RelayWatchModel
+    let questionID: String?
     @State private var answers: [String: [String]] = [:]
 
     var body: some View {
         List {
             RelayConnectionBanner(model: model)
-            if let question = model.selectedQuestion {
+            if let question {
                 ForEach(question.questions) { item in
                     Section(item.header) {
                         Text(item.question)
@@ -42,6 +43,11 @@ struct RelayQuestionView: View {
     }
 
     private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
+
+    private var question: RelayQuestion? {
+        guard let questionID else { return model.selectedQuestion }
+        return model.inbox.questions.first { $0.id == questionID }
+    }
 
     private func submit(_ question: RelayQuestion) {
         Task {

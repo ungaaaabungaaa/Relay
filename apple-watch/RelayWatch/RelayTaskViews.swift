@@ -26,12 +26,13 @@ struct RelayTasksView: View {
 
 struct RelayTaskActivityView: View {
     @ObservedObject var model: RelayWatchModel
+    let taskID: String?
     @State private var confirmStop = false
 
     var body: some View {
         List {
             RelayConnectionBanner(model: model)
-            if let task = model.selectedTaskDetail {
+            if let task {
                 Section {
                     Text(task.title).font(.headline)
                     Text("\(task.status.rawValue.capitalized) · \(task.cwd)")
@@ -64,18 +65,23 @@ struct RelayTaskActivityView: View {
                             Button("Cancel", role: .cancel) {}
                         }
                 }
-                Button("Send instruction") { model.show(.instruction) }
+                Button("Send instruction") { model.navigate(to: .instruction(task.id)) }
             } else {
                 ProgressView("Loading task…")
             }
             RelayBackButton(model: model, destination: .tasks)
         }
         .task {
-            if let id = model.selectedTaskID { await model.loadTask(id) }
+            if let id = taskID ?? model.selectedTaskID { await model.loadTask(id) }
         }
     }
 
     private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
+
+    private var task: RelayTaskDetail? {
+        guard let taskID else { return model.selectedTaskDetail }
+        return model.taskDetails[taskID]
+    }
 
     private func stop(_ taskID: String) {
         Task {

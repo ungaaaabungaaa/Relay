@@ -3,13 +3,14 @@ import WatchKit
 
 struct RelayApprovalView: View {
     @ObservedObject var model: RelayWatchModel
+    let approvalID: String?
     @State private var confirmNormal = false
     @State private var confirmDangerous = false
 
     var body: some View {
         List {
             RelayConnectionBanner(model: model)
-            if let approval = model.selectedApproval {
+            if let approval {
                 Section(approval.kind.rawValue.capitalized) {
                     if let command = approval.command {
                         Text(command).font(.caption.monospaced())
@@ -64,6 +65,11 @@ struct RelayApprovalView: View {
     }
 
     private var canMutate: Bool { model.actionsEnabled && !model.mutationPending }
+
+    private var approval: RelayApproval? {
+        guard let approvalID else { return model.selectedApproval }
+        return model.inbox.approvals.first { $0.id == approvalID }
+    }
 
     private func consequences(for approval: RelayApproval) -> [String] {
         if !approval.riskReasons.isEmpty { return approval.riskReasons }

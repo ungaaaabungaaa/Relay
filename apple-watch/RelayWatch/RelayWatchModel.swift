@@ -92,6 +92,7 @@ final class RelayWatchModel: ObservableObject {
     }
 
     func beginPairing() {
+        popToRoot()
         pairingPhase = .codeEntry
     }
 
@@ -102,6 +103,7 @@ final class RelayWatchModel: ObservableObject {
             return
         }
         pairingTask?.cancel()
+        popToRoot()
         discoveredMac = nil
         error = nil
         connection = .pairing
@@ -120,9 +122,11 @@ final class RelayWatchModel: ObservableObject {
                 await syncPairing()
             } catch is CancellationError {
                 await pairing.cancel()
+                popToRoot()
                 connection = .unpaired
                 await syncPairing()
             } catch {
+                popToRoot()
                 connection = .unpaired
                 self.error = "Pairing could not be started. Check the code and try again."
                 await syncPairing()
@@ -143,6 +147,7 @@ final class RelayWatchModel: ObservableObject {
                     case .denied:
                         throw RelayPairingStateError.denied
                     case .approved:
+                        popToRoot()
                         pairingPhase = .paired
                         connection = .offline
                         try await startRemoteSession()
@@ -151,13 +156,16 @@ final class RelayWatchModel: ObservableObject {
                 }
             } catch is CancellationError {
                 await pairing.cancel()
+                popToRoot()
                 connection = .unpaired
                 await syncPairing()
             } catch RelayAPIError.incompatible {
+                popToRoot()
                 connection = .incompatible
                 error = "Update Relay on the Mac and watch."
                 await syncPairing()
             } catch {
+                popToRoot()
                 connection = .unpaired
                 self.error = "Pairing was denied, expired, or unavailable."
                 await syncPairing()
@@ -168,6 +176,7 @@ final class RelayWatchModel: ObservableObject {
     func cancelPairing() {
         pairingTask?.cancel()
         pairingTask = nil
+        popToRoot()
         Task {
             await pairing.cancel()
             await syncPairing()
@@ -178,6 +187,7 @@ final class RelayWatchModel: ObservableObject {
 
     func refresh() async {
         guard deviceStore.load() != nil else {
+            popToRoot()
             connection = .unpaired
             cacheIsStale = true
             return
@@ -312,6 +322,7 @@ final class RelayWatchModel: ObservableObject {
     func revokeLocally() {
         pairingTask?.cancel()
         transportTask?.cancel()
+        popToRoot()
         Task {
             await voiceController.cancel()
             await api.eraseSession()
@@ -326,6 +337,7 @@ final class RelayWatchModel: ObservableObject {
     }
 
     func pairAgain() {
+        popToRoot()
         connection = .unpaired
         pairingPhase = .codeEntry
         error = nil
@@ -357,6 +369,9 @@ final class RelayWatchModel: ObservableObject {
     private func syncFeature() async {
         let state = await feature.state
         connection = state.connection
+        if state.connection == .unpaired || state.connection == .revoked || state.connection == .incompatible {
+            popToRoot()
+        }
         cacheIsStale = state.cacheIsStale
         inbox = state.inbox
         tasks = state.tasks

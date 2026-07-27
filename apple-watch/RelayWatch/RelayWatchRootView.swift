@@ -96,11 +96,11 @@ struct RelayWatchRootView: View {
     @ViewBuilder
     private func destination(for route: RelayWatchRoute) -> some View {
         switch route {
-        case .approval: RelayApprovalView(model: model)
-        case .question: RelayQuestionView(model: model)
+        case let .approval(id): RelayApprovalView(model: model, approvalID: id)
+        case let .question(id): RelayQuestionView(model: model, questionID: id)
         case .tasks: RelayTasksView(model: model)
-        case .task, .activity: RelayTaskActivityView(model: model)
-        case .instruction: RelayInstructionView(model: model)
+        case let .task(id), let .activity(id): RelayTaskActivityView(model: model, taskID: id)
+        case let .instruction(id): RelayInstructionView(model: model, taskID: id)
         case .newTask: RelayNewTaskView(model: model)
         case .history: RelayHistoryView(model: model)
         case .settings: RelaySettingsView(model: model)

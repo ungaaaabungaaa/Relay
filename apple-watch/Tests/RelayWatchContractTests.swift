@@ -36,6 +36,31 @@ func watchSourcesUseNativeNavigationAndNoCustomBackButton() throws {
 }
 
 @Test
+func terminalConnectionTransitionsClearTheNavigationPath() throws {
+    let model = try relayWatchSource(named: "RelayWatchModel.swift")
+
+    #expect(model.contains("case .approved:\n                        popToRoot()"))
+    #expect(model.contains("catch RelayAPIError.incompatible {\n                popToRoot()"))
+    #expect(model.contains("func revokeLocally() {\n        pairingTask?.cancel()\n        transportTask?.cancel()\n        popToRoot()"))
+    #expect(model.contains("func pairAgain() {\n        popToRoot()"))
+}
+
+@Test
+func routeDestinationsUseTheirStableIdentityInsteadOfMutableSelection() throws {
+    let root = try relayWatchSource(named: "RelayWatchRootView.swift")
+    let approval = try relayWatchSource(named: "RelayApprovalView.swift")
+    let question = try relayWatchSource(named: "RelayQuestionView.swift")
+    let task = try relayWatchSource(named: "RelayTaskViews.swift")
+
+    #expect(root.contains("case let .approval(id): RelayApprovalView(model: model, approvalID: id)"))
+    #expect(root.contains("case let .question(id): RelayQuestionView(model: model, questionID: id)"))
+    #expect(root.contains("case let .task(id), let .activity(id): RelayTaskActivityView(model: model, taskID: id)"))
+    #expect(approval.contains("model.inbox.approvals.first { $0.id == approvalID }"))
+    #expect(question.contains("model.inbox.questions.first { $0.id == questionID }"))
+    #expect(task.contains("model.taskDetails[taskID]"))
+}
+
+@Test
 func decodesBridgeTaskAndRejectsUnknownApprovalRisk() throws {
     let task = try JSONDecoder().decode(
         RelayTask.self,
