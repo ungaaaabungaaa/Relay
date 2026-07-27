@@ -161,7 +161,8 @@ test("Task 1 brand primitives define semantic Apple styling", async () => {
   assert.match(macBrand, /\.fill\(\.primary\)/);
   assert.match(watchStyle, /struct RelayWatchMark: View/);
   assert.match(watchStyle, /enum RelayWatchStyle/);
-  assert.match(watchStyle, /static let accent = Color\.accentColor/);
+  assert.match(watchStyle, /static let accent = Color\.blue/);
+  assert.doesNotMatch(watchStyle, /Color\.accentColor/);
   assert.doesNotMatch(watchStyle, /\.mint/);
 });
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum RelayWatchStyle {
-    static let accent = Color.accentColor
+    static let accent = Color.blue
     static let foreground = Color.primary
     static let secondaryForeground = Color.secondary
     static let surface = Material.thin
