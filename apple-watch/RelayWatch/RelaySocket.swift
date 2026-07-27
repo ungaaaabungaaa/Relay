@@ -16,17 +16,132 @@ enum RelaySocketError: Error, Equatable, Sendable {
     case closed
 }
 
+struct RelayWebSocketHandshakeFailure: Error, Equatable, Sendable {
+    let statusCode: Int?
+}
+
+protocol RelayWebSocketHandshakeDriving: Sendable {
+    func open(_ request: URLRequest) async throws -> any RelaySocket
+}
+
 final class URLSessionRelaySocketFactory: RelaySocketFactory, @unchecked Sendable {
-    private let session: URLSession
+    private let handshakeDriver: any RelayWebSocketHandshakeDriving
 
     init(session: URLSession = .shared) {
-        self.session = session
+        self.handshakeDriver = URLSessionWebSocketHandshakeDriver(
+            configuration: session.configuration
+        )
+    }
+
+    init(handshakeDriver: any RelayWebSocketHandshakeDriving) {
+        self.handshakeDriver = handshakeDriver
     }
 
     func connect(_ request: URLRequest) async throws -> any RelaySocket {
+        do {
+            return try await handshakeDriver.open(request)
+        } catch let failure as RelayWebSocketHandshakeFailure {
+            if let status = failure.statusCode, status == 401 || status == 403 {
+                throw RelaySocketError.handshakeRejected(status)
+            }
+            throw RelaySocketError.network
+        } catch let error as RelaySocketError {
+            throw error
+        } catch is CancellationError {
+            throw RelaySocketError.closed
+        } catch {
+            throw RelaySocketError.network
+        }
+    }
+}
+
+private actor URLSessionWebSocketHandshakeDriver: RelayWebSocketHandshakeDriving {
+    private let delegate: URLSessionRelaySocketDelegate
+    private let session: URLSession
+
+    init(configuration: URLSessionConfiguration) {
+        let delegate = URLSessionRelaySocketDelegate()
+        self.delegate = delegate
+        self.session = URLSession(
+            configuration: configuration,
+            delegate: delegate,
+            delegateQueue: nil
+        )
+    }
+
+    func open(_ request: URLRequest) async throws -> any RelaySocket {
         let task = session.webSocketTask(with: request)
-        task.resume()
+        try await delegate.waitUntilOpen(task)
         return URLSessionRelaySocket(task: task)
+    }
+}
+
+private final class URLSessionRelaySocketDelegate: NSObject,
+    URLSessionWebSocketDelegate, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var openings: [Int: CheckedContinuation<Void, Error>] = [:]
+
+    func waitUntilOpen(_ task: URLSessionWebSocketTask) async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.withLock {
+                    openings[task.taskIdentifier] = continuation
+                }
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel(with: .goingAway, reason: nil)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        finish(webSocketTask, result: .success(()))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        finish(
+            webSocketTask,
+            result: .failure(
+                RelayWebSocketHandshakeFailure(
+                    statusCode: (webSocketTask.response as? HTTPURLResponse)?.statusCode
+                )
+            )
+        )
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let task = task as? URLSessionWebSocketTask else { return }
+        finish(
+            task,
+            result: .failure(
+                RelayWebSocketHandshakeFailure(
+                    statusCode: (task.response as? HTTPURLResponse)?.statusCode
+                )
+            )
+        )
+    }
+
+    private func finish(
+        _ task: URLSessionWebSocketTask,
+        result: Result<Void, Error>
+    ) {
+        let continuation = lock.withLock {
+            openings.removeValue(forKey: task.taskIdentifier)
+        }
+        continuation?.resume(with: result)
     }
 }
 

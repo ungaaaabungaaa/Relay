@@ -342,6 +342,263 @@ func mutationRejectsMissingOrMalformedIdempotencyKeysBeforeSending() async throw
     await fixture.client.stop()
 }
 
+@Test
+func concurrentRequestCannotOvertakeAReservedVoiceBatchOnTheWire() async throws {
+    let socket = ControlledRelaySocket(blockSends: true)
+    let fixture = TransportFixture(sockets: [socket])
+    let stream = await fixture.client.start()
+    var events = stream.makeAsyncIterator()
+    #expect(await events.next() == .connected(reconnected: false))
+    let voice = Task {
+        try await fixture.client.transcribe(
+            audio: Data(repeating: 7, count: relayVoiceChunkBytes + 1),
+            durationMs: 2_000,
+            contentType: "audio/mp4",
+            idempotencyKey: "voice-ordered-0001"
+        )
+    }
+    guard await socket.waitForSendAttempts(1) else {
+        Issue.record("voice sender did not start")
+        voice.cancel()
+        await fixture.client.stop()
+        return
+    }
+    let read = Task {
+        try await fixture.client.request(RelayEndpoint<RelayInbox>.inbox())
+    }
+
+    await socket.releaseOneSend()
+    #expect(await socket.waitForSendAttempts(2))
+    await socket.releaseOneSend()
+    #expect(await socket.waitForSendAttempts(3))
+    await socket.releaseOneSend()
+    let frames = try await socket.takeSentEnvelopes(count: 3)
+    #expect(frames.map(\.sequence) == [1, 2, 3])
+    let firstKind = try decodeInner(frames[0], rootKey: testConfig.rootKey)["kind"] as? String
+    let secondKind = try decodeInner(frames[1], rootKey: testConfig.rootKey)["kind"] as? String
+    let thirdKind = try decodeInner(frames[2], rootKey: testConfig.rootKey)["kind"] as? String
+    #expect([firstKind, secondKind, thirdKind] == ["voice", "voice", "request"])
+
+    let classifiedFrames = Array(zip(frames, [firstKind, secondKind, thirdKind]))
+    let voiceResponseID = try #require(
+        classifiedFrames.last { $0.1 == "voice" }?.0.messageID
+    )
+    let readResponseID = try #require(
+        classifiedFrames.first { $0.1 == "request" }?.0.messageID
+    )
+    try await socket.push(hostResponse(
+        sequence: 1,
+        requestID: voiceResponseID,
+        body: #"{"transcript":"Ordered"}"#
+    ))
+    try await socket.push(hostResponse(
+        sequence: 2,
+        requestID: readResponseID,
+        body: #"{"approvals":[],"questions":[]}"#
+    ))
+    #expect(try await voice.value.transcript == "Ordered")
+    _ = try await read.value
+    await fixture.client.stop()
+}
+
+@Test
+func cancellationBeforeQueuedMutationSendLeaksNoFrame() async throws {
+    let socket = ControlledRelaySocket(blockSends: true)
+    let fixture = TransportFixture(sockets: [socket])
+    let stream = await fixture.client.start()
+    var events = stream.makeAsyncIterator()
+    #expect(await events.next() == .connected(reconnected: false))
+    let voice = Task {
+        try await fixture.client.transcribe(
+            audio: Data(repeating: 8, count: relayVoiceChunkBytes + 1),
+            durationMs: 2_000,
+            contentType: "audio/mp4",
+            idempotencyKey: "voice-blocker-0001"
+        )
+    }
+    guard await socket.waitForSendAttempts(1) else {
+        Issue.record("blocking voice sender did not start")
+        voice.cancel()
+        await fixture.client.stop()
+        return
+    }
+    let mutation = Task {
+        try await fixture.client.request(
+            RelayEndpoint<RelayMutationAcknowledgement>.stop(
+                taskID: "task-1",
+                turnID: "turn-1"
+            ),
+            idempotencyKey: "cancel-before-send"
+        )
+    }
+    mutation.cancel()
+    await #expect(throws: CancellationError.self) { try await mutation.value }
+
+    await socket.releaseOneSend()
+    #expect(await socket.waitForSendAttempts(2))
+    await socket.releaseOneSend()
+    await allowConcurrencyToSettle()
+    #expect(await socket.sendAttemptCount == 2)
+    voice.cancel()
+    await socket.releaseAllSends()
+    await fixture.client.stop()
+}
+
+@Test
+func disconnectedVoiceBatchCannotContinueOnReconnectedSocket() async throws {
+    let firstSocket = ControlledRelaySocket(
+        blockSends: true,
+        closeCancelsBlockedSends: false
+    )
+    let secondSocket = ControlledRelaySocket()
+    let fixture = TransportFixture(sockets: [firstSocket, secondSocket])
+    let stream = await fixture.client.start()
+    var events = stream.makeAsyncIterator()
+    #expect(await events.next() == .connected(reconnected: false))
+    let voice = Task {
+        try await fixture.client.transcribe(
+            audio: Data(repeating: 9, count: relayVoiceChunkBytes + 1),
+            durationMs: 2_000,
+            contentType: "audio/mp4",
+            idempotencyKey: "voice-disconnect-01"
+        )
+    }
+    guard await firstSocket.waitForSendAttempts(1) else {
+        Issue.record("voice sender did not block")
+        voice.cancel()
+        await fixture.client.stop()
+        return
+    }
+    await firstSocket.fail(RelaySocketError.network)
+    #expect(await events.next() == .disconnected(.network))
+    #expect(await events.next() == .connected(reconnected: true))
+    await firstSocket.releaseOneSend()
+    await allowConcurrencyToSettle()
+
+    #expect(await secondSocket.sendAttemptCount == 0)
+    await #expect(throws: RelayAPIError.offline) { try await voice.value }
+    await fixture.client.stop()
+}
+
+@Test
+func delayedOldCloseCannotOverlapOrClearRestartedLifecycle() async throws {
+    let firstSocket = ControlledRelaySocket(blockClose: true)
+    let secondSocket = ControlledRelaySocket()
+    let factory = ControlledSocketFactory(sockets: [firstSocket, secondSocket])
+    let fixture = TransportFixture(socketFactory: factory)
+    let firstStream = await fixture.client.start()
+    var firstEvents = firstStream.makeAsyncIterator()
+    #expect(await firstEvents.next() == .connected(reconnected: false))
+
+    let stopping = Task { await fixture.client.stop() }
+    guard await firstSocket.waitForCloseAttempts(1) else {
+        Issue.record("old lifecycle did not enter close")
+        stopping.cancel()
+        await fixture.client.stop()
+        return
+    }
+    let restartedStream = await fixture.client.start()
+    var restartedEvents = restartedStream.makeAsyncIterator()
+    await firstSocket.releaseClose()
+    #expect(await restartedEvents.next() == .connected(reconnected: true))
+    await stopping.value
+    await allowConcurrencyToSettle()
+
+    #expect(await factory.connectCount == 2)
+    #expect(!(await secondSocket.isClosed))
+    await fixture.client.stop()
+}
+
+@Test
+func productionHandshakeAdapterBacksOffAndErasesOnAuthorizationFailure() async throws {
+    let driver = ControlledHandshakeDriver(
+        failures: [
+            RelayWebSocketHandshakeFailure(statusCode: nil),
+            RelayWebSocketHandshakeFailure(statusCode: nil),
+            RelayWebSocketHandshakeFailure(statusCode: nil),
+            RelayWebSocketHandshakeFailure(statusCode: 401),
+        ]
+    )
+    let factory = URLSessionRelaySocketFactory(handshakeDriver: driver)
+    let delays = RecordedSleeper()
+    let fixture = TransportFixture(
+        socketFactory: factory,
+        sleep: { duration in await delays.record(duration) }
+    )
+    let stream = await fixture.client.start()
+    var events = stream.makeAsyncIterator()
+    #expect(await events.next() == .disconnected(.network))
+    #expect(await events.next() == .disconnected(.network))
+    #expect(await events.next() == .disconnected(.network))
+    #expect(await events.next() == .revoked)
+
+    #expect(await delays.values == [.seconds(1), .seconds(2), .seconds(4)])
+    #expect(fixture.store.load() == nil)
+    #expect(fixture.identity.deleteCount == 1)
+    #expect(fixture.agreementIdentity.deleteCount == 1)
+    await fixture.client.stop()
+}
+
+@Test
+func productionFactoryPublishesConnectedOnlyAfterHandshakeOpens() async throws {
+    let socket = ControlledRelaySocket()
+    let driver = BlockingHandshakeDriver(socket: socket)
+    let factory = URLSessionRelaySocketFactory(handshakeDriver: driver)
+    let fixture = TransportFixture(socketFactory: factory)
+    let stream = await fixture.client.start()
+    let recorder = TransportEventRecorder()
+    let consumer = Task {
+        for await event in stream { await recorder.append(event) }
+    }
+    #expect(await driver.waitForAttempts(1))
+    await allowConcurrencyToSettle()
+    #expect(await recorder.values.isEmpty)
+
+    await driver.open()
+    #expect(await recorder.waitForEvents(1))
+    #expect(await recorder.values == [.connected(reconnected: false)])
+    await fixture.client.stop()
+    consumer.cancel()
+}
+
+@Test
+func stopStartDuringCancelledBackoffHandsLifecycleToLatestGeneration() async throws {
+    let latestSocket = ControlledRelaySocket()
+    let factory = ControlledSocketFactory(
+        results: [
+            .failure(RelaySocketError.network),
+            .success(latestSocket as any RelaySocket),
+        ]
+    )
+    let sleeper = BlockingSleeper()
+    let fixture = TransportFixture(
+        socketFactory: factory,
+        sleep: { duration in try await sleeper.sleep(duration) }
+    )
+    let firstStream = await fixture.client.start()
+    var firstEvents = firstStream.makeAsyncIterator()
+    #expect(await firstEvents.next() == .disconnected(.network))
+    #expect(await sleeper.waitForAttempts(1))
+
+    let stopping = Task { await fixture.client.stop() }
+    #expect(await sleeper.waitForCancellations(1))
+    let restartedStream = await fixture.client.start()
+    let recorder = TransportEventRecorder()
+    let consumer = Task {
+        for await event in restartedStream { await recorder.append(event) }
+    }
+    await sleeper.release()
+    #expect(await factory.waitForConnects(2))
+    #expect(await recorder.waitForEvents(1))
+    #expect(await recorder.values == [.connected(reconnected: false)])
+    await stopping.value
+
+    #expect(await factory.connectCount == 2)
+    #expect(!(await latestSocket.isClosed))
+    await fixture.client.stop()
+    consumer.cancel()
+}
+
 private final class FakeSigningIdentity: RelayWatchSigningIdentity, @unchecked Sendable {
     private let lock = NSLock()
     private var storedDeleteCount = 0
@@ -408,12 +665,37 @@ private actor ControlledRelaySocket: RelaySocket {
     private var sentWaiters: [CheckedContinuation<Data, Never>] = []
     private var incoming: [Result<Data, Error>] = []
     private var receiveWaiters: [CheckedContinuation<Data, Error>] = []
+    private var blockedSendWaiters: [CheckedContinuation<Void, Never>] = []
+    private var blockedCloseWaiters: [CheckedContinuation<Void, Never>] = []
+    private let blockSends: Bool
+    private let blockClose: Bool
+    private let closeCancelsBlockedSends: Bool
+    private(set) var sendAttemptCount = 0
+    private(set) var closeAttemptCount = 0
     private(set) var closed = false
 
+    init(
+        blockSends: Bool = false,
+        blockClose: Bool = false,
+        closeCancelsBlockedSends: Bool = true
+    ) {
+        self.blockSends = blockSends
+        self.blockClose = blockClose
+        self.closeCancelsBlockedSends = closeCancelsBlockedSends
+    }
+
     var sentCount: Int { sent.count }
+    var isClosed: Bool { closed }
 
     func send(_ data: Data) async throws {
         guard !closed else { throw RelaySocketError.network }
+        sendAttemptCount += 1
+        if blockSends {
+            await withCheckedContinuation { blockedSendWaiters.append($0) }
+        }
+        if closed && closeCancelsBlockedSends {
+            throw RelaySocketError.closed
+        }
         if sentWaiters.isEmpty {
             sent.append(data)
         } else {
@@ -428,7 +710,16 @@ private actor ControlledRelaySocket: RelaySocket {
 
     func close() async {
         guard !closed else { return }
+        closeAttemptCount += 1
+        if blockClose {
+            await withCheckedContinuation { blockedCloseWaiters.append($0) }
+        }
         closed = true
+        if closeCancelsBlockedSends {
+            let sendWaiters = blockedSendWaiters
+            blockedSendWaiters.removeAll()
+            sendWaiters.forEach { $0.resume() }
+        }
         let waiters = receiveWaiters
         receiveWaiters.removeAll()
         waiters.forEach { $0.resume(throwing: RelaySocketError.closed) }
@@ -442,6 +733,47 @@ private actor ControlledRelaySocket: RelaySocket {
             data = await withCheckedContinuation { sentWaiters.append($0) }
         }
         return try JSONDecoder().decode(RelayTunnelEnvelope.self, from: data)
+    }
+
+    func takeSentEnvelopes(count: Int) async throws -> [RelayTunnelEnvelope] {
+        var envelopes: [RelayTunnelEnvelope] = []
+        for _ in 0..<count {
+            envelopes.append(try await nextSentEnvelope())
+        }
+        return envelopes
+    }
+
+    func waitForSendAttempts(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if sendAttemptCount >= count { return true }
+            await Task.yield()
+        }
+        return sendAttemptCount >= count
+    }
+
+    func waitForCloseAttempts(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if closeAttemptCount >= count { return true }
+            await Task.yield()
+        }
+        return closeAttemptCount >= count
+    }
+
+    func releaseOneSend() {
+        guard !blockedSendWaiters.isEmpty else { return }
+        blockedSendWaiters.removeFirst().resume()
+    }
+
+    func releaseAllSends() {
+        let waiters = blockedSendWaiters
+        blockedSendWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+    }
+
+    func releaseClose() {
+        let waiters = blockedCloseWaiters
+        blockedCloseWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     func push(_ envelope: RelayTunnelEnvelope) async throws {
@@ -464,15 +796,29 @@ private actor ControlledRelaySocket: RelaySocket {
 
 private actor ControlledSocketFactory: RelaySocketFactory {
     private var results: [Result<any RelaySocket, Error>]
+    private(set) var connectCount = 0
 
     init(sockets: [ControlledRelaySocket] = [], errors: [RelaySocketError] = []) {
         results = sockets.map { .success($0 as any RelaySocket) }
             + errors.map { .failure($0) }
     }
 
+    init(results: [Result<any RelaySocket, Error>]) {
+        self.results = results
+    }
+
     func connect(_ request: URLRequest) async throws -> any RelaySocket {
+        connectCount += 1
         guard !results.isEmpty else { throw RelaySocketError.network }
         return try results.removeFirst().get()
+    }
+
+    func waitForConnects(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if connectCount >= count { return true }
+            await Task.yield()
+        }
+        return connectCount >= count
     }
 }
 
@@ -487,13 +833,42 @@ private final class TransportFixture: @unchecked Sendable {
         connectErrors: [RelaySocketError] = []
     ) {
         let factory = ControlledSocketFactory(sockets: sockets, errors: connectErrors)
+        self.client = Self.makeClient(
+            identity: identity,
+            agreementIdentity: agreementIdentity,
+            store: store,
+            socketFactory: factory,
+            sleep: { _ in }
+        )
+    }
+
+    init(
+        socketFactory: any RelaySocketFactory,
+        sleep: @escaping RelayAPIClient.Sleep = { _ in }
+    ) {
+        self.client = Self.makeClient(
+            identity: identity,
+            agreementIdentity: agreementIdentity,
+            store: store,
+            socketFactory: socketFactory,
+            sleep: sleep
+        )
+    }
+
+    private static func makeClient(
+        identity: FakeSigningIdentity,
+        agreementIdentity: FakeAgreementIdentity,
+        store: MemoryCloudStore,
+        socketFactory: any RelaySocketFactory,
+        sleep: @escaping RelayAPIClient.Sleep
+    ) -> RelayAPIClient {
         let nonceCount = LockedCounter()
         let identifierCount = LockedCounter()
-        client = RelayAPIClient(
+        return RelayAPIClient(
             identity: identity,
             agreementIdentity: agreementIdentity,
             deviceStore: store,
-            socketFactory: factory,
+            socketFactory: socketFactory,
             environment: RelayEnvironment(
                 name: .localDevelopment,
                 httpOrigin: URL(string: "http://127.0.0.1:8787")!,
@@ -507,8 +882,108 @@ private final class TransportFixture: @unchecked Sendable {
                 "identifier-\(identifierCount.next())"
             },
             randomBytes: { Data(repeating: 0xA5, count: $0) },
-            sleep: { _ in }
+            sleep: sleep
         )
+    }
+}
+
+private actor RecordedSleeper {
+    private(set) var values: [Duration] = []
+    func record(_ duration: Duration) { values.append(duration) }
+}
+
+private actor BlockingSleeper {
+    private var attempts: [Duration] = []
+    private var cancellations = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func sleep(_ duration: Duration) async throws {
+        attempts.append(duration)
+        try await withTaskCancellationHandler {
+            await withCheckedContinuation { waiters.append($0) }
+            try Task.checkCancellation()
+        } onCancel: {
+            Task { await self.recordCancellation() }
+        }
+    }
+
+    func waitForAttempts(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if attempts.count >= count { return true }
+            await Task.yield()
+        }
+        return attempts.count >= count
+    }
+
+    func release() {
+        let continuations = waiters
+        waiters.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+
+    func waitForCancellations(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if cancellations >= count { return true }
+            await Task.yield()
+        }
+        return cancellations >= count
+    }
+
+    private func recordCancellation() { cancellations += 1 }
+}
+
+private actor BlockingHandshakeDriver: RelayWebSocketHandshakeDriving {
+    private let socket: any RelaySocket
+    private var attempts = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(socket: any RelaySocket) { self.socket = socket }
+
+    func open(_ request: URLRequest) async throws -> any RelaySocket {
+        attempts += 1
+        await withCheckedContinuation { waiters.append($0) }
+        try Task.checkCancellation()
+        return socket
+    }
+
+    func waitForAttempts(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if attempts >= count { return true }
+            await Task.yield()
+        }
+        return attempts >= count
+    }
+
+    func open() {
+        let continuations = waiters
+        waiters.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+}
+
+private actor TransportEventRecorder {
+    private(set) var values: [RelayTransportEvent] = []
+    func append(_ event: RelayTransportEvent) { values.append(event) }
+
+    func waitForEvents(_ count: Int) async -> Bool {
+        for _ in 0..<10_000 {
+            if values.count >= count { return true }
+            await Task.yield()
+        }
+        return values.count >= count
+    }
+}
+
+private actor ControlledHandshakeDriver: RelayWebSocketHandshakeDriving {
+    private var failures: [RelayWebSocketHandshakeFailure]
+
+    init(failures: [RelayWebSocketHandshakeFailure]) {
+        self.failures = failures
+    }
+
+    func open(_ request: URLRequest) async throws -> any RelaySocket {
+        guard !failures.isEmpty else { throw RelayWebSocketHandshakeFailure(statusCode: nil) }
+        throw failures.removeFirst()
     }
 }
 
@@ -578,4 +1053,8 @@ private func requestPath(_ inner: [String: Any]) -> String? {
 
 private func jsonObject<Value: Encodable>(_ value: Value) throws -> Any {
     try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+}
+
+private func allowConcurrencyToSettle() async {
+    for _ in 0..<200 { await Task.yield() }
 }

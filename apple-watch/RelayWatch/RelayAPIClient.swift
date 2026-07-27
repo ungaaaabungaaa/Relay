@@ -36,6 +36,35 @@ enum RelayTransportEvent: Sendable, Equatable {
 actor RelayAPIClient {
     typealias Sleep = @Sendable (Duration) async throws -> Void
 
+    private struct Lifecycle {
+        let id: Int
+        let task: Task<Void, Never>
+    }
+
+    private struct ActiveConnection {
+        let id: Int
+        let lifecycleID: Int
+        let socket: any RelaySocket
+        let config: RelayCloudDeviceConfig
+    }
+
+    private struct OutboundFrame {
+        let plaintext: Data
+        let requestID: String
+        let timestamp: Int64
+    }
+
+    private struct OutboundBatch {
+        let requestID: String
+        let connection: ActiveConnection
+        let frames: [OutboundFrame]
+    }
+
+    private struct Sender {
+        let connectionID: Int
+        let task: Task<Void, Never>
+    }
+
     private let identity: any RelayWatchSigningIdentity
     private let agreementIdentity: any RelayWatchAgreementIdentityProtocol
     private var deviceStore: any RelayWatchCloudStoring
@@ -49,13 +78,17 @@ actor RelayAPIClient {
     private let randomBytes: @Sendable (Int) -> Data
     private let sleep: Sleep
 
-    private var socket: (any RelaySocket)?
-    private var receiveTask: Task<Void, Never>?
-    private var sendTask: Task<Void, Error>?
-    private var sendGeneration = 0
+    private var lifecycle: Lifecycle?
+    private var lifecycleGeneration = 0
+    private var connectionGeneration = 0
+    private var activeConnection: ActiveConnection?
+    private var sender: Sender?
+    private var sendingRequestID: String?
+    private var outboundQueue: [OutboundBatch] = []
     private var pending: [String: CheckedContinuation<RelayTunnelHTTPResponse, Error>] = [:]
     private var eventContinuation: AsyncStream<RelayTransportEvent>.Continuation?
-    private var running = false
+    private var desiredRunning = false
+    private var erasingSession = false
     private var connected = false
     private var hasConnected = false
 
@@ -191,28 +224,26 @@ actor RelayAPIClient {
         eventContinuation?.finish()
         let (stream, continuation) = AsyncStream<RelayTransportEvent>.makeStream()
         eventContinuation = continuation
-        guard receiveTask == nil else { return stream }
-        running = true
-        receiveTask = Task { await self.runConnectionLoop() }
+        guard !erasingSession else { return stream }
+        desiredRunning = true
+        launchLifecycleIfNeeded()
         return stream
     }
 
     func stop() async {
-        running = false
-        connected = false
-        let lifecycle = receiveTask
-        receiveTask = nil
-        lifecycle?.cancel()
-        sendTask?.cancel()
-        sendTask = nil
-        let activeSocket = socket
-        socket = nil
-        await activeSocket?.close()
+        desiredRunning = false
+        let stoppingLifecycle = lifecycle
+        let stoppingConnection = activeConnection
+        stoppingLifecycle?.task.cancel()
+        invalidateConnection(stoppingConnection)
+        await stoppingConnection?.socket.close()
         failAllPending(with: RelayAPIError.offline)
-        await lifecycle?.value
-        eventContinuation?.yield(.disconnected(.stopped))
-        eventContinuation?.finish()
-        eventContinuation = nil
+        await stoppingLifecycle?.task.value
+        if !desiredRunning {
+            eventContinuation?.yield(.disconnected(.stopped))
+            eventContinuation?.finish()
+            eventContinuation = nil
+        }
     }
 
     func close() async {
@@ -280,7 +311,7 @@ actor RelayAPIClient {
             throw RelayAPIError.voiceLimitExceeded
         }
         try validateIdempotencyKey(idempotencyKey)
-        guard let config = deviceStore.load(), connected, socket != nil else {
+        guard let config = deviceStore.load(), connected, activeConnection != nil else {
             throw RelayAPIError.offline
         }
 
@@ -307,7 +338,7 @@ actor RelayAPIClient {
             throw RelayAPIError.voiceLimitExceeded
         }
         let transferID = makeIdentifier()
-        var frames: [Data] = []
+        var frames: [OutboundFrame] = []
         var finalRequestID = ""
         for (index, chunk) in chunks.enumerated() {
             let requestID = makeIdentifier()
@@ -330,11 +361,10 @@ actor RelayAPIClient {
                 ],
             ]
             frames.append(
-                try encryptedFrame(
-                    inner: inner,
+                OutboundFrame(
+                    plaintext: try JSONSerialization.data(withJSONObject: inner),
                     requestID: requestID,
-                    timestamp: timestamp,
-                    config: config
+                    timestamp: timestamp
                 )
             )
         }
@@ -353,19 +383,17 @@ actor RelayAPIClient {
     }
 
     func eraseSession() async {
-        running = false
-        connected = false
-        let lifecycle = receiveTask
-        receiveTask = nil
-        lifecycle?.cancel()
-        sendTask?.cancel()
-        sendTask = nil
-        let activeSocket = socket
-        socket = nil
-        await activeSocket?.close()
+        erasingSession = true
+        desiredRunning = false
+        let stoppingLifecycle = lifecycle
+        let stoppingConnection = activeConnection
+        stoppingLifecycle?.task.cancel()
+        invalidateConnection(stoppingConnection)
+        await stoppingConnection?.socket.close()
         failAllPending(with: RelayAPIError.revoked)
-        await lifecycle?.value
+        await stoppingLifecycle?.task.value
         eraseDeviceMaterial()
+        erasingSession = false
     }
 
     private func eraseDeviceMaterial() {
@@ -375,57 +403,78 @@ actor RelayAPIClient {
         hasConnected = false
     }
 
-    private func runConnectionLoop() async {
+    private func launchLifecycleIfNeeded() {
+        guard desiredRunning, lifecycle == nil else { return }
+        lifecycleGeneration += 1
+        let lifecycleID = lifecycleGeneration
+        let task = Task { await self.runConnectionLoop(lifecycleID: lifecycleID) }
+        lifecycle = Lifecycle(id: lifecycleID, task: task)
+    }
+
+    private func runConnectionLoop(lifecycleID: Int) async {
+        defer { lifecycleFinished(lifecycleID) }
         var reconnectAttempt = 0
-        while running && !Task.isCancelled {
+        while ownsLifecycle(lifecycleID) && desiredRunning && !Task.isCancelled {
             guard let config = deviceStore.load() else {
-                running = false
+                desiredRunning = false
                 break
             }
             do {
                 let activeSocket = try await socketFactory.connect(
                     socketRequest(config: config)
                 )
-                guard running && !Task.isCancelled else {
+                guard
+                    ownsLifecycle(lifecycleID),
+                    desiredRunning,
+                    !Task.isCancelled
+                else {
                     await activeSocket.close()
                     break
                 }
-                socket = activeSocket
+                connectionGeneration += 1
+                let connection = ActiveConnection(
+                    id: connectionGeneration,
+                    lifecycleID: lifecycleID,
+                    socket: activeSocket,
+                    config: config
+                )
+                activeConnection = connection
                 connected = true
                 let reconnected = hasConnected
                 hasConnected = true
                 reconnectAttempt = 0
                 eventContinuation?.yield(.connected(reconnected: reconnected))
-                try await receiveMessages(from: activeSocket, config: config)
+                try await receiveMessages(connection)
                 throw RelaySocketError.closed
             } catch {
                 let authFailure = isAuthorizationFailure(error)
                 let incompatible = error as? RelayAPIError == .incompatible
-                connected = false
-                let activeSocket = socket
-                socket = nil
-                await activeSocket?.close()
+                let failedConnection = activeConnection.flatMap {
+                    $0.lifecycleID == lifecycleID ? $0 : nil
+                }
+                invalidateConnection(failedConnection)
+                await failedConnection?.socket.close()
 
                 if authFailure {
-                    running = false
-                    sendTask?.cancel()
-                    sendTask = nil
+                    desiredRunning = false
                     failAllPending(with: RelayAPIError.revoked)
                     eraseDeviceMaterial()
-                    receiveTask = nil
                     eventContinuation?.yield(.revoked)
                     eventContinuation?.finish()
                     eventContinuation = nil
-                    return
+                    break
                 }
                 if incompatible {
                     failAllPending(with: RelayAPIError.incompatible)
                     eventContinuation?.yield(.incompatible)
-                    running = false
-                    receiveTask = nil
-                    return
+                    desiredRunning = false
+                    break
                 }
-                guard running && !Task.isCancelled else { return }
+                guard
+                    ownsLifecycle(lifecycleID),
+                    desiredRunning,
+                    !Task.isCancelled
+                else { break }
                 let mapped = requestFailure(for: error)
                 failAllPending(with: mapped)
                 eventContinuation?.yield(.disconnected(failureCategory(for: error)))
@@ -437,16 +486,45 @@ actor RelayAPIClient {
                 reconnectAttempt += 1
             }
         }
-        receiveTask = nil
     }
 
-    private func receiveMessages(
-        from activeSocket: any RelaySocket,
-        config: RelayCloudDeviceConfig
-    ) async throws {
-        while running && !Task.isCancelled {
-            let data = try await activeSocket.receive()
-            try processIncoming(data, config: config)
+    private func receiveMessages(_ connection: ActiveConnection) async throws {
+        while
+            ownsConnection(connection.id),
+            desiredRunning,
+            !Task.isCancelled
+        {
+            let data = try await connection.socket.receive()
+            guard ownsConnection(connection.id) else { throw RelaySocketError.closed }
+            try processIncoming(data, config: connection.config)
+        }
+    }
+
+    private func ownsLifecycle(_ id: Int) -> Bool {
+        lifecycle?.id == id
+    }
+
+    private func ownsConnection(_ id: Int) -> Bool {
+        activeConnection?.id == id
+    }
+
+    private func lifecycleFinished(_ id: Int) {
+        guard lifecycle?.id == id else { return }
+        lifecycle = nil
+        launchLifecycleIfNeeded()
+    }
+
+    private func invalidateConnection(_ connection: ActiveConnection?) {
+        guard let connection else { return }
+        if activeConnection?.id == connection.id {
+            activeConnection = nil
+            connected = false
+        }
+        outboundQueue.removeAll { $0.connection.id == connection.id }
+        if sender?.connectionID == connection.id {
+            sender?.task.cancel()
+            sender = nil
+            sendingRequestID = nil
         }
     }
 
@@ -558,7 +636,7 @@ actor RelayAPIClient {
         guard path.hasPrefix("/v1/"), !path.hasPrefix("//") else {
             throw RelayAPIError.invalidResponse
         }
-        guard let config = deviceStore.load(), connected, socket != nil else {
+        guard let config = deviceStore.load(), connected, activeConnection != nil else {
             throw RelayAPIError.offline
         }
         let timestamp = now()
@@ -582,11 +660,10 @@ actor RelayAPIClient {
                 "body": String(decoding: body, as: UTF8.self),
             ],
         ]
-        let frame = try encryptedFrame(
-            inner: inner,
+        let frame = OutboundFrame(
+            plaintext: try JSONSerialization.data(withJSONObject: inner),
             requestID: requestID,
-            timestamp: timestamp,
-            config: config
+            timestamp: timestamp
         )
         return try await awaitResponse(requestID: requestID, frames: [frame])
     }
@@ -622,22 +699,19 @@ actor RelayAPIClient {
     }
 
     private func encryptedFrame(
-        inner: [String: Any],
-        requestID: String,
-        timestamp: Int64,
+        _ frame: OutboundFrame,
         config: RelayCloudDeviceConfig
     ) throws -> Data {
-        let plaintext = try JSONSerialization.data(withJSONObject: inner)
         let nextSequence = deviceStore.outgoingSequence + 1
         let envelope = try relayEncrypt(
-            plaintext,
+            frame.plaintext,
             routing: RelayTunnelRouting(
-                messageID: requestID,
+                messageID: frame.requestID,
                 accountID: config.accountId,
                 hostID: config.hostId,
                 senderID: config.deviceId,
                 recipientID: config.hostId,
-                sentAt: timestamp,
+                sentAt: frame.timestamp,
                 sequence: nextSequence
             ),
             rootKey: SymmetricKey(data: config.rootKey),
@@ -649,52 +723,93 @@ actor RelayAPIClient {
 
     private func awaitResponse(
         requestID: String,
-        frames: [Data]
+        frames: [OutboundFrame]
     ) async throws -> RelayTunnelHTTPResponse {
-        guard connected, socket != nil else { throw RelayAPIError.offline }
+        guard let connection = activeConnection, connected else {
+            throw RelayAPIError.offline
+        }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pending[requestID] = continuation
-                Task { await self.send(frames, requestID: requestID) }
+                outboundQueue.append(
+                    OutboundBatch(
+                        requestID: requestID,
+                        connection: connection,
+                        frames: frames
+                    )
+                )
+                launchSenderIfNeeded(for: connection)
             }
         } onCancel: {
             Task { await self.cancelPending(requestID) }
         }
     }
 
-    private func cancelPending(_ requestID: String) {
+    private func cancelPending(_ requestID: String) async {
+        outboundQueue.removeAll { $0.requestID == requestID }
         completePending(requestID, with: .failure(CancellationError()))
+        if sendingRequestID == requestID, let connection = activeConnection {
+            invalidateConnection(connection)
+            await connection.socket.close()
+        }
     }
 
-    private func send(_ frames: [Data], requestID: String) async {
-        do {
-            for frame in frames {
-                try await enqueue(frame)
+    private func launchSenderIfNeeded(for connection: ActiveConnection) {
+        guard sender == nil, ownsConnection(connection.id) else { return }
+        let task = Task { await self.runSender(connectionID: connection.id) }
+        sender = Sender(connectionID: connection.id, task: task)
+    }
+
+    private func runSender(connectionID: Int) async {
+        while
+            ownsConnection(connectionID),
+            !Task.isCancelled,
+            let batch = nextBatch(for: connectionID)
+        {
+            sendingRequestID = batch.requestID
+            do {
+                for frame in batch.frames {
+                    guard
+                        ownsConnection(connectionID),
+                        pending[batch.requestID] != nil,
+                        !Task.isCancelled
+                    else { break }
+                    let data = try encryptedFrame(frame, config: batch.connection.config)
+                    try await batch.connection.socket.send(data)
+                }
+            } catch {
+                completePending(
+                    batch.requestID,
+                    with: .failure(requestFailure(for: error))
+                )
+                invalidateConnection(batch.connection)
+                await batch.connection.socket.close()
             }
-        } catch {
-            completePending(requestID, with: .failure(requestFailure(for: error)))
+            if sendingRequestID == batch.requestID {
+                sendingRequestID = nil
+            }
         }
+        senderFinished(connectionID)
     }
 
-    private func enqueue(_ frame: Data) async throws {
-        guard let activeSocket = socket, connected else {
-            throw RelayAPIError.offline
+    private func nextBatch(for connectionID: Int) -> OutboundBatch? {
+        while !outboundQueue.isEmpty {
+            let batch = outboundQueue.removeFirst()
+            guard
+                batch.connection.id == connectionID,
+                pending[batch.requestID] != nil
+            else { continue }
+            return batch
         }
-        let previous = sendTask
-        sendGeneration += 1
-        let generation = sendGeneration
-        let operation = Task {
-            if let previous { try await previous.value }
-            try Task.checkCancellation()
-            try await activeSocket.send(frame)
-        }
-        sendTask = operation
-        do {
-            try await operation.value
-            if generation == sendGeneration { sendTask = nil }
-        } catch {
-            if generation == sendGeneration { sendTask = nil }
-            throw error
+        return nil
+    }
+
+    private func senderFinished(_ connectionID: Int) {
+        guard sender?.connectionID == connectionID else { return }
+        sender = nil
+        sendingRequestID = nil
+        if let connection = activeConnection, !outboundQueue.isEmpty {
+            launchSenderIfNeeded(for: connection)
         }
     }
 
@@ -707,6 +822,7 @@ actor RelayAPIClient {
     }
 
     private func failAllPending(with error: Error) {
+        outboundQueue.removeAll()
         let continuations = pending.values
         pending.removeAll()
         continuations.forEach { $0.resume(throwing: error) }
