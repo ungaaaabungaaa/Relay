@@ -1,6 +1,6 @@
 # Relay Watch Native UI Design
 
-**Date:** 2026-07-27  
+**Date:** 2026-07-27
 **Status:** Approved visual direction; implementation contract
 
 ## Goal
