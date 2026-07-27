@@ -23,6 +23,9 @@ let package = Package(
             sources: [
                 "RelayAPIClient.swift",
                 "RelayProtocol.swift",
+                "RelayEndpoint.swift",
+                "RelayEnvironment.swift",
+                "RelayWatchTypes.swift",
                 "WatchIdentity.swift",
             ]
         ),

@@ -11,6 +11,18 @@ const apiClient = await readFile(
   "utf8",
 );
 
+const sourceMembership = [...project.matchAll(/\/\* ([^*]+) in Sources \*\//g)]
+  .map((match) => match[1]);
+
+function expectTargetSources(names) {
+  for (const name of names) {
+    assert.ok(
+      sourceMembership.includes(name),
+      `RelayWatch target must include ${name}`,
+    );
+  }
+}
+
 test("watchOS target uses Relay Cloud without Bonjour permissions", () => {
   assert.doesNotMatch(project, /NSBonjourServices|_relay-pair\._tcp/);
   assert.doesNotMatch(project, /NSLocalNetworkUsageDescription/);
@@ -34,4 +46,12 @@ test("watchOS target remains independent and watch-only", () => {
 test("Apple Watch sends Cloud envelopes as supported WebSocket text frames", () => {
   assert.match(apiClient, /activeSocket\.send\([\s\S]*?\.string\(/);
   assert.doesNotMatch(apiClient, /activeSocket\.send\(\s*\.data\(/);
+});
+
+test("Watch runtime contract sources belong to the app target", () => {
+  expectTargetSources([
+    "RelayEndpoint.swift",
+    "RelayEnvironment.swift",
+    "RelayWatchTypes.swift",
+  ]);
 });
