@@ -2,16 +2,11 @@ import SwiftUI
 
 @main
 struct RelayMacApp: App {
-    @StateObject private var model = RelayAppModel()
+    @NSApplicationDelegateAdaptor(RelayAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuContent(model: model)
-        } label: {
-            RelayUFOGlyph(size: 18)
-                .frame(width: 18, height: 18)
-                .accessibilityLabel("Relay")
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.menu)
     }
 }

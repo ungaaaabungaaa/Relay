@@ -35,6 +35,7 @@ fi
 
 for required_file in \
   "${repository_root}/dist/relay-bridge-arm64" \
+  "${repository_root}/mac/Resources/RelayMenuBarIcon.svg" \
   "${repository_root}/LICENSE" \
   "${repository_root}/NOTICE" \
   "${repository_root}/THIRD_PARTY_NOTICES.md"
@@ -68,6 +69,7 @@ cp -R "${swift_binary_path}/Sparkle.framework" "${frameworks_path}/Sparkle.frame
   "@executable_path/../Frameworks" \
   "${macos_path}/Relay"
 cp "${repository_root}/dist/relay-bridge-arm64" "${resources_path}/relay-bridge-arm64"
+cp "${repository_root}/mac/Resources/RelayMenuBarIcon.svg" "${resources_path}/RelayMenuBarIcon.svg"
 cp "${repository_root}/LICENSE" "${resources_path}/LICENSE"
 cp "${repository_root}/NOTICE" "${resources_path}/NOTICE"
 cp "${repository_root}/THIRD_PARTY_NOTICES.md" "${resources_path}/THIRD_PARTY_NOTICES.md"

@@ -37,12 +37,14 @@ const haptics = await readFile(
 );
 const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
 const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
-const macMenuContentURL = new URL("../../mac/Sources/RelayMac/MenuContent.swift", import.meta.url);
+const macAppDelegateURL = new URL("../../mac/Sources/RelayMac/RelayAppDelegate.swift", import.meta.url);
+const macStatusItemControllerURL = new URL("../../mac/Sources/RelayMac/RelayStatusItemController.swift", import.meta.url);
 const watchSourceDirectoryURL = new URL("../RelayWatch/", import.meta.url);
 const watchStyleURL = new URL("../RelayWatch/RelayWatchStyle.swift", import.meta.url);
 const sourceCheckURL = new URL("../../scripts/check-watchos-source.sh", import.meta.url);
 const watchAccentURL = new URL("../RelayWatch/Assets.xcassets/AccentColor.colorset/Contents.json", import.meta.url);
 const macIconURL = new URL("../../mac/Resources/AppIconSource.png", import.meta.url);
+const macMenuIconURL = new URL("../../mac/Resources/RelayMenuBarIcon.svg", import.meta.url);
 const watchIconURL = new URL("../RelayWatch/Assets.xcassets/AppIcon.appiconset/AppIcon.png", import.meta.url);
 
 function expectTargetSources(names, contents = project) {
@@ -221,9 +223,20 @@ test("Task 1 brand primitives define semantic Apple styling", async () => {
 });
 
 test("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
-  const macApp = await readFile(macAppURL, "utf8");
-  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?\}\s*label:\s*\{[\s\S]*?RelayUFOGlyph\(size: 18\)/);
-  assert.match(macApp, /RelayUFOGlyph\(size: 18\)[\s\S]*?\.accessibilityLabel\("Relay"\)/);
+  const [macApp, appDelegate, statusController, menuIcon] = await Promise.all([
+    readFile(macAppURL, "utf8"),
+    readFile(macAppDelegateURL, "utf8").catch(() => ""),
+    readFile(macStatusItemControllerURL, "utf8").catch(() => ""),
+    readFile(macMenuIconURL, "utf8").catch(() => ""),
+  ]);
+  assert.match(macApp, /@NSApplicationDelegateAdaptor\(RelayAppDelegate\.self\)/);
+  assert.doesNotMatch(macApp, /MenuBarExtra/);
+  assert.match(appDelegate, /RelayStatusItemController\(model: model\)/);
+  assert.match(statusController, /NSStatusBar\.system\.statusItem/);
+  assert.match(statusController, /image\.isTemplate = true/);
+  assert.match(statusController, /setAccessibilityTitle\("Relay"\)/);
+  assert.match(menuIcon, /<svg[^>]*viewBox="0 0 24 24"/);
+  assert.doesNotMatch(menuIcon, /#1C274C/i);
   assert.doesNotMatch(macApp, /systemImage:\s*model\.menuBarSymbol/);
 });
 
@@ -268,31 +281,33 @@ test("final Watch source check includes every Watch source", async () => {
 });
 
 test("final Mac contract retains the reviewed native menu architecture", async () => {
-  const [macApp, menuContent, accentAsset] = await Promise.all([
+  const [macApp, statusController, accentAsset] = await Promise.all([
     readFile(macAppURL, "utf8"),
-    readFile(macMenuContentURL, "utf8"),
+    readFile(macStatusItemControllerURL, "utf8"),
     readFile(watchAccentURL, "utf8"),
   ]);
 
-  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?MenuContent\(model: model\)/);
-  assert.match(macApp, /\.menuBarExtraStyle\(\.menu\)/);
-  assert.match(menuContent, /Menu\("Apple Watch"\)/);
-  assert.match(menuContent, /Menu\("Relay Cloud"\)/);
-  assert.match(menuContent, /Menu\("Diagnostics"\)[\s\S]*?Button\("Refresh"\)/);
+  assert.match(macApp, /@NSApplicationDelegateAdaptor\(RelayAppDelegate\.self\)/);
+  assert.doesNotMatch(macApp, /MenuBarExtra/);
+  assert.match(statusController, /submenuItem\("Apple Watch", menu: buildWatchMenu\(\)\)/);
+  assert.match(statusController, /submenuItem\("Relay Cloud", menu: buildCloudMenu\(\)\)/);
+  assert.match(statusController, /buildDiagnosticsMenu\(\)[\s\S]*?actionItem\("Refresh"\)/);
   assert.match(accentAsset, /"red" : "0\.000"/);
   assert.match(accentAsset, /"green" : "0\.478"/);
   assert.match(accentAsset, /"blue" : "1\.000"/);
 });
 
-test("final Mac menu glyph is dimensioned for its 18-point slot", async () => {
-  const [macApp, macBrand] = await Promise.all([
+test("final Mac menu icon is an adaptive AppKit template image", async () => {
+  const [macApp, statusController, menuIcon] = await Promise.all([
     readFile(macAppURL, "utf8"),
-    readFile(macBrandURL, "utf8"),
+    readFile(macStatusItemControllerURL, "utf8").catch(() => ""),
+    readFile(macMenuIconURL, "utf8").catch(() => ""),
   ]);
 
-  assert.match(macBrand, /var size: CGFloat/);
-  assert.match(macBrand, /\.frame\(width: size, height: size\)/);
-  assert.match(macApp, /RelayUFOGlyph\(size: 18\)/);
+  assert.match(menuIcon, /stroke="black"/);
+  assert.match(menuIcon, /fill="black"/);
+  assert.match(statusController, /image\.size = NSSize\(width: 18, height: 18\)/);
+  assert.doesNotMatch(macApp, /MenuBarExtra/);
 });
 
 test("final Mac and Watch app icon sources are identical", async () => {

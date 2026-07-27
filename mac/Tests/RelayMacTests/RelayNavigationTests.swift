@@ -75,6 +75,33 @@ func relayMenuRootExposesEveryReleaseControl() {
 }
 
 @Test
+func appKitStatusItemBuildsEveryReviewedMenuGroup() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let controllerURL = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac/RelayStatusItemController.swift")
+    let source = try String(contentsOf: controllerURL, encoding: .utf8)
+
+    #expect(source.contains("RelayMenuStructure.root"))
+    for builder in [
+        "buildPendingActionsMenu",
+        "buildWatchMenu",
+        "buildWorkspacesMenu",
+        "buildCloudMenu",
+        "buildVoiceMenu",
+        "buildDiagnosticsMenu",
+        "buildUpdatesMenu",
+        "buildAboutMenu",
+    ] {
+        #expect(source.contains(builder))
+    }
+    #expect(source.contains("RelayMenuDialogs.confirm(.emergencyStop)"))
+    #expect(source.contains("keyEquivalent: \"q\""))
+}
+
+@Test
 func relayMenuPresentationFormatsOnlySafeOperationalText() {
     #expect(
         RelayMenuPresentation.statusRows(
@@ -297,11 +324,11 @@ func diagnosticsRefreshReadsSupervisorBeforeAdminStatus() throws {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("Sources/RelayMac/MenuContent.swift")
+        .appendingPathComponent("Sources/RelayMac/RelayStatusItemController.swift")
     let source = try String(contentsOf: menuURL, encoding: .utf8)
 
-    let snapshot = try #require(source.range(of: "await model.updateSupervisorSnapshot()"))
-    let refresh = try #require(source.range(of: "await model.refresh()", range: snapshot.upperBound..<source.endIndex))
+    let snapshot = try #require(source.range(of: "await self.model.updateSupervisorSnapshot()"))
+    let refresh = try #require(source.range(of: "await self.model.refresh()", range: snapshot.upperBound..<source.endIndex))
     #expect(snapshot.lowerBound < refresh.lowerBound)
 }
 
@@ -331,12 +358,12 @@ func voiceAndMaintenanceMenusExposeReplacementAndRequiredLinks() throws {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("Sources/RelayMac/MenuContent.swift")
+        .appendingPathComponent("Sources/RelayMac/RelayStatusItemController.swift")
     let source = try String(contentsOf: menuURL, encoding: .utf8)
 
     #expect(source.contains("Replace OpenAI API Key…"))
     #expect(source.contains("Privacy Policy"))
     #expect(source.contains("Support"))
     #expect(source.contains("Licenses"))
-    #expect(source.contains("RelayMenuPresentation.updateLabel(updater.state)"))
+    #expect(source.contains("RelayMenuPresentation.updateLabel(model.updateController.state)"))
 }

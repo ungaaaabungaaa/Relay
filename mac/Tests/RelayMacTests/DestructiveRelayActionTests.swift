@@ -29,7 +29,7 @@ func destructiveButtonsStageAConfirmationBeforeCallingTheModel() throws {
         .deletingLastPathComponent()
 
     let menu = try String(
-        contentsOf: macRoot.appendingPathComponent("Sources/RelayMac/MenuContent.swift"),
+        contentsOf: macRoot.appendingPathComponent("Sources/RelayMac/RelayStatusItemController.swift"),
         encoding: .utf8
     )
     let dialogs = try String(

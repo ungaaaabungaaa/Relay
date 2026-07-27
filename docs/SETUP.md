@@ -20,7 +20,7 @@ through the App Store. This repository does not claim that either distribution
 channel is live.
 
 1. Install the supplied Relay Mac build on an Apple-silicon Mac running macOS
-   14 or newer. Find the white UFO beside the other menu-bar items; no
+   14 or newer. Find the adaptive UFO beside the other menu-bar items; no
    dashboard window is expected.
 2. Open **Diagnostics → Refresh** and confirm the bridge and Codex status.
 3. Open **Relay Cloud → Sign In…** and complete the invite/PKCE link in the
@@ -60,6 +60,12 @@ an action for later execution.
 For local native-menu testing, Relay is menu-bar only: expect the UFO beside
 the other menu-bar items, not a dashboard window. Exercise every root item and
 submenu plus every confirmation dialog before recording the result.
+
+To test the same install behavior as a user, copy the packaged `Relay.app` into
+`/Applications` and launch it from there. The app should then be searchable as
+**Relay** in Spotlight and Launchpad, remain visible in the Dock while running,
+and show the adaptive UFO in the menu bar. A build launched directly from
+SwiftPM or a temporary packaging folder is not registered as an installed app.
 
 ## Developer setup
 
