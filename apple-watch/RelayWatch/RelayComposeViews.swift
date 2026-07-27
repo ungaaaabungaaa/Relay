@@ -90,7 +90,11 @@ struct RelayNewTaskView: View {
                 ForEach(model.folders) { folder in Text(folder.name).tag(folder.path) }
             }
             Button("Continue") { step = draft.next(after: .workspace) }
-                .disabled(!draft.canAdvance(from: .workspace, models: model.models))
+                .disabled(!draft.canAdvance(
+                    from: .workspace,
+                    folders: model.folders,
+                    models: model.models
+                ))
         }
     }
 
@@ -105,7 +109,11 @@ struct RelayNewTaskView: View {
                 ForEach(selectedModel?.efforts ?? [], id: \.self) { Text($0).tag($0) }
             }
             Button("Continue") { step = draft.next(after: .model) }
-                .disabled(!draft.canAdvance(from: .model, models: model.models))
+                .disabled(!draft.canAdvance(
+                    from: .model,
+                    folders: model.folders,
+                    models: model.models
+                ))
         }
     }
 
@@ -115,7 +123,7 @@ struct RelayNewTaskView: View {
             LabeledContent("Model", value: selectedModel?.name ?? draft.modelID)
             LabeledContent("Effort", value: draft.effort)
             TextField("What should Codex do?", text: $draft.prompt, axis: .vertical)
-            Button("Start task") { start() }
+            Button(RelayNewTaskPresentation.finalActionTitle) { start() }
                 .disabled(!canStart)
                 .accessibilityHint("Starts Codex in the exact workspace, model, effort, and prompt shown")
         }
@@ -125,9 +133,9 @@ struct RelayNewTaskView: View {
     private var selectedFolder: RelayFolder? { model.folders.first { $0.path == draft.cwd } }
     private var canStart: Bool {
         model.actionsEnabled && !model.mutationPending
-            && draft.canAdvance(from: .workspace, models: model.models)
-            && draft.canAdvance(from: .model, models: model.models)
-            && draft.canAdvance(from: .prompt, models: model.models)
+            && draft.canAdvance(from: .workspace, folders: model.folders, models: model.models)
+            && draft.canAdvance(from: .model, folders: model.folders, models: model.models)
+            && draft.canAdvance(from: .prompt, folders: model.folders, models: model.models)
     }
 
     private func start() {

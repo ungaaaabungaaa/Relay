@@ -137,6 +137,12 @@ struct RelayQuestionProgress: Equatable, Sendable {
         index == questionCount - 1 ? "Send answer" : "Next question"
     }
 
+    func actionHint(at index: Int) -> String {
+        index == questionCount - 1
+            ? "Sends only the selected Mac-provided answers to Codex"
+            : "Advances locally without sending an answer"
+    }
+
     func canSubmit(answeredQuestionIDs: [String], requiredIDs: [String]) -> Bool {
         Set(requiredIDs).isSubset(of: Set(answeredQuestionIDs))
     }

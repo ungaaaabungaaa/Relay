@@ -65,7 +65,7 @@ struct RelayQuestionView: View {
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity)
                 .disabled(!canContinue(question, item: item))
-                .accessibilityHint("Sends only the selected Mac-provided answers to Codex")
+                .accessibilityHint(progress.actionHint(at: index))
             } else if question != nil {
                 Text("This question has no available answers.")
             } else {

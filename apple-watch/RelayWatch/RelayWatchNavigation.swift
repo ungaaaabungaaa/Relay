@@ -43,6 +43,17 @@ struct RelayMoreAction: Identifiable, Hashable {
     var id: String { title }
 }
 
+enum RelayCompactLayout {
+    static let materialTileMinimumHeight: CGFloat = 44
+    static let materialGridSpacing: CGFloat = 4
+
+    static func gridMinimumHeight(rows: Int) -> CGFloat {
+        let count = max(0, rows)
+        return CGFloat(count) * materialTileMinimumHeight
+            + CGFloat(max(0, count - 1)) * materialGridSpacing
+    }
+}
+
 enum RelayHomePresentation {
     static let clearActions = [
         RelayHomeAction(title: "Tasks", systemImage: "terminal", route: .tasks),
@@ -88,4 +99,52 @@ enum RelayMorePresentation {
         RelayMoreAction(title: "History", systemImage: "clock.arrow.circlepath", kind: .history),
         RelayMoreAction(title: "Settings", systemImage: "gearshape", kind: .settings),
     ]
+}
+
+struct RelayStatusPresentation: Equatable, Sendable {
+    enum Tone: Equatable, Sendable {
+        case normal, attention, destructive
+    }
+
+    let title: String
+    let systemImage: String
+    let detail: String?
+    let tone: Tone
+
+    var isAttention: Bool { tone != .normal }
+
+    static func make(
+        connection: RelayConnectionState,
+        cacheIsStale: Bool,
+        error: String?
+    ) -> Self {
+        let status: (String, String, Tone)
+        if connection == .offline || cacheIsStale {
+            status = ("Mac offline · cached data", "wifi.slash", .attention)
+        } else {
+            status = switch connection {
+            case .live: ("Relay live", "checkmark.circle.fill", .normal)
+            case .unpaired: ("Pair with Mac", "link", .normal)
+            case .pairing: ("Pairing with Mac", "link", .normal)
+            case .revoked: ("Access revoked", "lock.slash", .destructive)
+            case .incompatible: ("Update required", "arrow.triangle.2.circlepath", .attention)
+            case .offline: ("Mac offline · cached data", "wifi.slash", .attention)
+            }
+        }
+        let detail = error.flatMap { value in
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
+        }
+        return Self(
+            title: status.0,
+            systemImage: status.1,
+            detail: detail,
+            tone: detail == nil ? status.2 : maxTone(status.2, .attention)
+        )
+    }
+
+    private static func maxTone(_ lhs: Tone, _ rhs: Tone) -> Tone {
+        if lhs == .destructive || rhs == .destructive { return .destructive }
+        if lhs == .attention || rhs == .attention { return .attention }
+        return .normal
+    }
 }

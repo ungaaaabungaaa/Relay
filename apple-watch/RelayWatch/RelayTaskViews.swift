@@ -7,14 +7,20 @@ struct RelayTasksView: View {
         List {
             RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             ForEach(model.tasks) { task in
+                let row = RelayTaskPresentation.row(task)
                 NavigationLink(value: RelayWatchRoute.task(task.id)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(task.title)
-                        Text(task.preview).font(.caption2).lineLimit(2)
-                        Text("\(task.status.rawValue.capitalized) · \(task.cwd)")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: row.systemImage)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(task.title)
+                            Text(task.preview).font(.caption2).lineLimit(2)
+                            Text(row.statusAndTime)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -62,9 +68,11 @@ struct RelayTaskSummaryView: View {
             Label(summary.workspaceName, systemImage: "folder")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel(summary.workspaceAccessibilityLabel)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Latest activity").font(.caption2).foregroundStyle(.secondary)
                 Text(summary.latestActivityTitle).font(.caption)
+                Text(summary.latestActivityStatus).font(.caption2).foregroundStyle(.secondary)
             }
             Button("Instruct") { model.navigate(to: .instruction(taskID)) }
                 .disabled(!canMutate)

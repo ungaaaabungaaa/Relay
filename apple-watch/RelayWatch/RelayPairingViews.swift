@@ -19,11 +19,21 @@ struct RelayPairingFlowView: View {
     }
 
     private var codeEntry: some View {
-        VStack(spacing: 10) {
-            RelayWatchMark()
-                .frame(width: 44, height: 32)
-                .accessibilityHidden(true)
-            Text("Pair with Mac").font(.headline)
+        RelayAdaptiveContainer {
+            codeEntryContent
+        } scrolling: {
+            codeEntryContent.padding(.horizontal, 4)
+        }
+    }
+
+    private var codeEntryContent: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                RelayWatchMark()
+                    .frame(width: 30, height: 22)
+                    .accessibilityHidden(true)
+                Text("Pair with Mac").font(.headline)
+            }
             Text("Enter the six-character code from Relay on your Mac.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -33,12 +43,12 @@ struct RelayPairingFlowView: View {
             Button("Find Mac", action: model.pair)
                 .buttonStyle(.borderedProminent)
                 .disabled(model.pairingCode.count != 6)
-            Text("Watch \(model.watchFingerprint)")
+            Text("Watch \(model.watchFingerprint.prefix(8))…")
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Watch \(model.watchFingerprint)")
             error
         }
-        .padding(.horizontal, 4)
     }
 
     private func fingerprintReview(name: String, fingerprint: String) -> some View {

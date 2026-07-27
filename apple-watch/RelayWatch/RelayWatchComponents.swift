@@ -30,15 +30,17 @@ struct RelayMaterialTile: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 1) {
                 Image(systemName: systemImage)
-                    .font(.title3)
+                    .font(.caption)
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .padding(8)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: RelayCompactLayout.materialTileMinimumHeight
+            )
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: RelayWatchStyle.tileCornerRadius))
         }
         .buttonStyle(.plain)
@@ -73,47 +75,32 @@ struct RelayStatusStrip: View {
     let error: String?
 
     var body: some View {
-        Label(statusTitle, systemImage: statusSymbol)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(statusColor)
-            .lineLimit(1)
-            .padding(.vertical, 5)
-            .padding(.horizontal, 8)
-            .background(.thinMaterial, in: Capsule())
-            .accessibilityLabel(statusTitle)
-            .accessibilityHint(error ?? "")
-    }
-
-    private var statusTitle: String {
-        if let error { return error }
-        if connection == .offline || cacheIsStale { return "Mac offline · cached data" }
-        switch connection {
-        case .live: return "Relay live"
-        case .unpaired: return "Pair with Mac"
-        case .pairing: return "Pairing with Mac"
-        case .revoked: return "Access revoked"
-        case .incompatible: return "Update required"
-        case .offline: return "Mac offline · cached data"
+        let presentation = RelayStatusPresentation.make(
+            connection: connection,
+            cacheIsStale: cacheIsStale,
+            error: error
+        )
+        VStack(alignment: .leading, spacing: 3) {
+            Label(presentation.title, systemImage: presentation.systemImage)
+                .font(.caption2.weight(.medium))
+            if let detail = presentation.detail {
+                Text(detail)
+                    .font(.caption2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .foregroundStyle(color(for: presentation.tone))
+        .padding(.vertical, 5)
+        .padding(.horizontal, 7)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 
-    private var statusSymbol: String {
-        if error != nil { return "exclamationmark.triangle.fill" }
-        if connection == .offline || cacheIsStale { return "wifi.slash" }
-        switch connection {
-        case .live: return "checkmark.circle.fill"
-        case .unpaired, .pairing: return "link"
-        case .revoked: return "lock.slash"
-        case .incompatible: return "arrow.triangle.2.circlepath"
-        case .offline: return "wifi.slash"
-        }
-    }
-
-    private var statusColor: Color {
-        if error != nil || connection == .offline || cacheIsStale { return .orange }
-        switch connection {
-        case .revoked: return .red
-        default: return RelayWatchStyle.foreground
+    private func color(for tone: RelayStatusPresentation.Tone) -> Color {
+        switch tone {
+        case .normal: RelayWatchStyle.foreground
+        case .attention: .orange
+        case .destructive: .red
         }
     }
 }

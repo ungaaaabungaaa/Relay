@@ -12,10 +12,14 @@ struct RelayNewTaskDraft: Equatable, Sendable {
     var effort = ""
     var prompt = ""
 
-    func canAdvance(from step: RelayNewTaskStep, models: [RelayModel]) -> Bool {
+    func canAdvance(
+        from step: RelayNewTaskStep,
+        folders: [RelayFolder],
+        models: [RelayModel]
+    ) -> Bool {
         switch step {
         case .workspace:
-            return !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return folders.contains { $0.path == cwd }
         case .model:
             guard let model = models.first(where: { $0.id == modelID }) else { return false }
             return model.efforts.contains(effort)
@@ -42,12 +46,25 @@ struct RelayNewTaskDraft: Equatable, Sendable {
     }
 }
 
+enum RelayNewTaskPresentation {
+    static let finalActionTitle = "Start reviewed task"
+}
+
 struct RelayTaskSummary: Equatable, Sendable {
     let statusTitle: String
     let workspaceName: String
+    let workspacePath: String
     let latestActivityTitle: String
+    let latestActivityStatus: String
     let canStop: Bool
     let canViewActivity: Bool
+
+    var workspaceAccessibilityLabel: String { "Workspace \(workspacePath)" }
+}
+
+struct RelayTaskRowPresentation: Equatable, Sendable {
+    let systemImage: String
+    let statusAndTime: String
 }
 
 enum RelayTaskPresentation {
@@ -56,13 +73,24 @@ enum RelayTaskPresentation {
         selectedTaskID: String?,
         tasks: [RelayTask]
     ) -> RelayTask? {
-        if let routeTaskID, let task = tasks.first(where: { $0.id == routeTaskID }) {
-            return task
+        if let routeTaskID {
+            return tasks.first(where: { $0.id == routeTaskID })
         }
         if let selectedTaskID, let task = tasks.first(where: { $0.id == selectedTaskID }) {
             return task
         }
         return tasks.first(where: { $0.status == .running })
+    }
+
+    static func row(
+        _ task: RelayTask,
+        nowSeconds: Int64 = Int64(Date().timeIntervalSince1970)
+    ) -> RelayTaskRowPresentation {
+        let time = timeContext(updatedAt: task.updatedAt, nowSeconds: nowSeconds)
+        return RelayTaskRowPresentation(
+            systemImage: symbol(for: task.status),
+            statusAndTime: "\(task.status.rawValue.capitalized) · \(time)"
+        )
     }
 
     static func summary(_ detail: RelayTaskDetail) -> RelayTaskSummary {
@@ -74,7 +102,9 @@ enum RelayTaskPresentation {
         return RelayTaskSummary(
             statusTitle: detail.status.rawValue.capitalized,
             workspaceName: URL(fileURLWithPath: detail.cwd).lastPathComponent,
+            workspacePath: detail.cwd,
             latestActivityTitle: latestActivity?.title ?? detail.preview,
+            latestActivityStatus: (latestActivity?.status.rawValue ?? detail.status.rawValue).capitalized,
             canStop: detail.activeTurnId != nil,
             canViewActivity: true
         )
@@ -84,9 +114,28 @@ enum RelayTaskPresentation {
         RelayTaskSummary(
             statusTitle: task.status.rawValue.capitalized,
             workspaceName: URL(fileURLWithPath: task.cwd).lastPathComponent,
+            workspacePath: task.cwd,
             latestActivityTitle: task.preview,
+            latestActivityStatus: task.status.rawValue.capitalized,
             canStop: false,
             canViewActivity: false
         )
+    }
+
+    private static func symbol(for status: RelayTask.Status) -> String {
+        switch status {
+        case .idle: "pause.circle"
+        case .running: "play.circle.fill"
+        case .error: "exclamationmark.triangle.fill"
+        case .offline: "wifi.slash"
+        }
+    }
+
+    private static func timeContext(updatedAt: Int64, nowSeconds: Int64) -> String {
+        let elapsed = max(0, nowSeconds - updatedAt)
+        if elapsed < 60 { return "now" }
+        if elapsed < 3_600 { return "\(elapsed / 60)m ago" }
+        if elapsed < 86_400 { return "\(elapsed / 3_600)h ago" }
+        return "\(elapsed / 86_400)d ago"
     }
 }

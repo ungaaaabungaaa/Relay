@@ -63,20 +63,56 @@ func moreGridUsesTheApprovedActions() {
 }
 
 @Test
+func compactMaterialGridKeepsTwoRowsBelowOneHundredPoints() {
+    #expect(RelayCompactLayout.materialTileMinimumHeight == 44)
+    #expect(RelayCompactLayout.gridMinimumHeight(rows: 2) == 92)
+    #expect(RelayCompactLayout.gridMinimumHeight(rows: 2) < 100)
+}
+
+@Test
 func newTaskFlowAdvancesOnlyWithValidStepData() {
     var draft = RelayNewTaskDraft()
-    #expect(!draft.canAdvance(from: .workspace, models: []))
+    let folders = [folderFixture(path: "/workspace")]
+    #expect(!draft.canAdvance(from: .workspace, folders: folders, models: []))
     draft.cwd = "/workspace"
-    #expect(draft.canAdvance(from: .workspace, models: []))
+    #expect(draft.canAdvance(from: .workspace, folders: folders, models: []))
     #expect(draft.next(after: .workspace) == .model)
     #expect(draft.next(after: .model) == .prompt)
+}
+
+@Test
+func newTaskDraftRejectsWorkspaceRemovedFromCurrentAllowedFolders() {
+    var draft = RelayNewTaskDraft()
+    draft.cwd = "/previously-allowed"
+
+    #expect(!draft.canAdvance(
+        from: .workspace,
+        folders: [folderFixture(path: "/currently-allowed")],
+        models: []
+    ))
+}
+
+@Test
+func newTaskDraftUsesAdvertisedDefaultModelAndEffort() {
+    let models = [
+        modelFixture(id: "fallback", defaultEffort: "medium", isDefault: false),
+        modelFixture(id: "preferred", defaultEffort: "high", isDefault: true),
+    ]
+    var draft = RelayNewTaskDraft()
+
+    draft.applyDefaults(folders: [folderFixture(path: "/workspace")], models: models)
+
+    #expect(draft.cwd == "/workspace")
+    #expect(draft.modelID == "preferred")
+    #expect(draft.effort == "high")
+    #expect(RelayNewTaskPresentation.finalActionTitle == "Start reviewed task")
 }
 
 @Test
 func activeTaskSummaryUsesOnlyTheLatestActivity() {
     let detail = RelayTaskDetail(
         id: "task", title: "Build Watch UI", preview: "Working",
-        cwd: "/workspace", updatedAt: 2, status: .running,
+        cwd: "/Users/developer/Relay/watch-native-ui", updatedAt: 2, status: .running,
         activeTurnId: "turn",
         activity: [
             RelayActivity(
@@ -93,7 +129,29 @@ func activeTaskSummaryUsesOnlyTheLatestActivity() {
     )
     let summary = RelayTaskPresentation.summary(detail)
     #expect(summary.latestActivityTitle == "Second activity")
+    #expect(summary.latestActivityStatus == "Running")
+    #expect(summary.workspaceName == "watch-native-ui")
+    #expect(summary.workspaceAccessibilityLabel == "Workspace /Users/developer/Relay/watch-native-ui")
     #expect(summary.canStop)
+}
+
+@Test
+func taskRowsUseStateSpecificSymbolsAndShortTimeContext() {
+    let symbols = [
+        RelayTaskPresentation.row(taskFixture(id: "idle", status: .idle), nowSeconds: 121).systemImage,
+        RelayTaskPresentation.row(taskFixture(id: "running", status: .running), nowSeconds: 121).systemImage,
+        RelayTaskPresentation.row(taskFixture(id: "error", status: .error), nowSeconds: 121).systemImage,
+        RelayTaskPresentation.row(taskFixture(id: "offline", status: .offline), nowSeconds: 121).systemImage,
+    ]
+    let running = RelayTaskPresentation.row(
+        taskFixture(id: "running", status: .running),
+        nowSeconds: 121
+    )
+
+    #expect(symbols == [
+        "pause.circle", "play.circle.fill", "exclamationmark.triangle.fill", "wifi.slash",
+    ])
+    #expect(running.statusAndTime == "Running · 2m ago")
 }
 
 @Test
@@ -124,12 +182,27 @@ func instructionTargetRejectsAStaleSelectionWithoutRunningFallback() {
 }
 
 @Test
+func explicitInstructionRouteRejectsAStaleTaskWithoutRunningFallback() {
+    let running = taskFixture(id: "running", status: .running)
+
+    let target = RelayTaskPresentation.instructionTask(
+        routeTaskID: "stale-route",
+        selectedTaskID: "running",
+        tasks: [running]
+    )
+
+    #expect(target == nil)
+}
+
+@Test
 func cachedTaskSummaryRemainsReviewableWithoutDetail() {
     let summary = RelayTaskPresentation.summary(taskFixture(id: "cached", status: .offline))
 
     #expect(summary.statusTitle == "Offline")
     #expect(summary.workspaceName == "workspace")
     #expect(summary.latestActivityTitle == "Cached preview")
+    #expect(summary.latestActivityStatus == "Offline")
+    #expect(summary.workspaceAccessibilityLabel == "Workspace /workspace")
     #expect(!summary.canStop)
     #expect(!summary.canViewActivity)
 }
@@ -142,6 +215,25 @@ private func taskFixture(id: String, status: RelayTask.Status) -> RelayTask {
         cwd: "/workspace",
         updatedAt: 1,
         status: status
+    )
+}
+
+private func folderFixture(path: String) -> RelayFolder {
+    RelayFolder(name: URL(fileURLWithPath: path).lastPathComponent, path: path, kind: .root)
+}
+
+private func modelFixture(
+    id: String,
+    defaultEffort: String,
+    isDefault: Bool
+) -> RelayModel {
+    RelayModel(
+        id: id,
+        name: id.capitalized,
+        description: "Model",
+        efforts: ["medium", "high"],
+        defaultEffort: defaultEffort,
+        isDefault: isDefault
     )
 }
 
@@ -182,6 +274,7 @@ func utilityViewsRouteFeedbackAndIdentityThroughTheNativeWatchContracts() throws
     let haptics = try relayWatchSource(named: "RelayHaptics.swift")
     let model = try relayWatchSource(named: "RelayWatchModel.swift")
     let approval = try relayWatchSource(named: "RelayApprovalView.swift")
+    let components = try relayWatchSource(named: "RelayWatchComponents.swift")
     let more = try relayWatchSource(named: "RelayMoreViews.swift")
     let root = try relayWatchSource(named: "RelayWatchRootView.swift")
 
@@ -190,7 +283,15 @@ func utilityViewsRouteFeedbackAndIdentityThroughTheNativeWatchContracts() throws
     #expect(model.contains("playRelayHaptic(.failure)"))
     #expect(model.contains("playRelayHaptic(.success)"))
     #expect(approval.contains("playRelayHaptic(.notification)"))
-    #expect(more.contains("Grid(horizontalSpacing: 8, verticalSpacing: 8)"))
+    #expect(components.contains("RelayCompactLayout.materialTileMinimumHeight"))
+    #expect(components.contains("RelayStatusPresentation.make"))
+    #expect(components.contains(".fixedSize(horizontal: false, vertical: true)"))
+    #expect(!components.contains(".lineLimit(1)"))
+    #expect(more.contains("RelayAdaptiveContainer"))
+    #expect(more.contains("RelayCompactLayout.materialGridSpacing"))
+    #expect(try relayWatchSource(named: "RelayPairingViews.swift").contains(
+        "private var codeEntry: some View {\n        RelayAdaptiveContainer"
+    ))
     #expect(more.contains("struct RelayIdentityView"))
     #expect(more.contains("CFBundleShortVersionString"))
     #expect(root.contains("case .more: RelayMoreView(model: model)"))
@@ -232,11 +333,17 @@ func taskSourcesKeepSummaryControlsSeparateFromTheActivityList() throws {
     #expect(task.contains("Button(\"Instruct\")"))
     #expect(task.contains("Button(\"View full activity\")"))
     #expect(task.contains("struct RelayTaskActivityView"))
+    #expect(task.contains("Image(systemName: row.systemImage)"))
+    #expect(task.contains("Text(row.statusAndTime)"))
+    #expect(task.contains(".accessibilityLabel(summary.workspaceAccessibilityLabel)"))
+    #expect(task.contains("Text(summary.latestActivityStatus)"))
     #expect(compose.contains("@State private var step = RelayNewTaskStep.workspace"))
     #expect(compose.contains("Button(\"Send\")"))
     #expect(compose.contains("Section(\"1 of 3 · Workspace\")"))
     #expect(compose.contains("Section(\"2 of 3 · Model\")"))
     #expect(compose.contains("Section(\"3 of 3 · Review\")"))
+    #expect(compose.contains("Button(RelayNewTaskPresentation.finalActionTitle)"))
+    #expect(compose.contains("folders: model.folders"))
 }
 
 @Test
@@ -277,6 +384,28 @@ func questionProgressRequiresEveryAnswerBeforeSend() throws {
     #expect(progress.actionTitle(at: 0) == "Next question")
     #expect(progress.actionTitle(at: 1) == "Send answer")
     #expect(!progress.canSubmit(answeredQuestionIDs: ["one"], requiredIDs: ["one", "two"]))
+}
+
+@Test
+func questionActionHintDistinguishesLocalAdvanceFromFinalSubmission() {
+    let progress = RelayQuestionProgress(questionCount: 2)
+
+    #expect(progress.actionHint(at: 0) == "Advances locally without sending an answer")
+    #expect(progress.actionHint(at: 1) == "Sends only the selected Mac-provided answers to Codex")
+}
+
+@Test
+func offlineStatusKeepsLiteralStateAndExposesTheFullErrorSeparately() {
+    let presentation = RelayStatusPresentation.make(
+        connection: .offline,
+        cacheIsStale: true,
+        error: "The Mac could not refresh because the encrypted session expired."
+    )
+
+    #expect(presentation.title == "Mac offline · cached data")
+    #expect(presentation.systemImage == "wifi.slash")
+    #expect(presentation.detail == "The Mac could not refresh because the encrypted session expired.")
+    #expect(presentation.isAttention)
 }
 
 @Test

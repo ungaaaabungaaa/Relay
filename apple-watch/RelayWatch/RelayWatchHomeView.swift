@@ -77,12 +77,12 @@ struct RelayWatchHomeView: View {
     }
 
     private var allClearActions: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
             Text("All clear").font(.headline)
-            Text("No approvals or questions need your attention.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            Grid(
+                horizontalSpacing: RelayCompactLayout.materialGridSpacing,
+                verticalSpacing: RelayCompactLayout.materialGridSpacing
+            ) {
                 GridRow {
                     actionTile(RelayHomePresentation.clearActions[0])
                     actionTile(RelayHomePresentation.clearActions[1])

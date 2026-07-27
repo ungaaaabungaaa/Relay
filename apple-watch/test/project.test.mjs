@@ -183,7 +183,9 @@ test("Task 5 connects Watch utility flows and haptics", () => {
   assert.match(moreViews, /struct RelaySettingsView/);
   assert.match(moreViews, /struct RelayIdentityView/);
   assert.match(moreViews, /struct RelayAboutView/);
-  assert.match(moreViews, /Grid\(horizontalSpacing: 8, verticalSpacing: 8\)/);
+  assert.match(moreViews, /RelayAdaptiveContainer/);
+  assert.match(moreViews, /RelayCompactLayout\.materialGridSpacing/);
+  assert.match(pairingView, /private var codeEntry: some View \{\s*RelayAdaptiveContainer/);
   assert.match(haptics, /relay\.watch\.haptics\.enabled/);
   assert.match(haptics, /guard hapticPreference\.isEnabled else \{ return \}/);
   expectTargetSources(["RelayHaptics.swift", "RelayMoreViews.swift"]);

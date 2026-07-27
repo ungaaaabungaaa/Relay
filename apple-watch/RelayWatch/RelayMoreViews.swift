@@ -4,7 +4,19 @@ struct RelayMoreView: View {
     @ObservedObject var model: RelayWatchModel
 
     var body: some View {
-        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+        RelayAdaptiveContainer {
+            actionGrid
+        } scrolling: {
+            actionGrid.padding(.horizontal, 4)
+        }
+        .navigationTitle("More")
+    }
+
+    private var actionGrid: some View {
+        Grid(
+            horizontalSpacing: RelayCompactLayout.materialGridSpacing,
+            verticalSpacing: RelayCompactLayout.materialGridSpacing
+        ) {
             GridRow {
                 tile(RelayMorePresentation.actions[0])
                 tile(RelayMorePresentation.actions[1])
@@ -14,7 +26,6 @@ struct RelayMoreView: View {
                 tile(RelayMorePresentation.actions[3])
             }
         }
-        .navigationTitle("More")
     }
 
     private func tile(_ action: RelayMoreAction) -> some View {
