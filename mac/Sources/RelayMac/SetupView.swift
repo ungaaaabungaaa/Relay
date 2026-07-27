@@ -18,12 +18,12 @@ struct SetupView: View {
                         HStack(alignment: .top, spacing: 14) {
                             ZStack {
                                 Circle()
-                                    .fill(step.complete ? RelayPalette.accent : Color.secondary.opacity(0.2))
+                                    .fill(step.complete ? Color.primary.opacity(0.12) : Color.secondary.opacity(0.2))
                                     .frame(width: 30, height: 30)
                                 if step.complete {
                                     Image(systemName: "checkmark")
                                         .font(.caption.bold())
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(.primary)
                                 } else {
                                     Text("\(index + 1)")
                                         .font(.caption.monospacedDigit())

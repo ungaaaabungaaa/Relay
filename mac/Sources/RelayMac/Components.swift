@@ -16,13 +16,12 @@ struct DashboardHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(eyebrow.uppercased())
-                .font(.caption2.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(RelayPalette.accent)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
             Text(title)
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .font(.title2.weight(.semibold))
             Text(detail)
-                .font(.callout)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 620, alignment: .leading)
         }
@@ -38,7 +37,7 @@ struct RelayPanel<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RelayPalette.panel, in: RoundedRectangle(cornerRadius: 12))
             .overlay {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(.white.opacity(0.08))
             }
     }
@@ -53,9 +52,9 @@ struct StatusPill: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .foregroundStyle(ready ? RelayPalette.accent : RelayPalette.amber)
+            .foregroundStyle(ready ? .primary : RelayPalette.amber)
             .background(
-                (ready ? RelayPalette.accent : RelayPalette.amber).opacity(0.12),
+                (ready ? Color.primary : RelayPalette.amber).opacity(0.12),
                 in: Capsule()
             )
     }
@@ -71,7 +70,7 @@ struct RequirementRow: View {
         HStack(spacing: 13) {
             Image(systemName: icon)
                 .frame(width: 28, height: 28)
-                .foregroundStyle(status.isReady ? RelayPalette.accent : .secondary)
+                .foregroundStyle(status.isReady ? .primary : .secondary)
                 .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body.weight(.medium))

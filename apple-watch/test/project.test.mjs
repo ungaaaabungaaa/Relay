@@ -166,9 +166,11 @@ test("Task 1 brand primitives define semantic Apple styling", async () => {
   assert.doesNotMatch(watchStyle, /\.mint/);
 });
 
-test.skip("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
+test("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
   const macApp = await readFile(macAppURL, "utf8");
-  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*RelayUFOGlyph/);
+  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?\}\s*label:\s*\{[\s\S]*?RelayUFOGlyph\(\)/);
+  assert.match(macApp, /RelayUFOGlyph\(\)[\s\S]*?\.accessibilityLabel\("Relay"\)/);
+  assert.doesNotMatch(macApp, /systemImage:\s*model\.menuBarSymbol/);
 });
 
 test.skip("Task 4 uses RelayWatchMark in the Watch root", () => {

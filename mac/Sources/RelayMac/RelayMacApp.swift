@@ -5,8 +5,12 @@ struct RelayMacApp: App {
     @StateObject private var model = RelayAppModel()
 
     var body: some Scene {
-        MenuBarExtra("Relay", systemImage: model.menuBarSymbol) {
+        MenuBarExtra {
             MenuContent(model: model)
+        } label: {
+            RelayUFOGlyph()
+                .frame(width: 18, height: 18)
+                .accessibilityLabel("Relay")
         }
         .menuBarExtraStyle(.menu)
 

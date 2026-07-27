@@ -49,11 +49,16 @@ struct DashboardView: View {
                 Label(section.title, systemImage: section.icon)
                     .tag(section)
             }
-            .navigationTitle("Relay")
+            .safeAreaInset(edge: .top) {
+                RelayBrandMark()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
             .safeAreaInset(edge: .bottom) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(model.bridgeState == .running ? RelayPalette.accent : RelayPalette.amber)
+                        .fill(model.bridgeState == .running ? Color.secondary : RelayPalette.amber)
                         .frame(width: 7, height: 7)
                     Text(model.bridgeState == .running ? "Local bridge ready" : "Bridge needs attention")
                         .font(.caption)
@@ -63,33 +68,22 @@ struct DashboardView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 215)
         } detail: {
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.055, green: 0.07, blue: 0.085),
-                        Color(red: 0.035, green: 0.045, blue: 0.055),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                Group {
-                    switch selection ?? .setup {
-                    case .setup: SetupView(model: model)
-                    case .watches: WatchesView(model: model)
-                    case .remoteAccess: RemoteAccessView(model: model)
-                    case .workspaces: WorkspacesView(model: model)
-                    case .voice: VoiceView(model: model)
-                    case .updates: UpdatesView(model: model)
-                    case .diagnostics: DiagnosticsView(model: model)
-                    case .about: AboutView()
-                    }
+            Group {
+                switch selection ?? .setup {
+                case .setup: SetupView(model: model)
+                case .watches: WatchesView(model: model)
+                case .remoteAccess: RemoteAccessView(model: model)
+                case .workspaces: WorkspacesView(model: model)
+                case .voice: VoiceView(model: model)
+                case .updates: UpdatesView(model: model)
+                case .diagnostics: DiagnosticsView(model: model)
+                case .about: AboutView()
                 }
-                .padding(30)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(32)
+            .background(.background)
         }
         .frame(minWidth: 860, minHeight: 580)
-        .preferredColorScheme(.dark)
     }
 }

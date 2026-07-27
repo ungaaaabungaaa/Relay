@@ -19,7 +19,7 @@ struct RelayUFOGlyph: View {
                 .offset(y: 5)
         }
         .foregroundStyle(.primary)
-        .accessibilityLabel("Relay UFO")
+        .accessibilityLabel("Relay")
     }
 }
 
