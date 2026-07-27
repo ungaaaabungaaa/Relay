@@ -19,6 +19,14 @@ const rootView = await readFile(
   new URL("../RelayWatch/RelayWatchRootView.swift", import.meta.url),
   "utf8",
 );
+const pairingView = await readFile(
+  new URL("../RelayWatch/RelayPairingViews.swift", import.meta.url),
+  "utf8",
+);
+const homeView = await readFile(
+  new URL("../RelayWatch/RelayWatchHomeView.swift", import.meta.url),
+  "utf8",
+);
 const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
 const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
 const macComponentsURL = new URL("../../mac/Sources/RelayMac/Components.swift", import.meta.url);
@@ -105,13 +113,20 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayWatchFeature.swift",
     "RelayWatchService.swift",
     "RelayWatchTypes.swift",
+    "RelayPairingViews.swift",
+    "RelayWatchHomeView.swift",
   ]);
+  assert.ok(
+    !targetSourceMembership(project).includes("RelayInboxViews.swift"),
+    "RelayWatch target must not retain the deleted RelayInboxViews.swift",
+  );
 });
 
 test("Watch destinations use bridge data instead of preview fixtures", async () => {
   const viewSources = await Promise.all([
     "RelayWatchRootView.swift",
-    "RelayInboxViews.swift",
+    "RelayPairingViews.swift",
+    "RelayWatchHomeView.swift",
     "RelayApprovalView.swift",
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
@@ -127,12 +142,16 @@ test("Watch destinations use bridge data instead of preview fixtures", async () 
   assert.match(runtimeUI, /item\.options/);
   assert.match(runtimeUI, /model\.tasks/);
   assert.match(runtimeUI, /accessibilityHint\(/);
+  assert.match(homeView, /RelayStatusStrip/);
+  assert.match(homeView, /NavigationLink\(value:/);
+  assert.match(pairingView, /TextField\("6-character code"/);
   assert.doesNotMatch(rootView, /RelayWatchDestinationView/);
 });
 
 test("Watch destination view sources belong to the app target", () => {
   expectTargetSources([
-    "RelayInboxViews.swift",
+    "RelayPairingViews.swift",
+    "RelayWatchHomeView.swift",
     "RelayApprovalView.swift",
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
@@ -179,15 +198,16 @@ test("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
   assert.doesNotMatch(macApp, /systemImage:\s*model\.menuBarSymbol/);
 });
 
-test("Task 4 uses RelayWatchMark in the Watch root", () => {
-  assert.match(rootView, /RelayWatchMark/);
+test("Task 1 uses RelayWatchMark in the pairing flow", () => {
+  assert.match(pairingView, /RelayWatchMark/);
   assert.match(rootView, /\.tint\(RelayWatchStyle\.accent\)/);
 });
 
 test("Task 4 removes mint styling from Watch production sources", async () => {
   const sources = await Promise.all([
     "RelayWatchRootView.swift",
-    "RelayInboxViews.swift",
+    "RelayPairingViews.swift",
+    "RelayWatchHomeView.swift",
     "RelayApprovalView.swift",
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
