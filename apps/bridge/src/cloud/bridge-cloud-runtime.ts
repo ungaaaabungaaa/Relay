@@ -11,6 +11,7 @@ type BridgeCloudRuntimeOptions = {
   eventHub: EventHub;
   handler(request: Request): Promise<Response>;
   now?: () => number;
+  importRootKey?(encoded: string): Promise<CryptoKey>;
 };
 
 type CloudDeviceRegistration = {
@@ -41,51 +42,58 @@ export class BridgeCloudRuntime {
   }
 
   async registerDevice(input: CloudDeviceRegistration): Promise<void> {
-    if (this.#closed) throw new Error("Relay cloud runtime is closed");
-    const rootKey = typeof input.rootKey === "string"
-      ? await this.#importRootKey(input.rootKey)
-      : input.rootKey;
-    if (
-      rootKey.algorithm.name !== "AES-GCM" ||
-      !rootKey.usages.includes("encrypt") ||
-      !rootKey.usages.includes("decrypt")
-    ) {
-      throw new Error("Invalid Relay cloud root key");
-    }
-    this.#rootKeys.set(input.deviceId, rootKey);
-    this.#registrations.set(input.deviceId, structuredClone(input));
-    this.#options.store.addDevice(
-      input.deviceId,
-      input.signingPublicKey,
-      input.name,
-      Date.now(),
-      input.metadata,
-    );
-    if (!this.#adapters.has(input.hostId)) {
-      this.#adapters.set(
-        input.hostId,
-        new CloudTunnelAdapter({
-          hostId: input.hostId,
-          keyForDevice: async (deviceId) => {
-            const key = this.#rootKeys.get(deviceId);
-            if (!key) throw new Error("Unknown Relay cloud device");
-            return key;
-          },
-          loadReplayState: async () =>
-            this.#options.store.loadCloudSequenceState("incoming"),
-          saveReplayState: async (state) => {
-            this.#options.store.saveCloudSequenceState("incoming", state);
-          },
-          loadOutgoingSequences: async () =>
-            this.#options.store.loadCloudSequenceState("outgoing"),
-          saveOutgoingSequences: async (state) => {
-            this.#options.store.saveCloudSequenceState("outgoing", state);
-          },
-          handler: this.#options.handler,
-          ...(this.#options.now ? { now: this.#options.now } : {}),
-        }),
+    await this.#appendOutgoing(async () => {
+      if (this.#closed) throw new Error("Relay cloud runtime is closed");
+      const rootKey = typeof input.rootKey === "string"
+        ? await (this.#options.importRootKey ?? this.#importRootKey.bind(this))(
+            input.rootKey,
+          )
+        : input.rootKey;
+      if (this.#closed) throw new Error("Relay cloud runtime is closed");
+      const algorithm = rootKey.algorithm as AesKeyAlgorithm;
+      if (
+        algorithm.name !== "AES-GCM" ||
+        algorithm.length !== 256 ||
+        !rootKey.usages.includes("encrypt") ||
+        !rootKey.usages.includes("decrypt")
+      ) {
+        throw new Error("Invalid Relay cloud root key");
+      }
+      this.#rootKeys.set(input.deviceId, rootKey);
+      this.#registrations.set(input.deviceId, structuredClone(input));
+      this.#options.store.addDevice(
+        input.deviceId,
+        input.signingPublicKey,
+        input.name,
+        Date.now(),
+        input.metadata,
       );
-    }
+      if (!this.#adapters.has(input.hostId)) {
+        this.#adapters.set(
+          input.hostId,
+          new CloudTunnelAdapter({
+            hostId: input.hostId,
+            keyForDevice: async (deviceId) => {
+              const key = this.#rootKeys.get(deviceId);
+              if (!key) throw new Error("Unknown Relay cloud device");
+              return key;
+            },
+            loadReplayState: async () =>
+              this.#options.store.loadCloudSequenceState("incoming"),
+            saveReplayState: async (state) => {
+              this.#options.store.saveCloudSequenceState("incoming", state);
+            },
+            loadOutgoingSequences: async () =>
+              this.#options.store.loadCloudSequenceState("outgoing"),
+            saveOutgoingSequences: async (state) => {
+              this.#options.store.saveCloudSequenceState("outgoing", state);
+            },
+            handler: this.#options.handler,
+            ...(this.#options.now ? { now: this.#options.now } : {}),
+          }),
+        );
+      }
+    });
   }
 
   async receive(

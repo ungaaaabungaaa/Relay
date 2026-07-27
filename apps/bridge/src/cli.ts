@@ -7,6 +7,7 @@ import {
 } from "./admin/admin-server.ts";
 import { CodexAdapter } from "./codex/adapter.ts";
 import { BridgeCloudRuntime } from "./cloud/bridge-cloud-runtime.ts";
+import { createBridgeShutdown } from "./cli-lifecycle.ts";
 import { PairingService } from "./security/pairing.ts";
 import { PairingSessionService } from "./security/pairing-session.ts";
 import { createRelayServer, createRequestHandler } from "./server.ts";
@@ -76,14 +77,7 @@ if (command === "serve") {
       address && typeof address !== "string" ? address.port : port;
     console.log(`Relay bridge listening on http://${host}:${listeningPort}`);
   });
-  let shuttingDown = false;
-  const shutdown = () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    server.close();
-    adminServer.close();
-    adapter.stop();
-  };
+  let shutdown = async () => {};
   const adminServer = listenAdminServer(
     {
       token: adminToken,
@@ -96,7 +90,7 @@ if (command === "serve") {
       codexStatus: () => codexStatus,
       voiceConfigured: Boolean(openAiApiKey),
       cloudRuntime,
-      shutdown,
+      shutdown: () => shutdown(),
     },
     adminPort,
     adminHost,
@@ -106,8 +100,17 @@ if (command === "serve") {
       );
     },
   );
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  shutdown = createBridgeShutdown({
+    cloudRuntime,
+    server,
+    adminServer,
+    adapter,
+  });
+  const requestShutdown = () => {
+    void shutdown().catch(() => {});
+  };
+  process.on("SIGINT", requestShutdown);
+  process.on("SIGTERM", requestShutdown);
 } else if (command === "pair") {
   console.log(new PairingService(store).createCode());
 } else if (command === "devices") {

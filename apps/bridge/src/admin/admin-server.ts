@@ -40,8 +40,9 @@ export type AdminServerOptions = {
     }): Promise<void>;
     receive(envelope: RelayTunnelEnvelope): Promise<void>;
     drainEvents(limit?: number): Promise<RelayTunnelEnvelope[]>;
+    removeDevice(deviceId: string): Promise<void>;
   };
-  shutdown: () => void;
+  shutdown: () => void | Promise<void>;
 };
 
 const json = (body: unknown, status = 200) =>
@@ -282,6 +283,7 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
           return json({ error: "not found" }, 404);
         }
         options.store.revokeDevice(deviceId);
+        await options.cloudRuntime?.removeDevice(deviceId);
         options.store.audit(null, "device.revoke", deviceId, "succeeded");
         return json({ ok: true });
       }
@@ -307,7 +309,9 @@ export function createAdminRequestHandler(options: AdminServerOptions) {
         });
       }
       if (request.method === "POST" && url.pathname === "/v1/shutdown") {
-        setImmediate(options.shutdown);
+        setImmediate(() => {
+          void Promise.resolve(options.shutdown()).catch(() => {});
+        });
         return json({ stopping: true }, 202);
       }
       return json({ error: "not found" }, 404);

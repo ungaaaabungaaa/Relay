@@ -114,6 +114,15 @@ describe("encrypted Apple client journey", () => {
       }),
       { status: 200, body: { ok: true } },
     );
+    assert.deepEqual(
+      await fixture.request({
+        method: "POST",
+        path: "/v1/tasks/task-1/stop",
+        body: { turnId: "turn-1" },
+        idempotencyKey: "stop-task-1-turn-1",
+      }),
+      { status: 200, body: { ok: true } },
+    );
 
     assert.deepEqual(
       fakeCodex.calls.map((call) => call.operation),
@@ -129,6 +138,10 @@ describe("encrypted Apple client journey", () => {
         "steerTask",
         "stopTask",
       ],
+    );
+    assert.equal(
+      fakeCodex.calls.filter((call) => call.operation === "stopTask").length,
+      1,
     );
   });
 

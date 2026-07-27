@@ -12,6 +12,7 @@ import {
   type RelayTunnelEnvelope,
 } from "../../../../packages/cloud-protocol/src/index.ts";
 import { BridgeCloudRuntime } from "../../src/cloud/bridge-cloud-runtime.ts";
+import { createAdminRequestHandler } from "../../src/admin/admin-server.ts";
 import { EventHub, type RelayEvent } from "../../src/events/event-hub.ts";
 import { canonicalRequest } from "../../src/security/authentication.ts";
 import { InMemorySecurityStore } from "../../src/security/store.ts";
@@ -41,12 +42,14 @@ export type WatchVoiceInput = {
 };
 
 type WatchResponse = { status: number; body: unknown };
+const ADMIN_TOKEN = "relay-fixture-admin-token-that-is-at-least-32-bytes";
 
 export class WatchTransportFixture {
   readonly workspaceRoot: string;
   readonly #temporaryRoot: string;
-  readonly #store: InMemorySecurityStore;
   readonly #runtime: BridgeCloudRuntime;
+  readonly #adminHandler: (request: Request) => Promise<Response>;
+  readonly #shutdownComplete: Promise<void>;
   readonly #signingPrivateKey: ReturnType<
     typeof generateKeyPairSync
   >["privateKey"];
@@ -59,20 +62,23 @@ export class WatchTransportFixture {
   #revoked = false;
   #closed = false;
   #cleanup: Promise<void> = Promise.resolve();
+  #closeOperation: Promise<void> | undefined;
 
   private constructor(input: {
     workspaceRoot: string;
     temporaryRoot: string;
-    store: InMemorySecurityStore;
     runtime: BridgeCloudRuntime;
+    adminHandler: (request: Request) => Promise<Response>;
+    shutdownComplete: Promise<void>;
     signingPrivateKey: ReturnType<typeof generateKeyPairSync>["privateKey"];
     rootKey: CryptoKey;
     now: number;
   }) {
     this.workspaceRoot = input.workspaceRoot;
     this.#temporaryRoot = input.temporaryRoot;
-    this.#store = input.store;
     this.#runtime = input.runtime;
+    this.#adminHandler = input.adminHandler;
+    this.#shutdownComplete = input.shutdownComplete;
     this.#signingPrivateKey = input.signingPrivateKey;
     this.#rootKey = input.rootKey;
     this.#now = input.now;
@@ -118,6 +124,28 @@ export class WatchTransportFixture {
       handler,
       now: () => now,
     });
+    let finishShutdown!: () => void;
+    const shutdownComplete = new Promise<void>((resolve) => {
+      finishShutdown = resolve;
+    });
+    const adminHandler = createAdminRequestHandler({
+      token: ADMIN_TOKEN,
+      store,
+      workspacePolicy: new WorkspacePolicy([workspaceRoot]),
+      adminBindHost: "127.0.0.1",
+      watchBindHost: "127.0.0.1",
+      watchPort: 43117,
+      codexStatus: () => "ready",
+      voiceConfigured: true,
+      cloudRuntime: runtime,
+      shutdown: async () => {
+        try {
+          await runtime.close();
+        } finally {
+          finishShutdown();
+        }
+      },
+    });
     await runtime.registerDevice({
       accountId: "account-1",
       hostId: "host-1",
@@ -140,8 +168,9 @@ export class WatchTransportFixture {
     return new WatchTransportFixture({
       workspaceRoot,
       temporaryRoot,
-      store,
       runtime,
+      adminHandler,
+      shutdownComplete,
       signingPrivateKey: signing.privateKey,
       rootKey: watchRootKey,
       now,
@@ -160,7 +189,7 @@ export class WatchTransportFixture {
       idempotencyKey: input.idempotencyKey,
     });
     const messageId = crypto.randomUUID();
-    await this.#runtime.receive(
+    await this.#receive(
       await encryptRelayEnvelope(
         this.#routing(messageId, input.sequence),
         {
@@ -205,7 +234,7 @@ export class WatchTransportFixture {
       const recordedAtMs = chunks.length === 1
         ? input.durationMs
         : Math.floor((index * input.durationMs) / (chunks.length - 1));
-      await this.#runtime.receive(
+      await this.#receive(
         await encryptRelayEnvelope(
           this.#routing(finalMessageId),
           {
@@ -249,23 +278,40 @@ export class WatchTransportFixture {
   revoke(): void {
     if (this.#revoked || this.#closed) return;
     this.#revoked = true;
-    this.#store.revokeDevice("watch-1", this.#now);
-    this.#cleanup = this.#runtime.removeDevice("watch-1");
+    this.#cleanup = this.#adminHandler(
+      this.#adminRequest("/v1/devices/watch-1/revoke"),
+    ).then((response) => {
+      if (response.status !== 200) throw new Error("Relay Watch revoke failed");
+    });
   }
 
   async close(): Promise<void> {
-    if (this.#closed) return;
-    this.#closed = true;
-    this.#connected = false;
-    await this.#cleanup;
-    await this.#runtime.close();
-    await rm(this.#temporaryRoot, { recursive: true, force: true });
+    this.#closeOperation ??= (async () => {
+      this.#closed = true;
+      this.#connected = false;
+      await this.#cleanup;
+      const response = await this.#adminHandler(
+        this.#adminRequest("/v1/shutdown"),
+      );
+      if (response.status !== 202) throw new Error("Relay shutdown failed");
+      await this.#shutdownComplete;
+      await rm(this.#temporaryRoot, { recursive: true, force: true });
+    })();
+    return this.#closeOperation;
   }
 
   async #assertAvailable(): Promise<void> {
     await this.#cleanup;
-    if (this.#revoked) throw new Error("Relay Watch is revoked");
     if (!this.#connected || this.#closed) throw new Error("Relay Watch is offline");
+  }
+
+  async #receive(envelope: RelayTunnelEnvelope): Promise<void> {
+    try {
+      await this.#runtime.receive(envelope);
+    } catch (error) {
+      if (this.#revoked) throw new Error("Relay Watch is revoked");
+      throw error;
+    }
   }
 
   #signedHeaders(input: {
@@ -347,5 +393,12 @@ export class WatchTransportFixture {
       }
     }
     return messages;
+  }
+
+  #adminRequest(path: string): Request {
+    return new Request(`http://127.0.0.1${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
   }
 }

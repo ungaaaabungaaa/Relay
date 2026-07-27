@@ -103,7 +103,18 @@ describe("admin server", () => {
 
   it("provides focused operations without returning stored secrets", async () => {
     const { options, wasStopped } = createOptions();
-    const handler = createAdminRequestHandler(options);
+    const removedDevices: string[] = [];
+    const handler = createAdminRequestHandler({
+      ...options,
+      cloudRuntime: {
+        registerDevice: async () => {},
+        receive: async () => {},
+        drainEvents: async () => [],
+        removeDevice: async (deviceId) => {
+          removedDevices.push(deviceId);
+        },
+      },
+    });
 
     const status = await (await handler(authorized("/v1/status"))).json();
     assert.deepEqual(status, {
@@ -143,6 +154,7 @@ describe("admin server", () => {
     );
     assert.equal(revoked.status, 200);
     assert.notEqual(options.store.getDevice("watch-1")?.revokedAt, null);
+    assert.deepEqual(removedDevices, ["watch-1"]);
 
     const shutdown = await handler(
       authorized("/v1/shutdown", { method: "POST" }),
@@ -201,6 +213,7 @@ describe("admin server", () => {
             ciphertext: "ciphertext",
           },
         ],
+        removeDevice: async () => {},
       },
     });
 
