@@ -7,7 +7,7 @@ struct RelayInstructionView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             if selectedTaskID == nil {
                 Section("Task") {
                     ForEach(model.tasks) { task in
@@ -59,7 +59,7 @@ struct RelayNewTaskView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             Section("Workspace") {
                 Picker("Folder", selection: $cwd) {
                     Text("Choose").tag("")
@@ -133,7 +133,7 @@ struct RelaySettingsView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             Section("Connection") {
                 Text("End-to-end encrypted through Relay Cloud")
                 Text("Watch fingerprint \(model.watchFingerprint)")

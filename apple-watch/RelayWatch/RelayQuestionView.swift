@@ -7,7 +7,7 @@ struct RelayQuestionView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             if let question {
                 ForEach(question.questions) { item in
                     Section(item.header) {

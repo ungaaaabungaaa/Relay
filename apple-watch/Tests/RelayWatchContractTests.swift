@@ -29,6 +29,44 @@ func watchRoutesCarryOnlyStableDestinationIdentity() {
 }
 
 @Test
+func actionFirstHomeCapsTheVisibleQueueAtTwo() {
+    let items = RelayHomePresentation.items(
+        approvals: [approvalFixture("a1"), approvalFixture("a2")],
+        questions: [questionFixture("q1")],
+        limit: 2
+    )
+    #expect(items.map(\.id) == ["a1", "a2"])
+    #expect(RelayHomePresentation.remainingCount(total: 3, visible: items.count) == 1)
+}
+
+@Test
+func allClearHomeUsesTheApprovedFourActions() {
+    #expect(RelayHomePresentation.clearActions.map(\.title) == [
+        "Tasks", "New task", "Voice", "More",
+    ])
+}
+
+private func approvalFixture(_ id: String) -> RelayApproval {
+    RelayApproval(
+        id: id, threadId: "task", turnId: "turn", itemId: "item-\(id)",
+        kind: .command, risk: .normal, riskReasons: [], command: "pnpm test",
+        cwd: "/workspace", reason: nil, startedAtMs: 1
+    )
+}
+
+private func questionFixture(_ id: String) -> RelayQuestion {
+    RelayQuestion(
+        id: id, threadId: "task", turnId: "turn", itemId: "item-\(id)",
+        questions: [
+            .init(
+                id: "choice", header: "Release", question: "Choose",
+                options: [.init(label: "Beta", description: "Private testing")]
+            ),
+        ]
+    )
+}
+
+@Test
 func watchSourcesUseNativeNavigationAndNoCustomBackButton() throws {
     let sources = try relayWatchSources()
     #expect(sources["RelayWatchRootView.swift"]?.contains("NavigationStack(path:") == true)

@@ -5,7 +5,7 @@ struct RelayTasksView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             ForEach(model.tasks) { task in
                 Button {
                     model.showTask(task.id)
@@ -31,7 +31,7 @@ struct RelayTaskActivityView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             if let task {
                 Section {
                     Text(task.title).font(.headline)

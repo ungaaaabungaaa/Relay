@@ -7,7 +7,7 @@ struct RelayVoiceView: View {
 
     var body: some View {
         List {
-            RelayConnectionBanner(model: model)
+            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
             Section("Destination") {
                 Toggle("Draft a new task", isOn: $targetNewTask)
                     .disabled(controller.phase != .idle)

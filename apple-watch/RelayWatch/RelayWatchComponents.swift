@@ -116,3 +116,14 @@ struct RelayStatusStrip: View {
         }
     }
 }
+
+/// Temporary adapter while destination views move to native navigation routes.
+/// Task 5 removes this once the remaining call sites are gone.
+struct RelayBackButton: View {
+    @ObservedObject var model: RelayWatchModel
+    var destination: RelayWatchScreen = .inbox
+
+    var body: some View {
+        Button("Back") { model.show(destination) }
+    }
+}
