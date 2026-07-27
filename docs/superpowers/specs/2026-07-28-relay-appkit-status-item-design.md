@@ -18,6 +18,8 @@ other normal window.
 The status item uses the user-supplied UFO SVG. Every fixed color is converted
 to a solid template mask. `NSImage.isTemplate` remains enabled so macOS renders
 the UFO white in dark appearances and black in light appearances. The status
+image renders at 24 by 24 points so the wide UFO has similar visual weight to
+neighboring system items without modifying or stretching its paths. The status
 button accessibility title is `Relay`.
 
 ## Native menu
@@ -42,6 +44,7 @@ treated as installed applications.
 ## Acceptance criteria
 
 - The supplied UFO is visibly present in the macOS menu bar.
+- The UFO renders at 24 by 24 points and visually matches neighboring items.
 - The UFO adapts automatically between dark and light menu-bar appearances.
 - Selecting the UFO opens the existing native Relay menu.
 - Relay owns zero normal windows.

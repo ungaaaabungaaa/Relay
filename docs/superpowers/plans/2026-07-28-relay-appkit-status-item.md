@@ -55,7 +55,7 @@ struct RelayMacApp: App {
 
 The delegate creates one `RelayAppModel` and retains one
 `RelayStatusItemController`. The controller loads `RelayMenuBarIcon.svg` from
-`Bundle.main`, marks the image as a template, sizes it to 18 points, and assigns
+`Bundle.main`, marks the image as a template, sizes it to 24 points, and assigns
 it to the status button with accessibility title `Relay`.
 
 - [ ] **Step 4: Compile and verify GREEN**
