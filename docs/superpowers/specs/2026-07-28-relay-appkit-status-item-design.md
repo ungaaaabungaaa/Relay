@@ -41,6 +41,11 @@ registers that exact bundle with LaunchServices. Spotlight and Launchpad must
 discover the installed bundle; temporary builds under `/private/tmp` are not
 treated as installed applications.
 
+The shared Mac and Watch application icon retains the silver UFO, black
+background, rounded-square silhouette, and beam. Its outer tile edge is matte
+black or dark charcoal with no silver, white, glossy, or luminous perimeter
+highlight. The menu-bar SVG remains a separate adaptive template asset.
+
 ## Acceptance criteria
 
 - The supplied UFO is visibly present in the macOS menu bar.
@@ -50,5 +55,6 @@ treated as installed applications.
 - Relay owns zero normal windows.
 - Relay remains visible in the Dock while running.
 - `/Applications/Relay.app` exists and carries the approved application icon.
+- The application icon has no bright perimeter shine or silver outer stroke.
 - LaunchServices recognizes `com.relayforcodex.mac` at the Applications path.
 - Existing functional and security tests pass.

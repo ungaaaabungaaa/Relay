@@ -318,5 +318,8 @@ test("final Mac and Watch app icon sources are identical", async () => {
 
   const digest = (icon) => createHash("sha256").update(icon).digest("hex");
 
+  assert.equal(macIcon.subarray(1, 4).toString("ascii"), "PNG");
+  assert.equal(macIcon.readUInt32BE(16), 1024);
+  assert.equal(macIcon.readUInt32BE(20), 1024);
   assert.equal(digest(macIcon), digest(watchIcon));
 });
