@@ -71,3 +71,46 @@ func relayMenuPresentationFormatsOnlySafeOperationalText() {
     #expect(diagnostic.contains("[redacted]"))
     #expect(!diagnostic.contains("private-value"))
 }
+
+@Test
+func relayMenuPresentationProtectsPairingAndReconnectSafety() {
+    #expect(
+        RelayMenuPresentation.pairingMacFingerprint(
+            sessionFingerprint: "AB:CD",
+            hostFingerprint: "EF:01"
+        ) == "AB:CD"
+    )
+    #expect(
+        RelayMenuPresentation.pairingMacFingerprint(
+            sessionFingerprint: nil,
+            hostFingerprint: "EF:01"
+        ) == "EF:01"
+    )
+    #expect(
+        RelayMenuPresentation.canStartSecurePairing(
+            cloudConnected: true,
+            bridgeState: .running
+        )
+    )
+    #expect(
+        !RelayMenuPresentation.canStartSecurePairing(
+            cloudConnected: false,
+            bridgeState: .running
+        )
+    )
+    #expect(
+        !RelayMenuPresentation.canResolvePairing(
+            cloudPhase: .retrying(attempt: 1, delaySeconds: 1),
+            bridgeState: .running
+        )
+    )
+    #expect(
+        RelayMenuPresentation.canResolvePairing(
+            cloudPhase: .connected,
+            bridgeState: .running
+        )
+    )
+    #expect(RelayReconnectPlan.forSupervisor(state: .running) == .keep)
+    #expect(RelayReconnectPlan.forSupervisor(state: .emergencyStopped) == .restart)
+    #expect(RelayReconnectPlan.forSupervisor(state: nil) == .create)
+}

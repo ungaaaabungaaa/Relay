@@ -74,6 +74,13 @@ struct MenuContent: View {
             Button("Start Secure Pairing") {
                 Task { await model.createSecurePairingSession() }
             }
+            .disabled(
+                !RelayMenuPresentation.canStartSecurePairing(
+                    cloudConnected: model.cloudConnected,
+                    bridgeState: model.bridgeState
+                )
+            )
+            Text("Mac fingerprint \(pairingMacFingerprint)").disabled(true)
             if let session = model.cloudPairingSession {
                 Text("Code \(session.code)").disabled(true)
                 Text(
@@ -102,6 +109,12 @@ struct MenuContent: View {
                         Button("Approve") {
                             Task { await model.approvePairing(pairing) }
                         }
+                        .disabled(
+                            !RelayMenuPresentation.canResolvePairing(
+                                cloudPhase: model.cloudTunnelPhase,
+                                bridgeState: model.bridgeState
+                            )
+                        )
                         Button("Deny", role: .destructive) {
                             guard RelayMenuDialogs.confirm(
                                 title: "Deny \(pairing.name)?",
@@ -110,6 +123,12 @@ struct MenuContent: View {
                             ) else { return }
                             Task { await model.denyPairing(pairing) }
                         }
+                        .disabled(
+                            !RelayMenuPresentation.canResolvePairing(
+                                cloudPhase: model.cloudTunnelPhase,
+                                bridgeState: model.bridgeState
+                            )
+                        )
                     }
                 }
             }
@@ -170,13 +189,20 @@ struct MenuContent: View {
         }
     }
 
+    private var pairingMacFingerprint: String {
+        RelayMenuPresentation.pairingMacFingerprint(
+            sessionFingerprint: model.cloudPairingSession?.macFingerprint,
+            hostFingerprint: model.hostFingerprint
+        )
+    }
+
     private var cloudMenu: some View {
         Menu("Relay Cloud") {
             Text(RelayMenuPresentation.cloudLabel(model.cloudTunnelPhase)).disabled(true)
             Text("Environment \(model.cloudEnvironmentName)").disabled(true)
             if model.cloudSignedIn {
                 Button("Reconnect") {
-                    Task { await model.refresh() }
+                    Task { await model.reconnectRelay() }
                 }
                 Button("Sign Out") {
                     Task { await model.signOutOfRelayCloud() }

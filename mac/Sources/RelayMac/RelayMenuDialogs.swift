@@ -3,6 +3,30 @@ import Foundation
 import RelayCore
 
 enum RelayMenuPresentation {
+    static func pairingMacFingerprint(
+        sessionFingerprint: String?,
+        hostFingerprint: String
+    ) -> String {
+        guard let sessionFingerprint, !sessionFingerprint.isEmpty else {
+            return hostFingerprint
+        }
+        return sessionFingerprint
+    }
+
+    static func canStartSecurePairing(
+        cloudConnected: Bool,
+        bridgeState: BridgeSupervisorState
+    ) -> Bool {
+        cloudConnected && bridgeState == .running
+    }
+
+    static func canResolvePairing(
+        cloudPhase: RelayCloudTunnelPhase,
+        bridgeState: BridgeSupervisorState
+    ) -> Bool {
+        cloudPhase == .connected && bridgeState == .running
+    }
+
     static func statusRows(
         bridgeState: BridgeSupervisorState,
         codexStatus: String,
@@ -69,6 +93,20 @@ enum RelayMenuPresentation {
         case .connected: "connected"
         case let .retrying(_, delaySeconds): "retrying in \(delaySeconds)s"
         case .stopped: "stopped"
+        }
+    }
+}
+
+enum RelayReconnectPlan: Equatable {
+    case keep
+    case restart
+    case create
+
+    static func forSupervisor(state: BridgeSupervisorState?) -> Self {
+        guard let state else { return .create }
+        switch state {
+        case .running, .starting, .restarting: return .keep
+        case .stopped, .failed, .emergencyStopped: return .restart
         }
     }
 }

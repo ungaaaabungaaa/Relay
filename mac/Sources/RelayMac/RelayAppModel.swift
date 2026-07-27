@@ -3,6 +3,10 @@ import Foundation
 import RelayCore
 import ServiceManagement
 
+private enum RelayReconnectError: Error {
+    case bridgeUnavailable
+}
+
 @MainActor
 final class RelayAppModel: ObservableObject {
     @Published var setupState = SetupState.checking
@@ -137,6 +141,43 @@ final class RelayAppModel: ObservableObject {
             bridgeState = .failed
             codexStatus = "Unavailable"
             lastError = "The local bridge is not responding."
+            updateSetupState(bridgeReady: false)
+        }
+    }
+
+    func reconnectRelay() async {
+        cloudTunnelTask?.cancel()
+        cloudTunnelTask = nil
+        await cloudTunnel.disconnect()
+        cloudConnected = false
+
+        do {
+            let currentState = await supervisor?.snapshot().state
+            switch RelayReconnectPlan.forSupervisor(state: currentState) {
+            case .keep:
+                break
+            case .restart:
+                try await supervisor?.start()
+            case .create:
+                guard let executableURL = locateBridgeExecutable() else {
+                    throw RelayReconnectError.bridgeUnavailable
+                }
+                let token = try ensureAdminToken()
+                supervisor = makeSupervisor(executableURL: executableURL, token: token)
+                try await supervisor?.start()
+            }
+
+            try? await Task.sleep(for: .milliseconds(250))
+            await refresh()
+            guard bridgeState == .running else { return }
+            await restoreRelayCloudSession()
+            updateSetupState(bridgeReady: true)
+        } catch {
+            bridgeState = .failed
+            cloudConnected = false
+            cloudTunnelPhase = .stopped
+            lastError = "Relay could not restart its local bridge."
+            diagnostic = "Relay reconnect failed. No secret values were logged."
             updateSetupState(bridgeReady: false)
         }
     }
