@@ -109,7 +109,7 @@ rm -rf "${asset_catalog_path}" "${output_directory}/asset-info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${relay_version}" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${relay_version}" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 14.0" "${contents_path}/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "${contents_path}/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :LSUIElement bool false" "${contents_path}/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string Relay records only while you hold the watch record control." "${contents_path}/Info.plist"
 if [[ -n "${release_public_key}" ]]; then
   /usr/libexec/PlistBuddy -c "Add :RelayReleasePublicKey string ${release_public_key}" "${contents_path}/Info.plist"

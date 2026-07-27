@@ -14,6 +14,9 @@ test("consumer builds use permanent Apple product identifiers", async () => {
   assert.match(watchProject, /PRODUCT_BUNDLE_IDENTIFIER = com\.relayforcodex\.watch;/);
   assert.match(watchProject, /WATCHOS_DEPLOYMENT_TARGET = 10\.0;/);
   assert.match(macPackaging, /com\.relayforcodex\.mac/);
+  assert.match(macPackaging, /CFBundleIconFile string AppIcon/);
+  assert.match(macPackaging, /LSUIElement bool false/);
+  assert.doesNotMatch(macPackaging, /LSUIElement bool true/);
   assert.doesNotMatch(macPackaging, /NSBonjourServices/);
   assert.doesNotMatch(macPackaging, /NSLocalNetworkUsageDescription/);
 });
