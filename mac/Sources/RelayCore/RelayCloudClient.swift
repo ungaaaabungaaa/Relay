@@ -54,6 +54,17 @@ private struct RelayCloudPairingApprovalRequest: Encodable, Sendable {
     var approvedPayload: RelayCloudPairingPayloadEnvelope
 }
 
+private struct RelayCloudRecoveredPairingRequests: Decodable, Sendable {
+    struct Request: Decodable, Sendable {
+        var requestId: String
+        var signingPublicKey: String
+        var agreementPublicKey: String
+        var metadata: RelayCloudDeviceMetadata
+        var expiresAt: Int64
+    }
+    var requests: [Request]
+}
+
 public struct RelayCloudClient: Sendable {
     public typealias Transport = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
 
@@ -66,6 +77,13 @@ public struct RelayCloudClient: Sendable {
     ) {
         self.apiOrigin = apiOrigin
         self.transport = transport
+    }
+
+    public init(
+        endpoints: RelayCloudEndpoints,
+        transport: @escaping Transport = RelayCloudClient.liveTransport
+    ) {
+        self.init(apiOrigin: endpoints.apiOrigin, transport: transport)
     }
 
     public func startDeviceLogin(email: String) async throws -> RelayCloudLoginSession {
@@ -198,6 +216,40 @@ public struct RelayCloudClient: Sendable {
         )
     }
 
+    public func pendingPairingRequests(
+        accessToken: String,
+        pairingToken: String
+    ) async throws -> [RelayCloudPairingRequest] {
+        let (data, response) = try await transport(
+            request(
+                path: "/cloud/v1/pairing-sessions/\(pairingToken)/requests",
+                method: "GET",
+                accessToken: accessToken
+            )
+        )
+        guard response.statusCode == 200 else {
+            throw RelayCloudClientError.authenticationFailed
+        }
+        return try JSONDecoder().decode(
+            RelayCloudRecoveredPairingRequests.self,
+            from: data
+        ).requests.map { recovered in
+            guard Self.validAgreementKey(recovered.agreementPublicKey) else {
+                throw RelayCloudClientError.invalidResponse
+            }
+            return RelayCloudPairingRequest(
+                id: recovered.requestId,
+                fingerprint: try Self.watchFingerprint(
+                    signingPublicKey: recovered.signingPublicKey
+                ),
+                signingPublicKey: recovered.signingPublicKey,
+                agreementPublicKey: recovered.agreementPublicKey,
+                expiresAt: recovered.expiresAt,
+                metadata: recovered.metadata
+            )
+        }
+    }
+
     public func approvePairing(
         accessToken: String,
         pairingToken: String,
@@ -290,7 +342,7 @@ public struct RelayCloudClient: Sendable {
     private func okRequest(
         path: String,
         method: String,
-        body: Data,
+        body: Data = Data(),
         accessToken: String
     ) async throws {
         let (_, response) = try await transport(
@@ -306,10 +358,37 @@ public struct RelayCloudClient: Sendable {
         }
     }
 
+    private static func watchFingerprint(signingPublicKey: String) throws -> String {
+        let lines = signingPublicKey.split(separator: "\n").map(String.init)
+        guard
+            lines.first == "-----BEGIN PUBLIC KEY-----",
+            lines.last == "-----END PUBLIC KEY-----",
+            let decoded = Data(base64Encoded: lines.dropFirst().dropLast().joined()),
+            !decoded.isEmpty
+        else { throw RelayCloudClientError.invalidResponse }
+        let digest = SHA256.hash(data: Data(signingPublicKey.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return stride(from: 0, to: 32, by: 4).map { offset in
+            let start = digest.index(digest.startIndex, offsetBy: offset)
+            let end = digest.index(start, offsetBy: 4)
+            return String(digest[start..<end])
+        }.joined(separator: ":")
+    }
+
+    private static func validAgreementKey(_ value: String) -> Bool {
+        var base64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64) else { return false }
+        return (try? P256.KeyAgreement.PublicKey(x963Representation: data)) != nil
+    }
+
     private func request(
         path: String,
         method: String,
-        body: Data,
+        body: Data = Data(),
         accessToken: String? = nil
     ) -> URLRequest {
         var request = URLRequest(

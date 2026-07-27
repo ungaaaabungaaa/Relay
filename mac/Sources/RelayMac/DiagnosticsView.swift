@@ -18,6 +18,7 @@ struct DiagnosticsView: View {
                         diagnosticRow("Active watches", "\(model.activeDeviceCount)")
                         diagnosticRow("Workspace roots", "\(model.workspaces.count)")
                         diagnosticRow("Voice", model.voiceConfigured ? "Configured" : "Off")
+                        diagnosticRow("Cloud environment", model.cloudEnvironmentName)
                     }
                 }
                 RelayPanel {

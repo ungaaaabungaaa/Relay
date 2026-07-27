@@ -63,6 +63,13 @@ public actor RelayCloudHostTunnel {
         self.connector = connector
     }
 
+    public init(
+        endpoints: RelayCloudEndpoints,
+        connector: @escaping Connector = RelayCloudHostTunnel.liveConnector
+    ) {
+        self.init(origin: endpoints.hostWebSocketURL, connector: connector)
+    }
+
     public func events(
         hostID: String,
         credential: String

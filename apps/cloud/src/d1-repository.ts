@@ -709,6 +709,52 @@ export class D1CloudRepository {
     if (changeCount(result) !== 1) throw new Error(PAIRING_ERROR);
   }
 
+  async listPendingPairingRequests(input: {
+    accountId: string;
+    hostId: string;
+    tokenHash: string;
+  }): Promise<Array<{
+    requestId: string;
+    signingPublicKey: string;
+    agreementPublicKey: string;
+    metadata: Record<string, unknown>;
+    expiresAt: number;
+  }>> {
+    const now = this.#now();
+    const records = await this.database
+      .prepare(
+        `SELECT request.id, request.signing_public_key,
+                request.agreement_public_key, request.metadata_json,
+                request.expires_at
+         FROM pairing_requests AS request
+         JOIN pairing_sessions AS session
+           ON session.token_hash = request.pairing_token_hash
+         WHERE session.token_hash = ?
+           AND session.account_id = ?
+           AND session.host_id = ?
+           AND session.consumed_at IS NULL
+           AND session.expires_at > ?
+           AND request.status = 'pending'
+           AND request.expires_at > ?
+         ORDER BY request.created_at ASC, request.id ASC`,
+      )
+      .bind(input.tokenHash, input.accountId, input.hostId, now, now)
+      .all<{
+        id: string;
+        signing_public_key: string;
+        agreement_public_key: string;
+        metadata_json: string;
+        expires_at: number;
+      }>();
+    return records.results.map((record) => ({
+      requestId: record.id,
+      signingPublicKey: record.signing_public_key,
+      agreementPublicKey: record.agreement_public_key,
+      metadata: JSON.parse(record.metadata_json) as Record<string, unknown>,
+      expiresAt: record.expires_at,
+    }));
+  }
+
   async approvePairing(input: {
     accountId: string;
     hostId: string;

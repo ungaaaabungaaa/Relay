@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import RelayCore
@@ -79,6 +80,40 @@ func cloudClientRegistersOneHostAndCreatesItsPairingSession() async throws {
     #expect(requests.allSatisfy {
         $0.value(forHTTPHeaderField: "authorization") == "Bearer access"
     })
+}
+
+@Test
+func cloudClientRecoversPendingRequestsAndDerivesTheWatchFingerprint() async throws {
+    let signingKey = "-----BEGIN PUBLIC KEY-----\nAQID\n-----END PUBLIC KEY-----\n"
+    let agreementKey = P256.KeyAgreement.PrivateKey().publicKey.x963Representation
+        .base64EncodedString()
+    let response = try JSONSerialization.data(withJSONObject: [
+        "requests": [[
+            "requestId": "request-1",
+            "signingPublicKey": signingKey,
+            "agreementPublicKey": agreementKey,
+            "expiresAt": 301_000,
+            "metadata": [
+                "platform": "watch-os", "manufacturer": "Apple",
+                "model": "Apple Watch", "osVersion": "10",
+                "appVersion": "0.2.0", "screenShape": "rounded-rect",
+            ],
+        ]],
+    ])
+    let recorder = SequenceRequestRecorder(responses: [response])
+    let client = RelayCloudClient(transport: recorder.send)
+
+    let requests = try await client.pendingPairingRequests(
+        accessToken: "access", pairingToken: "pair-token"
+    )
+    #expect(requests.count == 1)
+    #expect(requests[0].fingerprint.split(separator: ":").count == 8)
+    #expect(requests[0].signingPublicKey == signingKey)
+    let sent = try #require(await recorder.requests.first)
+    #expect(sent.httpMethod == "GET")
+    #expect(sent.url?.path == "/cloud/v1/pairing-sessions/pair-token/requests")
+    #expect(sent.value(forHTTPHeaderField: "authorization") == "Bearer access")
+    #expect(sent.url?.query == nil)
 }
 
 @Test

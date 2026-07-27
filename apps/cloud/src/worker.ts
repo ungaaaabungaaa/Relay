@@ -38,6 +38,11 @@ const dynamicCommands: Array<{
   },
   {
     method: "GET",
+    pattern: /^\/cloud\/v1\/pairing-sessions\/([^/]+)\/requests$/,
+    command: "pairingSessions.recoverRequests",
+  },
+  {
+    method: "GET",
     pattern: /^\/cloud\/v1\/pairing-requests\/([^/]+)$/,
     command: "pairingRequests.status",
   },

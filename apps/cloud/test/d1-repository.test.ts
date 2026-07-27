@@ -50,6 +50,60 @@ function repository(now = 1_000) {
 }
 
 describe("D1 cloud repository", () => {
+  it("recovers only live pending requests owned by the active account host session", async () => {
+    const { database, repo } = await repository();
+    await repo.createTestAccount("account-1");
+    await repo.createTestAccount("account-2");
+    await repo.createHost({
+      id: "host-1", accountId: "account-1", name: "Mac",
+      credentialHash: "host-credential",
+    });
+    await repo.createHost({
+      id: "host-2", accountId: "account-2", name: "Other Mac",
+      credentialHash: "other-credential",
+    });
+    await repo.createPairingSession({
+      tokenHash: "pair-token", codeHash: "pair-code", accountId: "account-1",
+      hostId: "host-1", sessionNonce: "nonce", macFingerprint: "mac",
+      expiresAt: 10_000,
+    });
+    await repo.createPairingRequest({
+      id: "pending-1", tokenHash: "pair-token", pollTokenHash: "poll-1",
+      requestFingerprintHash: "fingerprint-hash", signingPublicKey: "signing",
+      agreementPublicKey: "agreement", metadata: { model: "Apple Watch" },
+      expiresAt: 5_000,
+    });
+    await repo.createPairingRequest({
+      id: "denied-1", tokenHash: "pair-token", pollTokenHash: "poll-2",
+      requestFingerprintHash: "fingerprint-hash", signingPublicKey: "denied-signing",
+      agreementPublicKey: "denied-agreement", metadata: {}, expiresAt: 5_000,
+    });
+    database.prepare("UPDATE pairing_requests SET status = 'denied' WHERE id = ?")
+      .run("denied-1");
+
+    assert.deepEqual(
+      await repo.listPendingPairingRequests({
+        accountId: "account-1", hostId: "host-1", tokenHash: "pair-token",
+      }),
+      [{
+        requestId: "pending-1", signingPublicKey: "signing",
+        agreementPublicKey: "agreement", metadata: { model: "Apple Watch" },
+        expiresAt: 5_000,
+      }],
+    );
+    assert.deepEqual(await repo.listPendingPairingRequests({
+      accountId: "account-2", hostId: "host-1", tokenHash: "pair-token",
+    }), []);
+    assert.deepEqual(await repo.listPendingPairingRequests({
+      accountId: "account-1", hostId: "host-2", tokenHash: "pair-token",
+    }), []);
+
+    database.prepare("UPDATE pairing_sessions SET consumed_at = 1000 WHERE token_hash = ?")
+      .run("pair-token");
+    assert.deepEqual(await repo.listPendingPairingRequests({
+      accountId: "account-1", hostId: "host-1", tokenHash: "pair-token",
+    }), []);
+  });
   it("stores only bounded redacted audit metadata for seven days", async () => {
     const { database, repo } = await repository();
     await repo.recordAudit({

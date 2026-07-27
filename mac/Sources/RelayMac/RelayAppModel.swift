@@ -22,19 +22,40 @@ final class RelayAppModel: ObservableObject {
     @Published var cloudConnected = false
     @Published var cloudLoginInProgress = false
     @Published var cloudPairingSession: RelayCloudPairingSession?
+    @Published var cloudEnvironmentName = "production"
 
     private let secrets: KeychainStore
     private let adminClient: AdminClient
     private var supervisor: BridgeSupervisor?
     let updateController = RelayUpdateController()
-    private let cloudClient = RelayCloudClient()
-    private let cloudTunnel = RelayCloudHostTunnel()
+    private let cloudClient: RelayCloudClient
+    private let cloudTunnel: RelayCloudHostTunnel
+    private let cloudConfigurationValid: Bool
     private var cloudAccessToken: String?
     private var cloudLoginTask: Task<Void, Never>?
     private var cloudTunnelTask: Task<Void, Never>?
     private var cloudPairingRequests: [String: RelayCloudPairingRequest] = [:]
 
     init() {
+        #if DEBUG
+        let isDebugBuild = true
+        #else
+        let isDebugBuild = false
+        #endif
+        let endpoints: RelayCloudEndpoints
+        do {
+            endpoints = try RelayCloudEndpoints.resolve(isDebugBuild: isDebugBuild)
+            cloudConfigurationValid = true
+            cloudEnvironmentName = endpoints.environment.rawValue
+        } catch {
+            endpoints = try! RelayCloudEndpoints.resolve(
+                processEnvironment: [:], isDebugBuild: false
+            )
+            cloudConfigurationValid = false
+            cloudEnvironmentName = "invalid configuration"
+        }
+        cloudClient = RelayCloudClient(endpoints: endpoints)
+        cloudTunnel = RelayCloudHostTunnel(endpoints: endpoints)
         let secrets = KeychainStore()
         self.secrets = secrets
         self.adminClient = AdminClient {
@@ -117,6 +138,7 @@ final class RelayAppModel: ObservableObject {
 
     func createSecurePairingSession() async {
         guard
+            cloudConfigurationValid,
             cloudConnected,
             let accessToken = cloudAccessToken,
             let hostID = try? secrets.value(for: .cloudHostID),
@@ -143,8 +165,7 @@ final class RelayAppModel: ObservableObject {
     }
 
     func refreshPendingPairings() async {
-        pendingPairings = cloudPendingPairings
-        lastError = nil
+        await recoverPendingCloudPairings()
     }
 
     func approvePairing(_ pairing: AdminPendingPairing) async {
@@ -235,6 +256,10 @@ final class RelayAppModel: ObservableObject {
     }
 
     func signInToRelayCloud(email: String) {
+        guard cloudConfigurationValid else {
+            lastError = "The Relay Cloud development origin is invalid. Remove it or use a safe debug origin."
+            return
+        }
         cloudLoginTask?.cancel()
         cloudLoginInProgress = true
         lastError = nil
@@ -394,6 +419,7 @@ final class RelayAppModel: ObservableObject {
 
     private var cloudPendingPairings: [AdminPendingPairing] {
         cloudPairingRequests.values
+            .filter { $0.expiresAt > Int64(Date().timeIntervalSince1970 * 1_000) }
             .sorted { $0.expiresAt < $1.expiresAt }
             .map {
                 AdminPendingPairing(
@@ -417,6 +443,7 @@ final class RelayAppModel: ObservableObject {
 
     private func restoreRelayCloudSession() async {
         guard
+            cloudConfigurationValid,
             let refreshToken = try? secrets.value(for: .cloudRefreshToken),
             let hostID = try? secrets.value(for: .cloudHostID),
             let hostCredential = try? secrets.value(for: .cloudHostCredential),
@@ -487,6 +514,7 @@ final class RelayAppModel: ObservableObject {
                             cloudConnected = true
                             retrySeconds = 1
                             diagnostic = "Relay Cloud is connected with end-to-end encryption."
+                            await recoverPendingCloudPairings()
                         case .pairingRequest(let request):
                             cloudPairingRequests[request.id] = request
                             pendingPairings = cloudPendingPairings
@@ -505,6 +533,35 @@ final class RelayAppModel: ObservableObject {
                 retrySeconds = min(retrySeconds * 2, 30)
             }
             cloudConnected = false
+        }
+    }
+
+    private func recoverPendingCloudPairings() async {
+        guard
+            cloudConfigurationValid,
+            cloudConnected,
+            let accessToken = cloudAccessToken,
+            let session = cloudPairingSession
+        else {
+            pendingPairings = cloudPendingPairings
+            return
+        }
+        do {
+            let recovered = try await cloudClient.pendingPairingRequests(
+                accessToken: accessToken,
+                pairingToken: session.token
+            )
+            let now = Int64(Date().timeIntervalSince1970 * 1_000)
+            cloudPairingRequests = Dictionary(
+                uniqueKeysWithValues: recovered
+                    .filter { $0.expiresAt > now }
+                    .map { ($0.id, $0) }
+            )
+            pendingPairings = cloudPendingPairings
+            lastError = nil
+        } catch {
+            pendingPairings = cloudPendingPairings
+            lastError = "Relay could not recover pending watch approvals."
         }
     }
 

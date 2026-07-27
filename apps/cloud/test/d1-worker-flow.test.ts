@@ -299,6 +299,35 @@ describe("D1-backed Worker flow", () => {
       },
     ]);
 
+    const recovered = await json(
+      worker,
+      `/cloud/v1/pairing-sessions/${pairing.body.token}/requests`,
+      {
+        method: "GET",
+        headers: { authorization: `Bearer ${token.body.accessToken}` },
+      },
+    );
+    assert.equal(recovered.response.status, 200);
+    assert.deepEqual(recovered.body, {
+      requests: [{
+        requestId: request.body.id,
+        signingPublicKey: "watch-signing-key",
+        agreementPublicKey: "watch-agreement-key",
+        expiresAt: 121_000,
+        metadata: {
+          platform: "watch-os",
+          manufacturer: "Apple",
+          model: "Apple Watch",
+          osVersion: "10",
+          appVersion: "0.2.0",
+          screenShape: "rounded-rect",
+        },
+      }],
+    });
+    assert.equal(JSON.stringify(recovered.body).includes(pairing.body.code), false);
+    assert.equal(JSON.stringify(recovered.body).includes("pollToken"), false);
+    assert.equal(JSON.stringify(recovered.body).includes("credential"), false);
+
     const pairingPending = await json(
       worker,
       `/cloud/v1/pairing-requests/${request.body.id}`,

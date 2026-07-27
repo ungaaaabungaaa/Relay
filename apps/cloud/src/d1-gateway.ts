@@ -193,6 +193,11 @@ export class D1CommandGateway {
         );
       case "pairingSessions.request":
         return this.#requestPairing(params[0], body, request);
+      case "pairingSessions.recoverRequests":
+        return this.#recoverPendingPairings(
+          await this.#authorize(request),
+          params[0],
+        );
       case "pairingRequests.status":
         return this.#pairingRequestStatus(params[0], request);
       case "pairingSessions.approve":
@@ -553,6 +558,22 @@ export class D1CommandGateway {
       id: deviceId,
       hostId: context.hostId,
       sessionNonce: context.sessionNonce,
+    };
+  }
+
+  async #recoverPendingPairings(
+    claims: AccessClaims,
+    rawToken: string | undefined,
+  ): Promise<{ requests: unknown[] }> {
+    const tokenHash = await this.#pairingTokenHash(rawToken);
+    const context = await this.#repository.getPairingContext(tokenHash);
+    if (context.accountId !== claims.accountId) throw new Error(PAIRING_ERROR);
+    return {
+      requests: await this.#repository.listPendingPairingRequests({
+        accountId: claims.accountId,
+        hostId: context.hostId,
+        tokenHash,
+      }),
     };
   }
 
