@@ -16,6 +16,9 @@ distribution proof.
       — every Watch transport, pairing, feature, and voice lifecycle test passes.
 - [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/check-watchos-source.sh`
       — the app sources typecheck for both supported watchOS architectures.
+- [x] Unsigned generic watchOS build — Xcode completed the `RelayWatch` Debug
+      build with `CODE_SIGNING_ALLOWED=NO` for `generic/platform=watchOS` and
+      produced the app binary and compiled asset catalog.
 - [x] Unsigned Watch simulator build — Xcode completed the `RelayWatch` Debug
       build with `CODE_SIGNING_ALLOWED=NO` for Series 11 (46mm), watchOS 26.0,
       destination `18534BA8-F531-45AF-AE90-B2407C119455`, using fresh derived

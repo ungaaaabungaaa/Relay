@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -20,7 +21,12 @@ const rootView = await readFile(
 );
 const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
 const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
+const macComponentsURL = new URL("../../mac/Sources/RelayMac/Components.swift", import.meta.url);
 const watchStyleURL = new URL("../RelayWatch/RelayWatchStyle.swift", import.meta.url);
+const sourceCheckURL = new URL("../../scripts/check-watchos-source.sh", import.meta.url);
+const watchAccentURL = new URL("../RelayWatch/Assets.xcassets/AccentColor.colorset/Contents.json", import.meta.url);
+const macIconURL = new URL("../../mac/Resources/AppIconSource.png", import.meta.url);
+const watchIconURL = new URL("../RelayWatch/Assets.xcassets/AppIcon.appiconset/AppIcon.png", import.meta.url);
 
 function expectTargetSources(names, contents = project) {
   const sourceMembership = targetSourceMembership(contents);
@@ -168,8 +174,8 @@ test("Task 1 brand primitives define semantic Apple styling", async () => {
 
 test("Task 3 wires the custom UFO label into the Mac menu bar", async () => {
   const macApp = await readFile(macAppURL, "utf8");
-  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?\}\s*label:\s*\{[\s\S]*?RelayUFOGlyph\(\)/);
-  assert.match(macApp, /RelayUFOGlyph\(\)[\s\S]*?\.accessibilityLabel\("Relay"\)/);
+  assert.match(macApp, /MenuBarExtra\s*\{[\s\S]*?\}\s*label:\s*\{[\s\S]*?RelayUFOGlyph\(size: 18\)/);
+  assert.match(macApp, /RelayUFOGlyph\(size: 18\)[\s\S]*?\.accessibilityLabel\("Relay"\)/);
   assert.doesNotMatch(macApp, /systemImage:\s*model\.menuBarSymbol/);
 });
 
@@ -194,4 +200,49 @@ test("Task 4 removes mint styling from Watch production sources", async () => {
 
 test("Task 4 compiles RelayWatchStyle in the Watch target", () => {
   expectTargetSources(["RelayWatchStyle.swift"]);
+});
+
+test("final Watch source check includes the presentation style", async () => {
+  const sourceCheck = await readFile(sourceCheckURL, "utf8");
+
+  assert.match(sourceCheck, /RelayWatchStyle\.swift/);
+});
+
+test("final Apple visual styles use system blue and semantic surfaces", async () => {
+  const [components, accentAsset] = await Promise.all([
+    readFile(macComponentsURL, "utf8"),
+    readFile(watchAccentURL, "utf8"),
+  ]);
+
+  assert.match(components, /static let accent = Color\.blue/);
+  assert.doesNotMatch(components, /Color\.accentColor/);
+  assert.doesNotMatch(components, /eyebrow\.uppercased\(\)/);
+  assert.doesNotMatch(components, /\.white\.opacity/);
+  assert.match(components, /Color\(nsColor: \.separatorColor\)/);
+  assert.match(components, /Color\(nsColor: \.controlBackgroundColor\)/);
+  assert.match(accentAsset, /"red" : "0\.000"/);
+  assert.match(accentAsset, /"green" : "0\.478"/);
+  assert.match(accentAsset, /"blue" : "1\.000"/);
+});
+
+test("final Mac menu glyph is dimensioned for its 18-point slot", async () => {
+  const [macApp, macBrand] = await Promise.all([
+    readFile(macAppURL, "utf8"),
+    readFile(macBrandURL, "utf8"),
+  ]);
+
+  assert.match(macBrand, /var size: CGFloat/);
+  assert.match(macBrand, /\.frame\(width: size, height: size\)/);
+  assert.match(macApp, /RelayUFOGlyph\(size: 18\)/);
+});
+
+test("final Mac and Watch app icon sources are identical", async () => {
+  const [macIcon, watchIcon] = await Promise.all([
+    readFile(macIconURL),
+    readFile(watchIconURL),
+  ]);
+
+  const digest = (icon) => createHash("sha256").update(icon).digest("hex");
+
+  assert.equal(digest(macIcon), digest(watchIcon));
 });

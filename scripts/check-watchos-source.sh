@@ -34,6 +34,7 @@ source_files=(
   "${relay_root}/apple-watch/RelayWatch/RelayWatchApp.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchModel.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchRootView.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayWatchStyle.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchFeature.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchService.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchTypes.swift"

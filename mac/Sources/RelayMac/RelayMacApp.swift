@@ -8,7 +8,7 @@ struct RelayMacApp: App {
         MenuBarExtra {
             MenuContent(model: model)
         } label: {
-            RelayUFOGlyph()
+            RelayUFOGlyph(size: 18)
                 .frame(width: 18, height: 18)
                 .accessibilityLabel("Relay")
         }

@@ -1,11 +1,14 @@
+import AppKit
 import SwiftUI
 import RelayCore
 
 enum RelayPalette {
-    static let accent = Color.accentColor
+    static let accent = Color.blue
     static let amber = Color.orange
     static let danger = Color.red
     static let panel = Material.thin
+    static let separator = Color(nsColor: .separatorColor)
+    static let controlFill = Color(nsColor: .controlBackgroundColor)
 }
 
 struct DashboardHeader: View {
@@ -15,7 +18,7 @@ struct DashboardHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(eyebrow.uppercased())
+            Text(eyebrow)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(title)
@@ -38,7 +41,7 @@ struct RelayPanel<Content: View>: View {
             .background(RelayPalette.panel, in: RoundedRectangle(cornerRadius: 12))
             .overlay {
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(.white.opacity(0.08))
+                    .strokeBorder(RelayPalette.separator)
             }
     }
 }
@@ -71,7 +74,7 @@ struct RequirementRow: View {
             Image(systemName: icon)
                 .frame(width: 28, height: 28)
                 .foregroundStyle(status.isReady ? .primary : .secondary)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                .background(RelayPalette.controlFill, in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body.weight(.medium))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
