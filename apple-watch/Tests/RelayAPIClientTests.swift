@@ -599,6 +599,67 @@ func stopStartDuringCancelledBackoffHandsLifecycleToLatestGeneration() async thr
     consumer.cancel()
 }
 
+@Test
+func handshakeOpeningRemembersCancellationBeforeWaitAndResumesOnlyOnce() async {
+    let neverStarted = LockedCounter()
+    let preCancelled = RelayWebSocketOpening()
+    preCancelled.finish(.failure(CancellationError()))
+
+    await #expect(throws: CancellationError.self) {
+        try await preCancelled.wait { _ = neverStarted.next() }
+    }
+    #expect(neverStarted.current == 0)
+    preCancelled.finish(.success(()))
+
+    for _ in 0..<100 {
+        let opening = RelayWebSocketOpening()
+        let waiter = Task {
+            try await opening.wait {
+                Task { opening.finish(.failure(CancellationError())) }
+            }
+        }
+        await #expect(throws: CancellationError.self) { try await waiter.value }
+        opening.finish(.success(()))
+    }
+}
+
+@Test
+func sendFailureFailsConnectionQueueAndReconnectsWithoutReceiveWakeup() async throws {
+    let failedSocket = ControlledRelaySocket(
+        blockSends: true,
+        closeWakesReceive: false,
+        sendFailures: [.network]
+    )
+    let latestSocket = ControlledRelaySocket()
+    let factory = ControlledSocketFactory(sockets: [failedSocket, latestSocket])
+    let fixture = TransportFixture(socketFactory: factory)
+    let stream = await fixture.client.start()
+    var events = stream.makeAsyncIterator()
+    #expect(await events.next() == .connected(reconnected: false))
+
+    let first = Task {
+        try await fixture.client.request(RelayEndpoint<RelayInbox>.inbox())
+    }
+    #expect(await failedSocket.waitForSendAttempts(1))
+    let second = Task {
+        try await fixture.client.request(RelayEndpoint<RelayPage<RelayTask>>.tasks())
+    }
+    await allowConcurrencyToSettle()
+    await failedSocket.releaseOneSend()
+
+    await #expect(throws: RelayAPIError.offline) { try await first.value }
+    await #expect(throws: RelayAPIError.offline) { try await second.value }
+    #expect(await events.next() == .disconnected(.network))
+    #expect(await events.next() == .connected(reconnected: true))
+    #expect(await factory.connectCount == 2)
+    #expect(!(await latestSocket.isClosed))
+
+    await failedSocket.fail(RelaySocketError.closed)
+    await allowConcurrencyToSettle()
+    #expect(!(await latestSocket.isClosed))
+    await fixture.client.stop()
+}
+
 private final class FakeSigningIdentity: RelayWatchSigningIdentity, @unchecked Sendable {
     private let lock = NSLock()
     private var storedDeleteCount = 0
@@ -670,6 +731,8 @@ private actor ControlledRelaySocket: RelaySocket {
     private let blockSends: Bool
     private let blockClose: Bool
     private let closeCancelsBlockedSends: Bool
+    private let closeWakesReceive: Bool
+    private var sendFailures: [RelaySocketError]
     private(set) var sendAttemptCount = 0
     private(set) var closeAttemptCount = 0
     private(set) var closed = false
@@ -677,11 +740,15 @@ private actor ControlledRelaySocket: RelaySocket {
     init(
         blockSends: Bool = false,
         blockClose: Bool = false,
-        closeCancelsBlockedSends: Bool = true
+        closeCancelsBlockedSends: Bool = true,
+        closeWakesReceive: Bool = true,
+        sendFailures: [RelaySocketError] = []
     ) {
         self.blockSends = blockSends
         self.blockClose = blockClose
         self.closeCancelsBlockedSends = closeCancelsBlockedSends
+        self.closeWakesReceive = closeWakesReceive
+        self.sendFailures = sendFailures
     }
 
     var sentCount: Int { sent.count }
@@ -695,6 +762,9 @@ private actor ControlledRelaySocket: RelaySocket {
         }
         if closed && closeCancelsBlockedSends {
             throw RelaySocketError.closed
+        }
+        if !sendFailures.isEmpty {
+            throw sendFailures.removeFirst()
         }
         if sentWaiters.isEmpty {
             sent.append(data)
@@ -720,9 +790,11 @@ private actor ControlledRelaySocket: RelaySocket {
             blockedSendWaiters.removeAll()
             sendWaiters.forEach { $0.resume() }
         }
-        let waiters = receiveWaiters
-        receiveWaiters.removeAll()
-        waiters.forEach { $0.resume(throwing: RelaySocketError.closed) }
+        if closeWakesReceive {
+            let waiters = receiveWaiters
+            receiveWaiters.removeAll()
+            waiters.forEach { $0.resume(throwing: RelaySocketError.closed) }
+        }
     }
 
     func nextSentEnvelope() async throws -> RelayTunnelEnvelope {
@@ -990,6 +1062,8 @@ private actor ControlledHandshakeDriver: RelayWebSocketHandshakeDriving {
 private final class LockedCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
+
+    var current: Int { lock.withLock { value } }
 
     func next() -> Int {
         lock.withLock {

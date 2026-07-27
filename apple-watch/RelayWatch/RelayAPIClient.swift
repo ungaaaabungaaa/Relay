@@ -33,6 +33,50 @@ enum RelayTransportEvent: Sendable, Equatable {
     case incompatible
 }
 
+private final class RelayConnectionTermination: @unchecked Sendable {
+    private enum State {
+        case pending
+        case waiting(CheckedContinuation<Void, Error>)
+        case finished(Result<Void, Error>)
+    }
+
+    private let lock = NSLock()
+    private var state: State = .pending
+
+    func wait() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let immediate: Result<Void, Error>? = lock.withLock {
+                switch state {
+                case .pending:
+                    state = .waiting(continuation)
+                    return nil
+                case let .finished(result):
+                    return result
+                case .waiting:
+                    preconditionFailure("Relay connection termination awaited twice")
+                }
+            }
+            if let immediate { continuation.resume(with: immediate) }
+        }
+    }
+
+    func finish(_ result: Result<Void, Error>) {
+        let continuation: CheckedContinuation<Void, Error>? = lock.withLock {
+            switch state {
+            case .pending:
+                state = .finished(result)
+                return nil
+            case let .waiting(continuation):
+                state = .finished(result)
+                return continuation
+            case .finished:
+                return nil
+            }
+        }
+        continuation?.resume(with: result)
+    }
+}
+
 actor RelayAPIClient {
     typealias Sleep = @Sendable (Duration) async throws -> Void
 
@@ -46,6 +90,7 @@ actor RelayAPIClient {
         let lifecycleID: Int
         let socket: any RelaySocket
         let config: RelayCloudDeviceConfig
+        let termination: RelayConnectionTermination
     }
 
     private struct OutboundFrame {
@@ -63,6 +108,11 @@ actor RelayAPIClient {
     private struct Sender {
         let connectionID: Int
         let task: Task<Void, Never>
+    }
+
+    private struct PendingRequest {
+        let connectionID: Int
+        let continuation: CheckedContinuation<RelayTunnelHTTPResponse, Error>
     }
 
     private let identity: any RelayWatchSigningIdentity
@@ -85,7 +135,7 @@ actor RelayAPIClient {
     private var sender: Sender?
     private var sendingRequestID: String?
     private var outboundQueue: [OutboundBatch] = []
-    private var pending: [String: CheckedContinuation<RelayTunnelHTTPResponse, Error>] = [:]
+    private var pending: [String: PendingRequest] = [:]
     private var eventContinuation: AsyncStream<RelayTransportEvent>.Continuation?
     private var desiredRunning = false
     private var erasingSession = false
@@ -436,7 +486,8 @@ actor RelayAPIClient {
                     id: connectionGeneration,
                     lifecycleID: lifecycleID,
                     socket: activeSocket,
-                    config: config
+                    config: config,
+                    termination: RelayConnectionTermination()
                 )
                 activeConnection = connection
                 connected = true
@@ -444,7 +495,9 @@ actor RelayAPIClient {
                 hasConnected = true
                 reconnectAttempt = 0
                 eventContinuation?.yield(.connected(reconnected: reconnected))
-                try await receiveMessages(connection)
+                let receiver = Task { await self.runReceiver(connection) }
+                defer { receiver.cancel() }
+                try await connection.termination.wait()
                 throw RelaySocketError.closed
             } catch {
                 let authFailure = isAuthorizationFailure(error)
@@ -488,6 +541,15 @@ actor RelayAPIClient {
         }
     }
 
+    private func runReceiver(_ connection: ActiveConnection) async {
+        do {
+            try await receiveMessages(connection)
+            connection.termination.finish(.failure(RelaySocketError.closed))
+        } catch {
+            connection.termination.finish(.failure(error))
+        }
+    }
+
     private func receiveMessages(_ connection: ActiveConnection) async throws {
         while
             ownsConnection(connection.id),
@@ -514,8 +576,12 @@ actor RelayAPIClient {
         launchLifecycleIfNeeded()
     }
 
-    private func invalidateConnection(_ connection: ActiveConnection?) {
+    private func invalidateConnection(
+        _ connection: ActiveConnection?,
+        error: Error = RelaySocketError.closed
+    ) {
         guard let connection else { return }
+        connection.termination.finish(.failure(error))
         if activeConnection?.id == connection.id {
             activeConnection = nil
             connected = false
@@ -730,7 +796,10 @@ actor RelayAPIClient {
         }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                pending[requestID] = continuation
+                pending[requestID] = PendingRequest(
+                    connectionID: connection.id,
+                    continuation: continuation
+                )
                 outboundQueue.append(
                     OutboundBatch(
                         requestID: requestID,
@@ -778,11 +847,9 @@ actor RelayAPIClient {
                     try await batch.connection.socket.send(data)
                 }
             } catch {
-                completePending(
-                    batch.requestID,
-                    with: .failure(requestFailure(for: error))
-                )
-                invalidateConnection(batch.connection)
+                let failure = requestFailure(for: error)
+                failPending(for: batch.connection.id, with: failure)
+                invalidateConnection(batch.connection, error: error)
                 await batch.connection.socket.close()
             }
             if sendingRequestID == batch.requestID {
@@ -817,15 +884,24 @@ actor RelayAPIClient {
         _ requestID: String,
         with result: Result<RelayTunnelHTTPResponse, Error>
     ) {
-        guard let continuation = pending.removeValue(forKey: requestID) else { return }
-        continuation.resume(with: result)
+        guard let request = pending.removeValue(forKey: requestID) else { return }
+        request.continuation.resume(with: result)
+    }
+
+    private func failPending(for connectionID: Int, with error: Error) {
+        let requestIDs = pending.compactMap { requestID, request in
+            request.connectionID == connectionID ? requestID : nil
+        }
+        for requestID in requestIDs {
+            completePending(requestID, with: .failure(error))
+        }
     }
 
     private func failAllPending(with error: Error) {
         outboundQueue.removeAll()
-        let continuations = pending.values
+        let requests = pending.values
         pending.removeAll()
-        continuations.forEach { $0.resume(throwing: error) }
+        requests.forEach { $0.continuation.resume(throwing: error) }
     }
 
     private func validateIdempotencyKey(_ key: String?) throws {

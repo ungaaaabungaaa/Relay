@@ -78,7 +78,8 @@ test("watchOS target remains independent and watch-only", () => {
 test("Apple Watch sends Cloud envelopes as supported WebSocket text frames", () => {
   assert.match(relaySocket, /task\.send\(\.string\(/);
   assert.doesNotMatch(relaySocket, /task\.send\(\s*\.data\(/);
-  assert.match(apiClient, /private var pending: \[String: CheckedContinuation/);
+  assert.match(apiClient, /private var pending: \[String: PendingRequest\]/);
+  assert.match(apiClient, /private var outboundQueue: \[OutboundBatch\]/);
 });
 
 test("Watch runtime contract sources belong to the app target", () => {

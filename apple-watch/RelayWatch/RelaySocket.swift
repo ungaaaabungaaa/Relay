@@ -76,20 +76,69 @@ private actor URLSessionWebSocketHandshakeDriver: RelayWebSocketHandshakeDriving
     }
 }
 
+final class RelayWebSocketOpening: @unchecked Sendable {
+    private enum State {
+        case pending
+        case waiting(CheckedContinuation<Void, Error>)
+        case finished(Result<Void, Error>)
+    }
+
+    private let lock = NSLock()
+    private var state: State = .pending
+
+    func wait(start: @escaping @Sendable () -> Void) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let immediate: Result<Void, Error>? = lock.withLock {
+                switch state {
+                case .pending:
+                    state = .waiting(continuation)
+                    return nil
+                case let .finished(result):
+                    return result
+                case .waiting:
+                    preconditionFailure("Relay WebSocket opening awaited twice")
+                }
+            }
+            if let immediate {
+                continuation.resume(with: immediate)
+            } else {
+                start()
+            }
+        }
+    }
+
+    func finish(_ result: Result<Void, Error>) {
+        let continuation: CheckedContinuation<Void, Error>? = lock.withLock {
+            switch state {
+            case .pending:
+                state = .finished(result)
+                return nil
+            case let .waiting(continuation):
+                state = .finished(result)
+                return continuation
+            case .finished:
+                return nil
+            }
+        }
+        continuation?.resume(with: result)
+    }
+}
+
 private final class URLSessionRelaySocketDelegate: NSObject,
     URLSessionWebSocketDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
-    private var openings: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var openings: [Int: RelayWebSocketOpening] = [:]
 
     func waitUntilOpen(_ task: URLSessionWebSocketTask) async throws {
+        let opening = RelayWebSocketOpening()
+        lock.withLock {
+            openings[task.taskIdentifier] = opening
+        }
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                lock.withLock {
-                    openings[task.taskIdentifier] = continuation
-                }
-                task.resume()
-            }
+            try await opening.wait { task.resume() }
         } onCancel: {
+            self.remove(task, opening: opening)
+            opening.finish(.failure(CancellationError()))
             task.cancel(with: .goingAway, reason: nil)
         }
     }
@@ -138,10 +187,20 @@ private final class URLSessionRelaySocketDelegate: NSObject,
         _ task: URLSessionWebSocketTask,
         result: Result<Void, Error>
     ) {
-        let continuation = lock.withLock {
+        let opening = lock.withLock {
             openings.removeValue(forKey: task.taskIdentifier)
         }
-        continuation?.resume(with: result)
+        opening?.finish(result)
+    }
+
+    private func remove(
+        _ task: URLSessionWebSocketTask,
+        opening: RelayWebSocketOpening
+    ) {
+        lock.withLock {
+            guard openings[task.taskIdentifier] === opening else { return }
+            openings.removeValue(forKey: task.taskIdentifier)
+        }
     }
 }
 
