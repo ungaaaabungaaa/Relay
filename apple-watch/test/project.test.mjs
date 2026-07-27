@@ -113,6 +113,8 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayWatchFeature.swift",
     "RelayWatchService.swift",
     "RelayWatchTypes.swift",
+    "RelayWatchNavigation.swift",
+    "RelayWatchComponents.swift",
     "RelayPairingViews.swift",
     "RelayWatchHomeView.swift",
   ]);
