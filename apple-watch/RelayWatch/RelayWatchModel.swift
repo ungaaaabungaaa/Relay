@@ -33,30 +33,36 @@ final class RelayWatchModel: ObservableObject {
     private lazy var pairing = RelayPairingState(service: api)
     private lazy var feature = RelayWatchFeature(service: RelayWatchService(api: api))
     private lazy var voiceRecorder = RelayAudioRecorder()
-    lazy var voiceController = RelayVoiceController(
-        recorder: voiceRecorder,
-        transcribe: { [api] recording in
-            let audio = try Data(contentsOf: recording.fileURL)
-            return try await api.transcribe(
-                audio: audio,
-                durationMs: recording.durationMs,
-                contentType: recording.contentType,
-                idempotencyKey: UUID().uuidString.lowercased()
-            ).transcript
-        },
-        send: { [weak self] target, text in
-            guard let self else { return }
-            switch target {
-            case let .instruction(taskID, _):
-                try await self.feature.sendText(taskID: taskID, text: text)
-                await self.syncFeature()
-                self.screen = .activity
-            case .newTaskPrompt:
-                self.newTaskDraft = text
-                self.screen = .newTask
+    private var cachedVoiceController: RelayVoiceController?
+    var voiceController: RelayVoiceController {
+        if let cachedVoiceController { return cachedVoiceController }
+        let controller = RelayVoiceController(
+            recorder: voiceRecorder,
+            transcribe: { [api] recording in
+                let audio = try Data(contentsOf: recording.fileURL)
+                return try await api.transcribe(
+                    audio: audio,
+                    durationMs: recording.durationMs,
+                    contentType: recording.contentType,
+                    idempotencyKey: UUID().uuidString.lowercased()
+                ).transcript
+            },
+            send: { [weak self] target, text in
+                guard let self else { return }
+                switch target {
+                case let .instruction(taskID, _):
+                    try await self.feature.sendText(taskID: taskID, text: text)
+                    await self.syncFeature()
+                    self.screen = .activity
+                case .newTaskPrompt:
+                    self.newTaskDraft = text
+                    self.screen = .newTask
+                }
             }
-        }
-    )
+        )
+        cachedVoiceController = controller
+        return controller
+    }
     private var pairingTask: Task<Void, Never>?
     private var transportTask: Task<Void, Never>?
 
