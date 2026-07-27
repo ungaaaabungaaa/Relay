@@ -16,11 +16,27 @@ distribution proof.
       — every Watch transport, pairing, feature, and voice lifecycle test passes.
 - [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/check-watchos-source.sh`
       — the app sources typecheck for both supported watchOS architectures.
-- [ ] Unsigned generic watchOS build — Xcode completes the `RelayWatch` scheme
-      build, or the exact missing-runtime/toolchain error is recorded as a local
-      external gate.
-      Current gate: the watchOS 26.5 SDK build `23T570` has no matching installed
-      simulator runtime; only runtime builds `23R353` and `23S36` are installed.
+- [x] Unsigned Watch simulator build — Xcode completed the `RelayWatch` Debug
+      build with `CODE_SIGNING_ALLOWED=NO` for Series 11 (46mm), watchOS 26.0,
+      destination `18534BA8-F531-45AF-AE90-B2407C119455`, using fresh derived
+      data at `/private/tmp/relay-watch-ufo-series11`.
+
+## Solo private-beta visual checklist
+
+- [ ] Inspect both rendered app icons: the Mac app in Finder/Dock and the Watch
+      app in the Watch app grid.
+- [ ] Launch the Mac app and inspect the UFO menu-bar mark in both light and
+      dark menu bars; verify the dashboard hierarchy, spacing, and contrast.
+- [ ] Inspect Watch pairing on the smallest supported display: UFO mark, title,
+      instruction, six-character field, Find Mac button, fingerprints, and
+      errors must remain readable and tappable without clipping.
+- [ ] Check the Watch screens at the largest supported Dynamic Type size;
+      navigate pairing, inbox, approvals, questions, tasks, compose, and voice
+      to confirm scrolling and controls do not overlap or clip.
+- [ ] Enable VoiceOver and confirm meaningful labels and order for the UFO mark,
+      pairing actions, status, warnings, destructive actions, and voice controls.
+- [ ] Record screenshots or observations for any clipping, contrast, truncation,
+      or tap-target issue before admitting a private-beta build.
 
 ## Interactive local or staging checks
 
