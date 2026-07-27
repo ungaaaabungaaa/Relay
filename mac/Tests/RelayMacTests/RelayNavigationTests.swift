@@ -4,6 +4,45 @@ import RelayCore
 @testable import RelayMac
 
 @Test
+func relayMacSourcesRemainMenuOnly() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let sourceDirectory = testFile
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/RelayMac")
+    let dashboardOnlyFiles = [
+        "DashboardView.swift",
+        "Components.swift",
+        "SetupView.swift",
+        "WatchesView.swift",
+        "WorkspacesView.swift",
+        "RemoteAccessView.swift",
+        "VoiceView.swift",
+        "UpdatesView.swift",
+        "DiagnosticsView.swift",
+        "AboutView.swift",
+    ]
+
+    for filename in dashboardOnlyFiles {
+        #expect(!FileManager.default.fileExists(atPath: sourceDirectory.appendingPathComponent(filename).path))
+    }
+
+    let sourceFiles = try FileManager.default.contentsOfDirectory(
+        at: sourceDirectory,
+        includingPropertiesForKeys: nil
+    ).filter { $0.pathExtension == "swift" }
+    let forbiddenWindowStrings = ["Window(\"Relay\"", "openWindow", "Open Dashboard"]
+
+    for sourceFile in sourceFiles {
+        let source = try String(contentsOf: sourceFile, encoding: .utf8)
+        for forbiddenString in forbiddenWindowStrings {
+            #expect(!source.contains(forbiddenString))
+        }
+    }
+}
+
+@Test
 func relayMenuRootExposesEveryReleaseControl() {
     #expect(
         RelayMenuStructure.root.map(\.rawValue) == [

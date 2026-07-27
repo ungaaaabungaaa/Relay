@@ -28,8 +28,10 @@ distribution proof.
 
 - [ ] Inspect both rendered app icons: the Mac app in Finder/Dock and the Watch
       app in the Watch app grid.
-- [ ] Launch the Mac app and inspect the UFO menu-bar mark in both light and
-      dark menu bars; verify the dashboard hierarchy, spacing, and contrast.
+- [ ] Launch the Mac app and inspect the UFO beside the other menu-bar items in
+      both light and dark menu bars. No dashboard window is expected. Exercise
+      every root item and submenu, including all confirmation dialogs, and
+      verify spacing, contrast, labels, and destructive-action wording.
 - [ ] Inspect Watch pairing on the smallest supported display: UFO mark, title,
       instruction, six-character field, Find Mac button, fingerprints, and
       errors must remain readable and tappable without clipping.

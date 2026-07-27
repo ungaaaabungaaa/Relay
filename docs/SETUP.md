@@ -21,13 +21,16 @@ channel is live.
 
 1. Install the supplied Relay Mac build on an Apple-silicon Mac running macOS
    14 or newer.
-2. Open Relay and confirm that it finds the local Codex installation and starts
-   the loopback bridge.
+2. Open Relay and confirm that the UFO appears beside the other menu-bar items,
+   then confirm it finds the local Codex installation and starts the loopback
+   bridge. No dashboard window is expected; exercise every root item, submenu,
+   and confirmation dialog from the native menu.
 3. Enter the invited email address. Open the single-use link in the browser to
    finish the PKCE login.
 4. Install Relay for Codex on the Apple Watch from the TestFlight or App Store
    link supplied with the invite.
-5. In Relay for Mac, open **Watches** and create a six-character pairing code.
+5. In Relay for Mac, open **Apple Watch** from the native menu and create a
+   six-character pairing code.
 6. Enter the code on the Apple Watch.
 7. Compare the Mac fingerprint on both devices. Confirm it on the watch, then
    approve the watch fingerprint on the Mac.
@@ -50,6 +53,10 @@ an action for later execution.
 - Use **Delete Relay Account** to remove cloud account and device metadata and
   clear Relay Cloud credentials from the Mac. Relay does not delete Codex tasks
   or repositories.
+
+For local native-menu testing, Relay is menu-bar only: expect the UFO beside
+the other menu-bar items, not a dashboard window. Exercise every root item and
+submenu plus every confirmation dialog before recording the result.
 
 ## Developer setup
 
