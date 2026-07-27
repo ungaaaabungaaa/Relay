@@ -27,7 +27,7 @@ func destructiveButtonsStageAConfirmationBeforeCallingTheModel() throws {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-    for name in ["RemoteAccessView.swift", "WatchesView.swift", "MenuContent.swift"] {
+    for name in ["RemoteAccessView.swift", "WatchesView.swift"] {
         let source = try String(
             contentsOf: macRoot.appendingPathComponent("Sources/RelayMac/\(name)"),
             encoding: .utf8
@@ -36,4 +36,20 @@ func destructiveButtonsStageAConfirmationBeforeCallingTheModel() throws {
         #expect(source.contains(".confirmationDialog("))
         #expect(source.contains("action.consequence"))
     }
+
+    let menu = try String(
+        contentsOf: macRoot.appendingPathComponent("Sources/RelayMac/MenuContent.swift"),
+        encoding: .utf8
+    )
+    let dialogs = try String(
+        contentsOf: macRoot.appendingPathComponent("Sources/RelayMac/RelayMenuDialogs.swift"),
+        encoding: .utf8
+    )
+    #expect(menu.contains("RelayMenuDialogs.confirm"))
+    #expect(
+        menu.range(of: "RelayMenuDialogs.confirm(.emergencyStop)")!.lowerBound
+            < menu.range(of: "model.emergencyStop()")!.lowerBound
+    )
+    #expect(dialogs.contains("action.consequence"))
+    #expect(dialogs.contains("alert.runModal()"))
 }
