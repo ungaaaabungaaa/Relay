@@ -11,16 +11,44 @@ const apiClient = await readFile(
   "utf8",
 );
 
-const sourceMembership = [...project.matchAll(/\/\* ([^*]+) in Sources \*\//g)]
-  .map((match) => match[1]);
-
-function expectTargetSources(names) {
+function expectTargetSources(names, contents = project) {
+  const sourceMembership = targetSourceMembership(contents);
   for (const name of names) {
     assert.ok(
       sourceMembership.includes(name),
       `RelayWatch target must include ${name}`,
     );
   }
+}
+
+function targetSourceMembership(contents) {
+  const target = contents.match(
+    /E00000000000000000000001 \/\* RelayWatch \*\/ = \{\s*isa = PBXNativeTarget;([\s\S]*?)\n\t\t\};/,
+  );
+  assert.ok(target, "RelayWatch target must exist");
+  const sourcePhaseID = target[1].match(
+    /\b([A-F0-9]{24}) \/\* Sources \*\//,
+  )?.[1];
+  assert.ok(sourcePhaseID, "RelayWatch target must reference a Sources build phase");
+
+  const sourcePhase = contents.match(
+    new RegExp(
+      `${sourcePhaseID} /\\* Sources \\*/ = \\{\\s*isa = PBXSourcesBuildPhase;[\\s\\S]*?files = \\(\\n([\\s\\S]*?)\\n\\t\\t\\t\\);`,
+    ),
+  );
+  assert.ok(sourcePhase, "RelayWatch Sources build phase must exist");
+
+  return [...sourcePhase[1].matchAll(/^\s*([A-F0-9]{24}) \/\* .+ in Sources \*\/,?$/gm)]
+    .map((match) => match[1])
+    .map((buildFileID) => {
+      const buildFile = contents.match(
+        new RegExp(
+          `${buildFileID} /\\* ([^*]+) in Sources \\*/ = \\{isa = PBXBuildFile;`,
+        ),
+      );
+      assert.ok(buildFile, `Sources build file ${buildFileID} must exist`);
+      return buildFile[1];
+    });
 }
 
 test("watchOS target uses Relay Cloud without Bonjour permissions", () => {
@@ -54,4 +82,15 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayEnvironment.swift",
     "RelayWatchTypes.swift",
   ]);
+});
+
+test("Watch runtime contract sources must be connected to the Sources build phase", () => {
+  const missingEndpointMembership = project.replace(
+    "\n\t\t\t\tA00000000000000000000009 /* RelayEndpoint.swift in Sources */,",
+    "",
+  );
+
+  assert.throws(() => {
+    expectTargetSources(["RelayEndpoint.swift"], missingEndpointMembership);
+  }, /RelayWatch target must include RelayEndpoint.swift/);
 });
