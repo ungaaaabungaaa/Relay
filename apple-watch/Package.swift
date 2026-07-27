@@ -26,7 +26,10 @@ let package = Package(
                 "RelayEndpoint.swift",
                 "RelayEnvironment.swift",
                 "RelayReconnectPolicy.swift",
+                "RelayPairingState.swift",
                 "RelaySocket.swift",
+                "RelayWatchFeature.swift",
+                "RelayWatchService.swift",
                 "RelayWatchTypes.swift",
                 "WatchIdentity.swift",
             ]

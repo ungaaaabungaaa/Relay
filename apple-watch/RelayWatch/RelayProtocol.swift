@@ -50,7 +50,7 @@ enum RelayWatchScreen: String, CaseIterable, Identifiable {
     }
 }
 
-enum RelayConnectionState: Equatable {
+enum RelayConnectionState: Equatable, Sendable {
     case unpaired, pairing, live, offline, revoked, incompatible
 }
 

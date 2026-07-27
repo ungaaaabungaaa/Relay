@@ -7,10 +7,15 @@ final class RelayWatchModel: ObservableObject {
     @Published var connection: RelayConnectionState = .unpaired
     @Published var screen: RelayWatchScreen = .onboarding
     @Published var pairingCode = ""
+    @Published var pairingPhase: RelayPairingPhase = .codeEntry
     @Published var discoveredMac: RelayMacIdentity?
     @Published var error: String?
-    @Published var cachedTaskCount = 0
-    @Published var cachedInboxCount = 0
+    @Published var inbox = RelayInbox(approvals: [], questions: [])
+    @Published var tasks: [RelayTask] = []
+    @Published var taskDetails: [String: RelayTaskDetail] = [:]
+    @Published var models: [RelayModel] = []
+    @Published var folders: [RelayFolder] = []
+    @Published var mutationAttempts: [RelayMutationAttempt] = []
     @Published var cacheIsStale = true
 
     private let identity = RelayWatchIdentity()
@@ -21,29 +26,26 @@ final class RelayWatchModel: ObservableObject {
         agreementIdentity: agreementIdentity,
         deviceStore: deviceStore
     )
+    private lazy var pairing = RelayPairingState(service: api)
+    private lazy var feature = RelayWatchFeature(service: RelayWatchService(api: api))
     private var pairingTask: Task<Void, Never>?
+    private var transportTask: Task<Void, Never>?
 
     init() {
         if deviceStore.load() != nil {
             connection = .offline
             screen = .inbox
-            Task { await refresh() }
+            Task { try? await startRemoteSession() }
         }
     }
 
-    var watchFingerprint: String {
-        (try? identity.fingerprint()) ?? "Unavailable"
-    }
-
-    var actionsEnabled: Bool {
-        connection == .live && !cacheIsStale
-    }
+    var cachedTaskCount: Int { tasks.count }
+    var cachedInboxCount: Int { inbox.approvals.count + inbox.questions.count }
+    var watchFingerprint: String { (try? identity.fingerprint()) ?? "Unavailable" }
+    var actionsEnabled: Bool { connection == .live && !cacheIsStale }
 
     func beginPairing() {
-        screen = .pairing
-    }
-
-    func confirmMac() {
+        pairingPhase = .codeEntry
         screen = .pairing
     }
 
@@ -57,6 +59,7 @@ final class RelayWatchModel: ObservableObject {
         discoveredMac = nil
         error = nil
         connection = .pairing
+        pairingPhase = .submitting
         pairingTask = Task {
             do {
                 let device = WKInterfaceDevice.current()
@@ -67,40 +70,66 @@ final class RelayWatchModel: ObservableObject {
                         forInfoDictionaryKey: "CFBundleShortVersionString"
                     ) as? String ?? "0"
                 )
-                let prepared = try await api.submit(
-                    code: code,
-                    metadata: metadata
-                )
-                discoveredMac = RelayMacIdentity(
-                    macName: "Relay Mac",
-                    macFingerprint: prepared.pending.macFingerprint
-                )
-                while !Task.isCancelled,
-                      Int64(Date().timeIntervalSince1970 * 1_000)
-                        <= prepared.pending.expiresAt {
-                    switch try await api.poll(prepared) {
+                try await pairing.submit(code: code, metadata: metadata)
+                await syncPairing()
+            } catch is CancellationError {
+                await pairing.cancel()
+                connection = .unpaired
+                await syncPairing()
+            } catch {
+                connection = .unpaired
+                self.error = "Pairing could not be started. Check the code and try again."
+                await syncPairing()
+            }
+        }
+    }
+
+    func confirmMac() {
+        pairingTask?.cancel()
+        pairingTask = Task {
+            do {
+                try await pairing.confirmMacFingerprint(watchFingerprint: watchFingerprint)
+                await syncPairing()
+                while !Task.isCancelled {
+                    switch try await pairing.pollOnce() {
                     case .pending:
                         try await Task.sleep(for: .seconds(2))
                     case .denied:
-                        throw RelayWatchModelError.denied
+                        throw RelayPairingStateError.denied
                     case .approved:
+                        pairingPhase = .paired
                         connection = .offline
                         screen = .inbox
-                        await refresh()
+                        try await startRemoteSession()
                         return
                     }
                 }
-                throw RelayWatchModelError.expired
             } catch is CancellationError {
+                await pairing.cancel()
                 connection = .unpaired
+                await syncPairing()
             } catch RelayAPIError.incompatible {
                 connection = .incompatible
                 error = "Update Relay on the Mac and watch."
+                await syncPairing()
             } catch {
                 connection = .unpaired
-                self.error = "Pairing was denied, expired, or rate limited."
+                self.error = "Pairing was denied, expired, or unavailable."
+                await syncPairing()
             }
         }
+    }
+
+    func cancelPairing() {
+        pairingTask?.cancel()
+        pairingTask = nil
+        Task {
+            await pairing.cancel()
+            await syncPairing()
+        }
+        connection = .unpaired
+        discoveredMac = nil
+        screen = .onboarding
     }
 
     func refresh() async {
@@ -110,47 +139,73 @@ final class RelayWatchModel: ObservableObject {
             return
         }
         do {
-            let inboxResponse = try await api.request(path: "/v1/inbox")
-            let tasksResponse = try await api.request(path: "/v1/tasks")
-            guard
-                (200..<300).contains(inboxResponse.status),
-                (200..<300).contains(tasksResponse.status)
-            else {
-                throw RelayWatchModelError.rejected
-            }
-            let inbox = try JSONSerialization.jsonObject(with: inboxResponse.body)
-                as? [String: Any]
-            let tasks = try JSONSerialization.jsonObject(with: tasksResponse.body)
-                as? [String: Any]
-            cachedInboxCount =
-                ((inbox?["approvals"] as? [Any])?.count ?? 0)
-                + ((inbox?["questions"] as? [Any])?.count ?? 0)
-            cachedTaskCount = (tasks?["data"] as? [Any])?.count ?? 0
-            connection = .live
-            cacheIsStale = false
-            error = nil
-        } catch RelayAPIError.revoked {
-            revokeLocally()
+            try await feature.refresh()
+            await syncFeature()
         } catch {
             connection = .offline
             cacheIsStale = true
         }
     }
 
-    func show(_ destination: RelayWatchScreen) {
-        screen = destination
+    func loadTask(_ id: String) async {
+        do {
+            try await feature.loadTask(id)
+            await syncFeature()
+        } catch {
+            self.error = "Task details are unavailable."
+        }
     }
+
+    func loadCreationOptions() async {
+        do {
+            try await feature.loadCreationOptions()
+            await syncFeature()
+        } catch {
+            self.error = "Workspaces and models are unavailable."
+        }
+    }
+
+    func approve(_ id: String, dangerousConfirmation: Bool) async throws {
+        try await feature.approve(id, dangerousConfirmation: dangerousConfirmation)
+        await syncFeature()
+    }
+
+    func deny(_ id: String) async throws {
+        try await feature.deny(id)
+        await syncFeature()
+    }
+
+    func answer(_ id: String, answers: [String: [String]]) async throws {
+        try await feature.answer(id, answers: answers)
+        await syncFeature()
+    }
+
+    func sendText(taskID: String, text: String) async throws {
+        try await feature.sendText(taskID: taskID, text: text)
+        await syncFeature()
+    }
+
+    func stop(_ taskID: String) async throws {
+        try await feature.stop(taskID)
+        await syncFeature()
+    }
+
+    func startTask(cwd: String, modelID: String, effort: String, prompt: String) async throws {
+        try await feature.startTask(cwd: cwd, modelID: modelID, effort: effort, prompt: prompt)
+        await syncFeature()
+    }
+
+    func show(_ destination: RelayWatchScreen) { screen = destination }
 
     func revokeLocally() {
         pairingTask?.cancel()
-        Task { await api.close() }
-        deviceStore.delete()
-        agreementIdentity.delete()
-        identity.delete()
+        transportTask?.cancel()
+        Task { await api.eraseSession() }
         discoveredMac = nil
         pairingCode = ""
-        cachedInboxCount = 0
-        cachedTaskCount = 0
+        inbox = RelayInbox(approvals: [], questions: [])
+        tasks = []
+        taskDetails = [:]
         cacheIsStale = true
         connection = .revoked
         screen = .revoked
@@ -158,11 +213,39 @@ final class RelayWatchModel: ObservableObject {
 
     func pairAgain() {
         connection = .unpaired
+        pairingPhase = .codeEntry
         screen = .onboarding
         error = nil
     }
-}
 
-enum RelayWatchModelError: Error {
-    case denied, expired, incompatible, rejected
+    private func startRemoteSession() async throws {
+        let stream = await api.start()
+        transportTask?.cancel()
+        transportTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in stream {
+                await self.feature.handle(event)
+                await self.syncFeature()
+            }
+        }
+    }
+
+    private func syncPairing() async {
+        pairingPhase = await pairing.phase
+        if case let .confirmMac(name, fingerprint, _) = pairingPhase {
+            discoveredMac = RelayMacIdentity(macName: name, macFingerprint: fingerprint)
+        }
+    }
+
+    private func syncFeature() async {
+        let state = await feature.state
+        connection = state.connection
+        cacheIsStale = state.cacheIsStale
+        inbox = state.inbox
+        tasks = state.tasks
+        taskDetails = state.taskDetails
+        models = state.models
+        folders = state.folders
+        mutationAttempts = state.attempts
+    }
 }

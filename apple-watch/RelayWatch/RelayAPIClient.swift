@@ -23,6 +23,9 @@ enum RelayFailureCategory: Equatable, Sendable {
     case network
     case invalidEnvelope
     case stopped
+    case rejected
+    case revoked
+    case incompatible
 }
 
 enum RelayTransportEvent: Sendable, Equatable {
