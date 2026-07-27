@@ -46,7 +46,8 @@ still require interactive staging and physical-device evidence.
 Relay must block mutations when the Mac or watch is offline and must not queue
 an action for later execution.
 
-- Revoke one Apple Watch from **Watches** if the device is lost.
+- Revoke one Apple Watch from **Apple Watch → paired device → Revoke…** if the
+  device is lost.
 - Use **Emergency Stop** to revoke watch access, rotate the Mac host
   credential, disconnect tunnels, and stop the bridge. Codex tasks stay on the
   Mac.
