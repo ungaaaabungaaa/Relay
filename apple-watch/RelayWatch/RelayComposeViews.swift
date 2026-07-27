@@ -80,6 +80,10 @@ struct RelayNewTaskView: View {
         }
         .task {
             await model.loadCreationOptions()
+            if prompt.isEmpty, !model.newTaskDraft.isEmpty {
+                prompt = model.newTaskDraft
+                model.newTaskDraft = ""
+            }
             chooseDefaults()
         }
         .onChange(of: modelID) { _, _ in

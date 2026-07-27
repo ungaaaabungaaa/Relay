@@ -107,6 +107,7 @@ test("Watch destinations use bridge data instead of preview fixtures", async () 
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
     "RelayComposeViews.swift",
+    "RelayVoiceView.swift",
   ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
   const runtimeUI = viewSources.join("\n");
 
@@ -127,6 +128,9 @@ test("Watch destination view sources belong to the app target", () => {
     "RelayQuestionView.swift",
     "RelayTaskViews.swift",
     "RelayComposeViews.swift",
+    "RelayVoiceLifecycle.swift",
+    "RelayAudioRecorder.swift",
+    "RelayVoiceView.swift",
   ]);
 });
 

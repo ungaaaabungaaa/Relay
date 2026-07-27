@@ -20,6 +20,7 @@ final class RelayWatchModel: ObservableObject {
     @Published var selectedApprovalID: String?
     @Published var selectedQuestionID: String?
     @Published var selectedTaskID: String?
+    @Published var newTaskDraft = ""
 
     private let identity = RelayWatchIdentity()
     private let agreementIdentity = RelayWatchAgreementIdentity()
@@ -31,6 +32,31 @@ final class RelayWatchModel: ObservableObject {
     )
     private lazy var pairing = RelayPairingState(service: api)
     private lazy var feature = RelayWatchFeature(service: RelayWatchService(api: api))
+    private lazy var voiceRecorder = RelayAudioRecorder()
+    lazy var voiceController = RelayVoiceController(
+        recorder: voiceRecorder,
+        transcribe: { [api] recording in
+            let audio = try Data(contentsOf: recording.fileURL)
+            return try await api.transcribe(
+                audio: audio,
+                durationMs: recording.durationMs,
+                contentType: recording.contentType,
+                idempotencyKey: UUID().uuidString.lowercased()
+            ).transcript
+        },
+        send: { [weak self] target, text in
+            guard let self else { return }
+            switch target {
+            case let .instruction(taskID, _):
+                try await self.feature.sendText(taskID: taskID, text: text)
+                await self.syncFeature()
+                self.screen = .activity
+            case .newTaskPrompt:
+                self.newTaskDraft = text
+                self.screen = .newTask
+            }
+        }
+    )
     private var pairingTask: Task<Void, Never>?
     private var transportTask: Task<Void, Never>?
 
@@ -244,7 +270,10 @@ final class RelayWatchModel: ObservableObject {
     func revokeLocally() {
         pairingTask?.cancel()
         transportTask?.cancel()
-        Task { await api.eraseSession() }
+        Task {
+            await voiceController.cancel()
+            await api.eraseSession()
+        }
         discoveredMac = nil
         pairingCode = ""
         inbox = RelayInbox(approvals: [], questions: [])
@@ -260,6 +289,10 @@ final class RelayWatchModel: ObservableObject {
         pairingPhase = .codeEntry
         screen = .onboarding
         error = nil
+    }
+
+    func appBecameInactive() {
+        Task { await voiceController.appBecameInactive() }
     }
 
     private func startRemoteSession() async throws {
@@ -291,5 +324,6 @@ final class RelayWatchModel: ObservableObject {
         models = state.models
         folders = state.folders
         mutationAttempts = state.attempts
+        if state.connection != .live { await voiceController.connectionLost() }
     }
 }

@@ -27,6 +27,9 @@
 		A00000000000000000000013 /* RelayQuestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* RelayQuestionView.swift */; };
 		A00000000000000000000014 /* RelayTaskViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* RelayTaskViews.swift */; };
 		A00000000000000000000015 /* RelayComposeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* RelayComposeViews.swift */; };
+		A00000000000000000000016 /* RelayVoiceLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* RelayVoiceLifecycle.swift */; };
+		A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* RelayAudioRecorder.swift */; };
+		A00000000000000000000018 /* RelayVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* RelayVoiceView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +54,9 @@
 		B00000000000000000000014 /* RelayQuestionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayQuestionView.swift; sourceTree = "<group>"; };
 		B00000000000000000000015 /* RelayTaskViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayTaskViews.swift; sourceTree = "<group>"; };
 		B00000000000000000000016 /* RelayComposeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayComposeViews.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 /* RelayVoiceLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayVoiceLifecycle.swift; sourceTree = "<group>"; };
+		B00000000000000000000018 /* RelayAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayAudioRecorder.swift; sourceTree = "<group>"; };
+		B00000000000000000000019 /* RelayVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayVoiceView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +100,9 @@
 				B00000000000000000000014 /* RelayQuestionView.swift */,
 				B00000000000000000000015 /* RelayTaskViews.swift */,
 				B00000000000000000000016 /* RelayComposeViews.swift */,
+				B00000000000000000000017 /* RelayVoiceLifecycle.swift */,
+				B00000000000000000000018 /* RelayAudioRecorder.swift */,
+				B00000000000000000000019 /* RelayVoiceView.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
 			);
 			path = RelayWatch;
@@ -199,6 +208,9 @@
 				A00000000000000000000013 /* RelayQuestionView.swift in Sources */,
 				A00000000000000000000014 /* RelayTaskViews.swift in Sources */,
 				A00000000000000000000015 /* RelayComposeViews.swift in Sources */,
+				A00000000000000000000016 /* RelayVoiceLifecycle.swift in Sources */,
+				A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */,
+				A00000000000000000000018 /* RelayVoiceView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,7 +248,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Relay;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only while you hold the voice button and sends encrypted audio to your Mac for review.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only after you tap Start and sends encrypted temporary audio to your Mac for transcription and review.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -264,7 +276,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Relay;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only while you hold the voice button and sends encrypted audio to your Mac for review.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Relay records only after you tap Start and sends encrypted temporary audio to your Mac for transcription and review.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";

@@ -55,6 +55,7 @@ struct RelayInboxView: View {
 
             Section("Relay") {
                 Button("New task", systemImage: "plus.circle") { model.show(.newTask) }
+                Button("Voice", systemImage: "mic") { model.show(.voice) }
                 Button("History", systemImage: "clock.arrow.circlepath") { model.show(.history) }
                 Button("Settings", systemImage: "gearshape") { model.show(.settings) }
             }

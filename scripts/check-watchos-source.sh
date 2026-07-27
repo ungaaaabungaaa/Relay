@@ -20,6 +20,7 @@ mkdir -p "${module_cache}"
 source_files=(
   "${relay_root}/apple-watch/RelayWatch/RelayAPIClient.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayApprovalView.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayAudioRecorder.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayComposeViews.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayEndpoint.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayEnvironment.swift"
@@ -36,6 +37,8 @@ source_files=(
   "${relay_root}/apple-watch/RelayWatch/RelayWatchFeature.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchService.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayWatchTypes.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayVoiceLifecycle.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayVoiceView.swift"
   "${relay_root}/apple-watch/RelayWatch/WatchIdentity.swift"
 )
 

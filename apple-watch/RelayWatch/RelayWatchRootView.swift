@@ -98,10 +98,7 @@ struct RelayWatchRootView: View {
         case .history: RelayHistoryView(model: model)
         case .settings: RelaySettingsView(model: model)
         case .voice:
-            List {
-                Text("Voice review is not available in this build.")
-                RelayBackButton(model: model)
-            }
+            RelayVoiceView(model: model, controller: model.voiceController)
         case .onboarding, .pairing, .revoked:
             RelayInboxView(model: model)
         }
