@@ -5,7 +5,7 @@ import WatchKit
 @MainActor
 final class RelayWatchModel: ObservableObject {
     @Published var connection: RelayConnectionState = .unpaired
-    @Published var screen: RelayWatchScreen = .onboarding
+    @Published var path: [RelayWatchRoute] = []
     @Published var pairingCode = ""
     @Published var pairingPhase: RelayPairingPhase = .codeEntry
     @Published var discoveredMac: RelayMacIdentity?
@@ -53,10 +53,10 @@ final class RelayWatchModel: ObservableObject {
                 case let .instruction(taskID, _):
                     try await self.feature.sendText(taskID: taskID, text: text)
                     await self.syncFeature()
-                    self.screen = .activity
+                    self.navigate(to: .activity(taskID))
                 case .newTaskPrompt:
                     self.newTaskDraft = text
-                    self.screen = .newTask
+                    self.navigate(to: .newTask)
                 }
             }
         )
@@ -69,7 +69,6 @@ final class RelayWatchModel: ObservableObject {
     init() {
         if deviceStore.load() != nil {
             connection = .offline
-            screen = .inbox
             Task { try? await startRemoteSession() }
         }
     }
@@ -94,7 +93,6 @@ final class RelayWatchModel: ObservableObject {
 
     func beginPairing() {
         pairingPhase = .codeEntry
-        screen = .pairing
     }
 
     func pair() {
@@ -147,7 +145,6 @@ final class RelayWatchModel: ObservableObject {
                     case .approved:
                         pairingPhase = .paired
                         connection = .offline
-                        screen = .inbox
                         try await startRemoteSession()
                         return
                     }
@@ -177,7 +174,6 @@ final class RelayWatchModel: ObservableObject {
         }
         connection = .unpaired
         discoveredMac = nil
-        screen = .onboarding
     }
 
     func refresh() async {
@@ -243,21 +239,61 @@ final class RelayWatchModel: ObservableObject {
         await syncFeature()
     }
 
-    func show(_ destination: RelayWatchScreen) { screen = destination }
+    func navigate(to route: RelayWatchRoute) {
+        switch route {
+        case let .approval(id): selectedApprovalID = id
+        case let .question(id): selectedQuestionID = id
+        case let .task(id), let .activity(id): selectedTaskID = id
+        case let .instruction(id):
+            if let id { selectedTaskID = id }
+        default: break
+        }
+        path.append(route)
+    }
+
+    func popToRoot() { path.removeAll() }
+
+    func show(_ destination: RelayWatchScreen) {
+        switch destination {
+        case .onboarding, .pairing, .inbox, .revoked:
+            popToRoot()
+        case .approval:
+            guard let selectedApprovalID else { return }
+            navigate(to: .approval(selectedApprovalID))
+        case .question:
+            guard let selectedQuestionID else { return }
+            navigate(to: .question(selectedQuestionID))
+        case .tasks:
+            navigate(to: .tasks)
+        case .activity:
+            guard let selectedTaskID else { return }
+            navigate(to: .activity(selectedTaskID))
+        case .instruction:
+            navigate(to: .instruction(selectedTaskID))
+        case .voice:
+            navigate(to: .voice)
+        case .newTask:
+            navigate(to: .newTask)
+        case .history:
+            navigate(to: .history)
+        case .settings:
+            navigate(to: .settings)
+        }
+    }
 
     func showApproval(_ id: String) {
-        selectedApprovalID = id
-        screen = .approval
+        navigate(to: .approval(id))
     }
 
     func showQuestion(_ id: String) {
-        selectedQuestionID = id
-        screen = .question
+        navigate(to: .question(id))
     }
 
     func showTask(_ id: String, destination: RelayWatchScreen = .activity) {
-        selectedTaskID = id
-        screen = destination
+        switch destination {
+        case .activity: navigate(to: .activity(id))
+        default: navigate(to: .activity(id))
+        }
         Task { await loadTask(id) }
     }
 
@@ -287,13 +323,11 @@ final class RelayWatchModel: ObservableObject {
         taskDetails = [:]
         cacheIsStale = true
         connection = .revoked
-        screen = .revoked
     }
 
     func pairAgain() {
         connection = .unpaired
         pairingPhase = .codeEntry
-        screen = .onboarding
         error = nil
     }
 

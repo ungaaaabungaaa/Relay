@@ -23,7 +23,12 @@ struct RelayWatchRootView: View {
                     callback: model.pairAgain
                 )
             case .live, .offline:
-                destination
+                NavigationStack(path: $model.path) {
+                    RelayInboxView(model: model)
+                        .navigationDestination(for: RelayWatchRoute.self) { route in
+                            destination(for: route)
+                        }
+                }
             }
         }
         .tint(RelayWatchStyle.accent)
@@ -89,21 +94,20 @@ struct RelayWatchRootView: View {
     }
 
     @ViewBuilder
-    private var destination: some View {
-        switch model.screen {
-        case .inbox: RelayInboxView(model: model)
+    private func destination(for route: RelayWatchRoute) -> some View {
+        switch route {
         case .approval: RelayApprovalView(model: model)
         case .question: RelayQuestionView(model: model)
         case .tasks: RelayTasksView(model: model)
-        case .activity: RelayTaskActivityView(model: model)
+        case .task, .activity: RelayTaskActivityView(model: model)
         case .instruction: RelayInstructionView(model: model)
         case .newTask: RelayNewTaskView(model: model)
         case .history: RelayHistoryView(model: model)
         case .settings: RelaySettingsView(model: model)
         case .voice:
             RelayVoiceView(model: model, controller: model.voiceController)
-        case .onboarding, .pairing, .revoked:
-            RelayInboxView(model: model)
+        case .more, .identity, .about:
+            RelayFutureRouteView(route: route)
         }
     }
 
@@ -125,6 +129,34 @@ struct RelayWatchRootView: View {
     private var error: some View {
         if let error = model.error {
             Text(error).font(.caption2).foregroundStyle(.orange)
+        }
+    }
+}
+
+private struct RelayFutureRouteView: View {
+    let route: RelayWatchRoute
+
+    var body: some View {
+        ContentUnavailableView(route.title, systemImage: route.symbol)
+    }
+}
+
+private extension RelayWatchRoute {
+    var title: String {
+        switch self {
+        case .more: "More"
+        case .identity: "Identity"
+        case .about: "About Relay"
+        default: "Relay"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .more: "ellipsis.circle"
+        case .identity: "person.text.rectangle"
+        case .about: "info.circle"
+        default: "relay"
         }
     }
 }

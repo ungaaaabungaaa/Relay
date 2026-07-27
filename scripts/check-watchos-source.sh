@@ -25,6 +25,8 @@ source_files=(
   "${relay_root}/apple-watch/RelayWatch/RelayEndpoint.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayEnvironment.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayInboxViews.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayWatchComponents.swift"
+  "${relay_root}/apple-watch/RelayWatch/RelayWatchNavigation.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayProtocol.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayPairingState.swift"
   "${relay_root}/apple-watch/RelayWatch/RelayQuestionView.swift"

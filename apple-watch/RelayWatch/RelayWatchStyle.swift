@@ -5,6 +5,7 @@ enum RelayWatchStyle {
     static let foreground = Color.primary
     static let secondaryForeground = Color.secondary
     static let surface = Material.thin
+    static let tileCornerRadius: CGFloat = 16
 }
 
 struct RelayWatchMark: View {

@@ -7,6 +7,8 @@ let relayVoiceMaximumBytes = 2 * 1024 * 1024
 let relayVoiceMaximumDurationMs = 30_000
 let relayVoiceMaximumChunks = 16
 
+/// Temporary input for the compatibility navigation adapter in `RelayWatchModel`.
+/// Task 5 removes this once all view call sites use `RelayWatchRoute` directly.
 enum RelayWatchScreen: String, CaseIterable, Identifiable {
     case onboarding, pairing, inbox, approval, question, tasks, activity
     case instruction, voice, newTask, history, settings, revoked

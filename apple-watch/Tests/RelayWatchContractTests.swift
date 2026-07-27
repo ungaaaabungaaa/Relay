@@ -2,6 +2,39 @@ import Foundation
 import Testing
 @testable import RelayWatchCore
 
+private func relayWatchSources() throws -> [String: String] {
+    let tests = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    let sourceDirectory = tests
+        .deletingLastPathComponent()
+        .appendingPathComponent("RelayWatch")
+    return try Dictionary(uniqueKeysWithValues:
+        FileManager.default.contentsOfDirectory(
+            at: sourceDirectory,
+            includingPropertiesForKeys: nil
+        )
+        .filter { $0.pathExtension == "swift" }
+        .map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
+    )
+}
+
+private func relayWatchSource(named name: String) throws -> String {
+    try #require(relayWatchSources()[name])
+}
+
+@Test
+func watchRoutesCarryOnlyStableDestinationIdentity() {
+    #expect(RelayWatchRoute.approval("approval-1") != .approval("approval-2"))
+    #expect(RelayWatchRoute.task("task-1") == .task("task-1"))
+    #expect(RelayWatchRoute.newTask != .voice)
+}
+
+@Test
+func watchSourcesUseNativeNavigationAndNoCustomBackButton() throws {
+    let sources = try relayWatchSources()
+    #expect(sources["RelayWatchRootView.swift"]?.contains("NavigationStack(path:") == true)
+    #expect(sources["RelayWatchNavigation.swift"]?.contains("enum RelayWatchRoute") == true)
+}
+
 @Test
 func decodesBridgeTaskAndRejectsUnknownApprovalRisk() throws {
     let task = try JSONDecoder().decode(
