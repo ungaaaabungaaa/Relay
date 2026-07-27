@@ -139,37 +139,9 @@ struct RelayNewTaskView: View {
                 )
                 draft.prompt = ""
                 model.reportActionSuccess()
-                model.show(.tasks)
+                model.popToRoot()
+                model.navigate(to: .tasks)
             } catch { model.reportActionFailure(error) }
-        }
-    }
-}
-
-struct RelaySettingsView: View {
-    @ObservedObject var model: RelayWatchModel
-    @State private var confirmForget = false
-
-    var body: some View {
-        List {
-            RelayStatusStrip(connection: model.connection, cacheIsStale: model.cacheIsStale, error: model.error)
-            Section("Connection") {
-                Text("End-to-end encrypted through Relay Cloud")
-                Text("Watch fingerprint \(model.watchFingerprint)")
-                    .font(.caption2.monospaced())
-            }
-            Text("Apple Watch updates are installed through the App Store.")
-                .font(.caption2)
-            Button("Forget this watch", role: .destructive) { confirmForget = true }
-                .accessibilityHint("Erases this watch's Relay credentials and requires pairing again")
-                .confirmationDialog(
-                    "Erase Relay credentials from this watch?",
-                    isPresented: $confirmForget,
-                    titleVisibility: .visible
-                ) {
-                    Button("Forget and erase", role: .destructive, action: model.revokeLocally)
-                    Button("Cancel", role: .cancel) {}
-                }
-            RelayBackButton(model: model)
         }
     }
 }

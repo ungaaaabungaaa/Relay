@@ -31,6 +31,18 @@ struct RelayHomeAction: Identifiable, Hashable {
     var id: String { title }
 }
 
+struct RelayMoreAction: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case voice, refresh, history, settings
+    }
+
+    let title: String
+    let systemImage: String
+    let kind: Kind
+
+    var id: String { title }
+}
+
 enum RelayHomePresentation {
     static let clearActions = [
         RelayHomeAction(title: "Tasks", systemImage: "terminal", route: .tasks),
@@ -67,4 +79,13 @@ enum RelayHomePresentation {
     static func remainingCount(total: Int, visible: Int) -> Int {
         max(0, total - visible)
     }
+}
+
+enum RelayMorePresentation {
+    static let actions = [
+        RelayMoreAction(title: "Voice", systemImage: "mic", kind: .voice),
+        RelayMoreAction(title: "Refresh", systemImage: "arrow.clockwise", kind: .refresh),
+        RelayMoreAction(title: "History", systemImage: "clock.arrow.circlepath", kind: .history),
+        RelayMoreAction(title: "Settings", systemImage: "gearshape", kind: .settings),
+    ]
 }

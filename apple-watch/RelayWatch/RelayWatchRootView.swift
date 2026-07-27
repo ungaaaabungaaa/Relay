@@ -46,39 +46,11 @@ struct RelayWatchRootView: View {
         case .newTask: RelayNewTaskView(model: model)
         case .history: RelayHistoryView(model: model)
         case .settings: RelaySettingsView(model: model)
-        case .voice:
-            RelayVoiceView(model: model, controller: model.voiceController)
-        case .more, .identity, .about:
-            RelayFutureRouteView(route: route)
+        case .voice: RelayVoiceView(model: model, controller: model.voiceController)
+        case .more: RelayMoreView(model: model)
+        case .identity: RelayIdentityView(model: model)
+        case .about: RelayAboutView()
         }
     }
 
-}
-
-private struct RelayFutureRouteView: View {
-    let route: RelayWatchRoute
-
-    var body: some View {
-        ContentUnavailableView(route.title, systemImage: route.symbol)
-    }
-}
-
-private extension RelayWatchRoute {
-    var title: String {
-        switch self {
-        case .more: "More"
-        case .identity: "Identity"
-        case .about: "About Relay"
-        default: "Relay"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .more: "ellipsis.circle"
-        case .identity: "person.text.rectangle"
-        case .about: "info.circle"
-        default: "relay"
-        }
-    }
 }

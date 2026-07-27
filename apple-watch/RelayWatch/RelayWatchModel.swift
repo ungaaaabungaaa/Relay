@@ -263,34 +263,6 @@ final class RelayWatchModel: ObservableObject {
 
     func popToRoot() { path.removeAll() }
 
-    func show(_ destination: RelayWatchScreen) {
-        switch destination {
-        case .onboarding, .pairing, .inbox, .revoked:
-            popToRoot()
-        case .approval:
-            guard let selectedApprovalID else { return }
-            navigate(to: .approval(selectedApprovalID))
-        case .question:
-            guard let selectedQuestionID else { return }
-            navigate(to: .question(selectedQuestionID))
-        case .tasks:
-            navigate(to: .tasks)
-        case .activity:
-            guard let selectedTaskID else { return }
-            navigate(to: .activity(selectedTaskID))
-        case .instruction:
-            navigate(to: .instruction(selectedTaskID))
-        case .voice:
-            navigate(to: .voice)
-        case .newTask:
-            navigate(to: .newTask)
-        case .history:
-            navigate(to: .history)
-        case .settings:
-            navigate(to: .settings)
-        }
-    }
-
     func showApproval(_ id: String) {
         navigate(to: .approval(id))
     }
@@ -299,24 +271,16 @@ final class RelayWatchModel: ObservableObject {
         navigate(to: .question(id))
     }
 
-    func showTask(_ id: String, destination: RelayWatchScreen = .activity) {
-        switch destination {
-        case .activity: navigate(to: .task(id))
-        default: navigate(to: .task(id))
-        }
-        Task { await loadTask(id) }
-    }
-
     func reportActionFailure(_ error: Error) {
         self.error = error is RelayUserError
             ? "That action is unavailable. Refresh and try again."
             : "The Mac did not complete that action. Try again."
-        WKInterfaceDevice.current().play(.failure)
+        playRelayHaptic(.failure)
     }
 
     func reportActionSuccess() {
         error = nil
-        WKInterfaceDevice.current().play(.success)
+        playRelayHaptic(.success)
     }
 
     func revokeLocally() {

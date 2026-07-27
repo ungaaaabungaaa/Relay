@@ -35,6 +35,8 @@
 		A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* RelayAudioRecorder.swift */; };
 		A00000000000000000000018 /* RelayVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* RelayVoiceView.swift */; };
 		A00000000000000000000019 /* RelayWatchStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001A /* RelayWatchStyle.swift */; };
+		A00000000000000000000020 /* RelayHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* RelayHaptics.swift */; };
+		A00000000000000000000021 /* RelayMoreViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* RelayMoreViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +69,8 @@
 		B00000000000000000000018 /* RelayAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayAudioRecorder.swift; sourceTree = "<group>"; };
 		B00000000000000000000019 /* RelayVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayVoiceView.swift; sourceTree = "<group>"; };
 		B0000000000000000000001A /* RelayWatchStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchStyle.swift; sourceTree = "<group>"; };
+		B00000000000000000000020 /* RelayHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayHaptics.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* RelayMoreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayMoreViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +122,8 @@
 				B00000000000000000000018 /* RelayAudioRecorder.swift */,
 				B00000000000000000000019 /* RelayVoiceView.swift */,
 				B0000000000000000000001A /* RelayWatchStyle.swift */,
+				B00000000000000000000020 /* RelayHaptics.swift */,
+				B00000000000000000000021 /* RelayMoreViews.swift */,
 				B00000000000000000000008 /* Assets.xcassets */,
 			);
 			path = RelayWatch;
@@ -231,6 +237,8 @@
 				A00000000000000000000017 /* RelayAudioRecorder.swift in Sources */,
 				A00000000000000000000018 /* RelayVoiceView.swift in Sources */,
 				A00000000000000000000019 /* RelayWatchStyle.swift in Sources */,
+				A00000000000000000000020 /* RelayHaptics.swift in Sources */,
+				A00000000000000000000021 /* RelayMoreViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

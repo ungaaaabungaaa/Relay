@@ -47,6 +47,22 @@ func allClearHomeUsesTheApprovedFourActions() {
 }
 
 @Test
+func hapticPreferenceDefaultsOnAndPersistsOff() {
+    let defaults = UserDefaults(suiteName: UUID().uuidString)!
+    let preference = RelayHapticPreference(defaults: defaults)
+    #expect(preference.isEnabled)
+    preference.isEnabled = false
+    #expect(!RelayHapticPreference(defaults: defaults).isEnabled)
+}
+
+@Test
+func moreGridUsesTheApprovedActions() {
+    #expect(RelayMorePresentation.actions.map(\.title) == [
+        "Voice", "Refresh", "History", "Settings",
+    ])
+}
+
+@Test
 func newTaskFlowAdvancesOnlyWithValidStepData() {
     var draft = RelayNewTaskDraft()
     #expect(!draft.canAdvance(from: .workspace, models: []))
@@ -154,6 +170,28 @@ func watchSourcesUseNativeNavigationAndNoCustomBackButton() throws {
     let sources = try relayWatchSources()
     #expect(sources["RelayWatchRootView.swift"]?.contains("NavigationStack(path:") == true)
     #expect(sources["RelayWatchNavigation.swift"]?.contains("enum RelayWatchRoute") == true)
+    #expect(sources.values.joined().contains("RelayBackButton") == false)
+    #expect(sources.values.joined().contains("RelayWatchScreen") == false)
+    #expect(sources["RelayWatchModel.swift"]?.contains("func show(") == false)
+}
+
+@Test
+func utilityViewsRouteFeedbackAndIdentityThroughTheNativeWatchContracts() throws {
+    let haptics = try relayWatchSource(named: "RelayHaptics.swift")
+    let model = try relayWatchSource(named: "RelayWatchModel.swift")
+    let approval = try relayWatchSource(named: "RelayApprovalView.swift")
+    let more = try relayWatchSource(named: "RelayMoreViews.swift")
+    let root = try relayWatchSource(named: "RelayWatchRootView.swift")
+
+    #expect(haptics.contains("static let key = \"relay.watch.haptics.enabled\""))
+    #expect(haptics.contains("guard hapticPreference.isEnabled else { return }"))
+    #expect(model.contains("playRelayHaptic(.failure)"))
+    #expect(model.contains("playRelayHaptic(.success)"))
+    #expect(approval.contains("playRelayHaptic(.notification)"))
+    #expect(more.contains("Grid(horizontalSpacing: 8, verticalSpacing: 8)"))
+    #expect(more.contains("struct RelayIdentityView"))
+    #expect(more.contains("CFBundleShortVersionString"))
+    #expect(root.contains("case .more: RelayMoreView(model: model)"))
 }
 
 @Test
@@ -254,7 +292,7 @@ func approvalSourceRendersReviewDataAndDangerousSafeguards() throws {
     #expect(source.contains("Text(\"Working directory\")"))
     #expect(source.contains("Label(cwd, systemImage: \"folder\")"))
     #expect(source.contains("ForEach(consequences(for: approval), id: \\.self)"))
-    #expect(source.contains("WKInterfaceDevice.current().play(.notification)"))
+    #expect(source.contains("playRelayHaptic(.notification)"))
     #expect(source.contains("confirmNormal"))
     #expect(source.contains("confirmDangerous"))
     #expect(source.contains("Button(\"Deny\", role: .destructive)"))

@@ -17,7 +17,6 @@ struct RelayTasksView: View {
                     }
                 }
             }
-            RelayBackButton(model: model)
         }
         .navigationTitle("Tasks")
     }
@@ -126,7 +125,6 @@ struct RelayTaskActivityView: View {
             } else {
                 ProgressView("Loading task…")
             }
-            RelayBackButton(model: model, destination: .tasks)
         }
         .navigationTitle("Activity")
         .task {
@@ -157,7 +155,6 @@ struct RelayHistoryView: View {
             Text("History is limited to this running watch session and contains no secrets.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            RelayBackButton(model: model)
         }
     }
 

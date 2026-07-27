@@ -97,6 +97,33 @@ func voiceTranscriptionFailureAndCancelDeleteTemporaryAudio() async throws {
 
 @MainActor
 @Test
+func voiceStartingAnotherRecordingDiscardsTheReviewedTranscript() async throws {
+    let recorder = VoiceRecorderFake(recording: .init(
+        fileURL: temporaryAudio(), durationMs: 1_000, contentType: "audio/mp4"
+    ))
+    let controller = RelayVoiceController(
+        recorder: recorder,
+        transcribe: { _ in "First reviewed transcript" },
+        send: { _, _ in },
+        sleep: { _ in try await Task.sleep(for: .seconds(60)) }
+    )
+
+    try await controller.start(target: .newTaskPrompt)
+    try await controller.stopAndTranscribe()
+    #expect(controller.phase == .review)
+
+    let nextFile = temporaryAudio()
+    recorder.setRecording(.init(fileURL: nextFile, durationMs: 1_000, contentType: "audio/mp4"))
+    try await controller.start(target: .instruction(taskID: "task-1", turnID: nil))
+
+    #expect(controller.phase == .recording)
+    #expect(controller.transcript.isEmpty)
+    await controller.cancel()
+    #expect(!FileManager.default.fileExists(atPath: nextFile.path))
+}
+
+@MainActor
+@Test
 func disconnectDuringTranscriptionCannotRestoreAudioOrTranscript() async throws {
     let file = temporaryAudio()
     let recorder = VoiceRecorderFake(recording: .init(

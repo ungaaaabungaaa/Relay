@@ -71,7 +71,6 @@ struct RelayQuestionView: View {
             } else {
                 Text("This question is no longer pending.")
             }
-            RelayBackButton(model: model)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(scrolling ? .horizontal : [])
@@ -119,7 +118,7 @@ struct RelayQuestionView: View {
                 let validatedAnswers = try question.validatedAnswers(answers)
                 try await model.answer(question.id, answers: validatedAnswers)
                 model.reportActionSuccess()
-                model.show(.inbox)
+                model.popToRoot()
             } catch { model.reportActionFailure(error) }
         }
     }

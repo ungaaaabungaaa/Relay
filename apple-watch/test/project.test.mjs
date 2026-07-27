@@ -27,6 +27,14 @@ const homeView = await readFile(
   new URL("../RelayWatch/RelayWatchHomeView.swift", import.meta.url),
   "utf8",
 );
+const moreViews = await readFile(
+  new URL("../RelayWatch/RelayMoreViews.swift", import.meta.url),
+  "utf8",
+);
+const haptics = await readFile(
+  new URL("../RelayWatch/RelayHaptics.swift", import.meta.url),
+  "utf8",
+);
 const macAppURL = new URL("../../mac/Sources/RelayMac/RelayMacApp.swift", import.meta.url);
 const macBrandURL = new URL("../../mac/Sources/RelayMac/RelayBrand.swift", import.meta.url);
 const macComponentsURL = new URL("../../mac/Sources/RelayMac/Components.swift", import.meta.url);
@@ -116,6 +124,8 @@ test("Watch runtime contract sources belong to the app target", () => {
     "RelayWatchNavigation.swift",
     "RelayNewTaskFlow.swift",
     "RelayWatchComponents.swift",
+    "RelayHaptics.swift",
+    "RelayMoreViews.swift",
     "RelayPairingViews.swift",
     "RelayWatchHomeView.swift",
   ]);
@@ -136,6 +146,7 @@ test("Watch destinations use bridge data instead of preview fixtures", async () 
     "RelayComposeViews.swift",
     "RelayNewTaskFlow.swift",
     "RelayVoiceView.swift",
+    "RelayMoreViews.swift",
   ].map((name) => readFile(new URL(`../RelayWatch/${name}`, import.meta.url), "utf8")));
   const runtimeUI = viewSources.join("\n");
 
@@ -164,6 +175,17 @@ test("Watch destination view sources belong to the app target", () => {
     "RelayAudioRecorder.swift",
     "RelayVoiceView.swift",
   ]);
+});
+
+test("Task 5 connects Watch utility flows and haptics", () => {
+  assert.match(moreViews, /struct RelayMoreView/);
+  assert.match(moreViews, /struct RelaySettingsView/);
+  assert.match(moreViews, /struct RelayIdentityView/);
+  assert.match(moreViews, /struct RelayAboutView/);
+  assert.match(moreViews, /Grid\(horizontalSpacing: 8, verticalSpacing: 8\)/);
+  assert.match(haptics, /relay\.watch\.haptics\.enabled/);
+  assert.match(haptics, /guard hapticPreference\.isEnabled else \{ return \}/);
+  expectTargetSources(["RelayHaptics.swift", "RelayMoreViews.swift"]);
 });
 
 test("Watch runtime contract sources must be connected to the Sources build phase", () => {
@@ -230,6 +252,8 @@ test("final Watch source check includes the presentation style", async () => {
   const sourceCheck = await readFile(sourceCheckURL, "utf8");
 
   assert.match(sourceCheck, /RelayWatchStyle\.swift/);
+  assert.match(sourceCheck, /RelayHaptics\.swift/);
+  assert.match(sourceCheck, /RelayMoreViews\.swift/);
 });
 
 test("final Apple visual styles use system blue and semantic surfaces", async () => {

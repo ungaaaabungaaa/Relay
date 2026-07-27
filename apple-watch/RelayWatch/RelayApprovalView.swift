@@ -1,5 +1,4 @@
 import SwiftUI
-import WatchKit
 
 struct RelayApprovalView: View {
     @ObservedObject var model: RelayWatchModel
@@ -17,7 +16,6 @@ struct RelayApprovalView: View {
                 } else {
                     Text("This approval is no longer pending.")
                 }
-                RelayBackButton(model: model)
             }
         } scrolling: {
             VStack(alignment: .leading, spacing: 12) {
@@ -28,7 +26,6 @@ struct RelayApprovalView: View {
                 } else {
                     Text("This approval is no longer pending.")
                 }
-                RelayBackButton(model: model)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
@@ -123,7 +120,7 @@ struct RelayApprovalView: View {
     private func approveButton(for approval: RelayApproval) -> some View {
         Button("Approve this action") {
             if approval.risk == .dangerous {
-                WKInterfaceDevice.current().play(.notification)
+                playRelayHaptic(.notification)
                 confirmDangerous = true
             } else {
                 confirmNormal = true
@@ -173,7 +170,7 @@ struct RelayApprovalView: View {
             do {
                 try await model.deny(approval.id)
                 model.reportActionSuccess()
-                model.show(.inbox)
+                model.popToRoot()
             } catch { model.reportActionFailure(error) }
         }
     }
@@ -184,7 +181,7 @@ struct RelayApprovalView: View {
             do {
                 try await model.approve(approval.id, dangerousConfirmation: dangerous)
                 model.reportActionSuccess()
-                model.show(.inbox)
+                model.popToRoot()
             } catch { model.reportActionFailure(error) }
         }
     }

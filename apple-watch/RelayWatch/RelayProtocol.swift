@@ -7,51 +7,6 @@ let relayVoiceMaximumBytes = 2 * 1024 * 1024
 let relayVoiceMaximumDurationMs = 30_000
 let relayVoiceMaximumChunks = 16
 
-/// Temporary input for the compatibility navigation adapter in `RelayWatchModel`.
-/// Task 5 removes this once all view call sites use `RelayWatchRoute` directly.
-enum RelayWatchScreen: String, CaseIterable, Identifiable {
-    case onboarding, pairing, inbox, approval, question, tasks, activity
-    case instruction, voice, newTask, history, settings, revoked
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .onboarding: "Welcome"
-        case .pairing: "Pair Mac"
-        case .inbox: "Inbox"
-        case .approval: "Approval"
-        case .question: "Question"
-        case .tasks: "Tasks"
-        case .activity: "Activity"
-        case .instruction: "Instruction"
-        case .voice: "Voice"
-        case .newTask: "New task"
-        case .history: "History"
-        case .settings: "Settings"
-        case .revoked: "Revoked"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .onboarding: "hand.wave"
-        case .pairing: "link"
-        case .inbox: "tray.full"
-        case .approval: "checkmark.shield"
-        case .question: "questionmark.bubble"
-        case .tasks: "terminal"
-        case .activity: "waveform.path.ecg"
-        case .instruction: "text.bubble"
-        case .voice: "mic"
-        case .newTask: "plus.circle"
-        case .history: "clock.arrow.circlepath"
-        case .settings: "gearshape"
-        case .revoked: "lock.slash"
-        }
-    }
-}
-
 enum RelayConnectionState: Equatable, Sendable {
     case unpaired, pairing, live, offline, revoked, incompatible
 }
